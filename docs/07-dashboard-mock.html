@@ -1,0 +1,592 @@
+<title>Saley Dashboard Mock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<style>
+/* Layout: left rail of views, one scroll column per view, summary row on top, detail tables below */
+:root{
+  --bg:#f5f4ef; --fg:#1b1a17; --mute:#605d55; --line:#dad6cb; --panel:#ffffff; --rail:#122b2e; --rail-fg:#d9e6e5;
+  --accent:#0d5c63; --accent-soft:#dcecec; --warn:#9a5b00; --warn-soft:#f8ead2; --bad:#9b2d20; --bad-soft:#f6dcd6; --ok:#2f6b2f; --ok-soft:#dcebd7;
+  --bar:#0d5c63; --bar-2:#9fc7ca;
+  --display:"Fraunces",Georgia,serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151613; --fg:#ecebe5; --mute:#a9a69b; --line:#33342f; --panel:#1e1f1b; --rail:#0d1c1e; --rail-fg:#c7d7d6;
+  --accent:#6fc3c9; --accent-soft:#163b3e; --warn:#e3a44a; --warn-soft:#3b2d14; --bad:#ec8b7d; --bad-soft:#3d1f1a; --ok:#8fcf8a; --ok-soft:#1f3a1f;
+  --bar:#6fc3c9; --bar-2:#2d5a5e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151613; --fg:#ecebe5; --mute:#a9a69b; --line:#33342f; --panel:#1e1f1b; --rail:#0d1c1e; --rail-fg:#c7d7d6;
+  --accent:#6fc3c9; --accent-soft:#163b3e; --warn:#e3a44a; --warn-soft:#3b2d14; --bad:#ec8b7d; --bad-soft:#3d1f1a; --ok:#8fcf8a; --ok-soft:#1f3a1f;
+  --bar:#6fc3c9; --bar-2:#2d5a5e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.45;margin:0}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.rail{background:var(--rail);color:var(--rail-fg);padding-block:22px 30px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:14px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{font-family:var(--display);font-size:24px;color:#fff;margin:0 0 2px}
+.brand small{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--rail-fg);opacity:.75;margin-top:4px}
+.rail .grp{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;opacity:.55;margin:22px 0 6px}
+.rail a{display:flex;justify-content:space-between;align-items:center;color:var(--rail-fg);text-decoration:none;padding:7px 10px;border-radius:5px;font-size:13.5px}
+.rail a:hover,.rail a:focus-visible{background:rgba(255,255,255,.08);outline:none}
+.rail a.on{background:rgba(255,255,255,.14);color:#fff;font-weight:500}
+.rail .cnt{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.14);padding:0 6px;border-radius:3px}
+main{min-width:0;padding-block:22px 60px;padding-left:24px;padding-right:max(16px,env(safe-area-inset-right,0px))}
+.view{display:none;max-width:1180px}.view.on{display:block}
+.top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+h1{font-family:var(--display);font-weight:600;font-size:26px;margin:0;text-wrap:balance}
+.sub{color:var(--mute);margin:2px 0 0;font-size:13px}
+h2{font-size:15px;font-weight:600;margin:24px 0 8px;display:flex;gap:10px;align-items:baseline}
+h2 .hint{font-weight:400;color:var(--mute);font-size:12.5px}
+.stamp{font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px;min-width:0}
+.tile .l{font-size:12px;color:var(--mute)}
+.tile .v{font-family:var(--mono);font-size:26px;font-variant-numeric:tabular-nums;line-height:1.1;margin:4px 0 2px}
+.tile .d{font-size:12px;color:var(--mute)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:600px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--mute);font-weight:500}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:1px 7px;border-radius:3px;white-space:nowrap;vertical-align:middle}
+.ok{background:var(--ok-soft);color:var(--ok)} .warn{background:var(--warn-soft);color:var(--warn)} .bad{background:var(--bad-soft);color:var(--bad)} .acc{background:var(--accent-soft);color:var(--accent)} .gray{background:var(--bg);color:var(--mute);border:1px solid var(--line)}
+.bar{height:8px;background:var(--bar-2);border-radius:2px;overflow:hidden;min-width:60px}
+.bar i{display:block;height:100%;background:var(--bar)}
+.rows{display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:150px 1fr 48px;gap:10px;align-items:center;font-size:13px}
+.row .n{font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.btn{font:inherit;font-size:12.5px;font-weight:500;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:5px;padding:5px 10px;cursor:pointer}
+.btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.act{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line)}
+.act:last-child{border-bottom:0}
+.act .t{font-weight:500}.act .w{font-size:12.5px;color:var(--mute);margin-top:2px;max-width:70ch}
+.act .b{display:flex;gap:6px;flex-wrap:wrap}
+.why{font-family:var(--mono);font-size:11px;color:var(--accent)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 12px}
+.tabs button{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:5px 11px;border-radius:999px;cursor:pointer}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:9px 12px;border-radius:0 5px 5px 0;font-size:13px;max-width:78ch;margin:10px 0}
+.note.w{border-color:var(--warn);background:var(--warn-soft)}
+.ask{border:1px dashed var(--line);border-radius:6px;padding:10px 12px;font-size:13px}
+.ask b{display:block}
+.src{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.src .card h3{margin:0 0 6px;font-size:14px}
+.src ul{margin:0;padding-left:18px;font-size:13px}
+code{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--line);padding:0 4px;border-radius:3px}
+.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));right:calc(16px + env(safe-area-inset-right,0px));background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.sample{font-family:var(--mono);font-size:10.5px;color:var(--warn);letter-spacing:.05em;text-transform:uppercase}
+@media (max-width:760px){.app{grid-template-columns:1fr}.rail{position:static;height:auto;padding-right:max(16px,env(safe-area-inset-right,0px))}.rail nav{display:flex;flex-wrap:wrap;gap:4px}.rail .grp{width:100%}main{padding-left:max(16px,env(safe-area-inset-left,0px))}.row{grid-template-columns:110px 1fr 40px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+<aside class="rail">
+  <p class="brand">saley<small>membrane · sales desk</small></p>
+  <nav>
+    <div class="grp">Run the plan</div>
+    <a href="#today" data-v="today" class="on">Today <span class="cnt">10</span></a>
+    <a href="#goals" data-v="goals">Q4 goals</a>
+    <a href="#accounts" data-v="accounts">Accounts</a>
+    <a href="#people" data-v="people">People</a>
+    <a href="#suggest" data-v="suggest">Suggestions <span class="cnt">4</span></a>
+    <div class="grp">Watch</div>
+    <a href="#signals" data-v="signals">Signals</a>
+    <a href="#blockers" data-v="blockers">Blockers <span class="cnt">5</span></a>
+    <a href="#events" data-v="events">Events</a>
+    <div class="grp">Team</div>
+    <a href="#asks" data-v="asks">Inbox <span class="cnt">3</span></a>
+    <a href="#commit" data-v="commit">Commitments <span class="cnt">4</span></a>
+    <a href="#decisions" data-v="decisions">Decisions</a>
+    <a href="#pack" data-v="pack">Weekly pack</a>
+    <a href="#scorecard" data-v="scorecard">Scorecard</a>
+    <a href="#sources" data-v="sources">Sources and health</a>
+  </nav>
+</aside>
+
+<main>
+<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px">
+  <span class="stamp">Signed in as</span>
+  <div class="tabs" id="who" style="margin:0"><button class="on" data-f="vr">Vaishnavi</button><button data-f="sid">Sid</button><button data-f="kushal">Kushal</button></div>
+  <input id="gsearch" placeholder="Search everything: a company, a person, a city, a news story…" style="flex:1;min-width:260px;font-weight:500;border-color:var(--accent);font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg)">
+  <span class="stamp">Updated 14:10 IST · sheet 14:10 · news 12:04</span>
+</div>
+
+<!-- ===================== TODAY ===================== -->
+<section class="view on" id="v-today">
+  <div class="top"><div><h1 id="hello">Good afternoon, Vaishnavi</h1><p class="sub">Friday 17 October. The numbers, then your list for today, then what needs a look.</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+
+  <h2 style="margin-top:0">Where we stand <span class="hint">click a number to open the list</span></h2>
+  <div class="tiles">
+    <a class="tile" href="#goals" data-v="goals" style="text-decoration:none;color:inherit"><div class="l">Deals closed this quarter</div><div class="v">0 of 3</div><div class="d">75 days left</div></a>
+    <a class="tile" href="#people" data-v="people" data-f="meet" style="text-decoration:none;color:inherit"><div class="l">People in a live conversation</div><div class="v">6</div><div class="d">meeting done or emails going</div></a>
+    <a class="tile" href="#people" data-v="people" data-f="backlog" style="text-decoration:none;color:inherit"><div class="l">Connected, no email sent yet</div><div class="v">42</div><div class="d">36 of them have an email</div></a>
+    <a class="tile" href="#people" data-v="people" data-f="p1" style="text-decoration:none;color:inherit"><div class="l">Priority people waiting on LinkedIn</div><div class="v">39</div><div class="d">of 51 marked P1</div></a>
+    <a class="tile" href="#scorecard" data-v="scorecard" style="text-decoration:none;color:inherit"><div class="l">New people contacted this week</div><div class="v">50</div><div class="d">last week 91</div></a>
+    <a class="tile" href="#blockers" data-v="blockers" style="text-decoration:none;color:inherit"><div class="l">Late items that block goals</div><div class="v">5</div><div class="d">NDA, MSA, Overview doc…</div></a>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h2 style="margin-top:0">Your tasks today <span class="hint">from the rules, for you only · tick when done, Saley updates the sheet</span></h2>
+    <div id="mytasks"></div>
+  </div>
+
+  <div class="grid2" style="margin-top:12px">
+    <div class="card"><h2 style="margin-top:0">Needs a look now</h2>
+      <div class="act"><div><div class="t">Sarvam launched a new speech model this morning</div><div class="w">Two Sarvam people are connected. Good moment to email Sshubam with the Hinglish package. <span class="why">news · importance 4 · Goal 3</span></div></div><div class="b"><button class="btn p" data-t>Draft the email</button><button class="btn" data-t>Later</button></div></div>
+      <div class="act"><div><div class="t">Amos (AISI UK) replied on 13 Oct · no answer from us yet</div><div class="w">4 days silent. He shared his official email. <span class="why">reply watch · Goal 1, 4</span></div></div><div class="b"><button class="btn p" data-t>Draft reply</button></div></div>
+      <div class="act"><div><div class="t">London summit starts Monday</div><div class="w">13 connected people are in London. Registration is not confirmed. <span class="why">events · 3 days</span></div></div><div class="b"><button class="btn p" data-t>See the list</button></div></div>
+      <div class="act"><div><div class="t">Grant call: Indic language datasets, 21 days left</div><div class="w">Fits Goal 3. Needs a yes or no from Sid. <span class="why">news · tender</span></div></div><div class="b"><button class="btn" data-t>Ask Sid</button><button class="btn" data-t>Not for us</button></div></div>
+    </div>
+    <div class="card"><h2 style="margin-top:0">Blocked or waiting</h2>
+      <div class="act"><div><div class="t">NDA and MSA are not started</div><div class="w">They block every goal. Last asked Kushal on 14 Oct. <span class="why">deliverables</span></div></div><div class="b"><button class="btn" data-t>Remind Kushal</button></div></div>
+      <div class="act"><div><div class="t">Pulse Product Overview Document</div><div class="w">Blocks 5 of 7 motions. Design, in progress, 17 days past the date.</div></div><div class="b"><button class="btn" data-t>Ask for a date</button></div></div>
+      <div class="act"><div><div class="t">Sid owes ARTPARK the language list</div><div class="w">Asked 2 Oct in the meeting. Due Monday.</div></div><div class="b"><button class="btn" data-t>Nudge Sid</button></div></div>
+      <div class="act"><div><div class="t">274 people have no industry</div><div class="w">Saley can fill it from the company row. Say yes and it is done. <span class="why">data quality</span></div></div><div class="b"><button class="btn p" data-t>Yes, fill it</button></div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h2 style="margin-top:0">Saley suggests <span class="hint">one click does it · nothing waits in a queue</span></h2>
+    <div class="act"><div><div class="t">Add AI4Bharat to the pipeline with 3 people</div><div class="w">In Master Pipeline, no people yet. The reference lab for Indic speech. Goal 3. Public profiles found. <span class="why">new company</span></div></div><div class="b"><button class="btn p" data-t>Add to pipeline</button><button class="btn" data-t>Not now</button></div></div>
+    <div class="act"><div><div class="t">Ask Angelos (ElevenLabs) for an intro to Piotr, the CTO</div><div class="w">Angelos is connected and emailed. The CTO owns data buying. <span class="why">warm path</span></div></div><div class="b"><button class="btn p" data-t>Draft the ask</button><button class="btn" data-t>Skip</button></div></div>
+    <div class="act"><div><div class="t">Park 14 people who did not reply after 3 touches</div><div class="w">Reconnect date set 60 days out. See the list first if you want.</div></div><div class="b"><button class="btn p" data-t>Park them</button><button class="btn" data-t>See list</button></div></div>
+  </div>
+</section>
+
+<!-- ===================== GOALS ===================== -->
+<section class="view" id="v-goals">
+  <div class="top"><div><h1>Q4 goals</h1><p class="sub">The five goals for December. How many conversations each has, and what blocks it.</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div id="goals" class="grid2"></div>
+  <div class="note w" style="margin-top:14px"><b>All five goals share three blockers.</b> NDA (not started, due 18 Sep). MSA (not started, due 9 Oct). Pulse Product Overview Document (in progress, due 30 Sep). Saley reminds the owner every Monday until a date is set.</div>
+</section>
+
+<!-- ===================== ACCOUNTS ===================== -->
+<section class="view" id="v-accounts">
+  <div class="top"><div><h1>Accounts</h1><p class="sub">One line per company. How many people we know there, how far the conversation has gone, and what to do next.</p></div><span class="stamp">229 companies with people · 285 in Master Pipeline</span></div>
+  <div class="tabs" id="acc-tabs">
+    <button class="on" data-f="all">All</button><button data-f="p1">P1 accounts</button><button data-f="warm">Has a connection</button><button data-f="g3">Goal 3 · sovereign and voice</button><button data-f="g5">Goal 5 · academia</button>
+  </div>
+  <div class="card"><div class="tw"><table id="acc-table">
+    <thead><tr><th>Company</th><th>Industry</th><th>Goal</th><th class="num">People</th><th class="num">Contacted</th><th class="num">Connected</th><th class="num">Emailed</th><th>Coverage</th><th>Warmth</th><th>Buying group</th><th>Saley says</th></tr></thead>
+    <tbody></tbody>
+  </table></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <h2>Industry coverage <span class="hint">people contacted ÷ listed</span></h2>
+  <div class="card rows">
+    <div class="row"><span>AI Labs</span><div class="bar"><i style="width:48%"></i></div><span class="n">48 %</span></div>
+    <div class="row"><span>Voice/Productivity</span><div class="bar"><i style="width:52%"></i></div><span class="n">52 %</span></div>
+    <div class="row"><span>AI Voice Agents</span><div class="bar"><i style="width:36%"></i></div><span class="n">36 %</span></div>
+    <div class="row"><span>Academia</span><div class="bar"><i style="width:17%"></i></div><span class="n">17 %</span></div>
+    <div class="row"><span>Consumer AI apps</span><div class="bar"><i style="width:1%"></i></div><span class="n">1 %</span></div>
+    <div class="row"><span>No industry (274)</span><div class="bar"><i style="width:1%"></i></div><span class="n">1 %</span></div>
+  </div>
+</section>
+
+<!-- ===================== PEOPLE ===================== -->
+<section class="view" id="v-people">
+  <div class="top"><div><h1>People</h1><p class="sub">Everyone in the pipeline. Where each person is, what they work on, and the next step.</p></div><span class="stamp">998 people · 80 with notes · 269 with a paper</span></div>
+  <div class="tabs" id="ppl-tabs">
+    <button class="on" data-f="backlog">Connected, no email (42)</button><button data-f="p1">P1 waiting (39)</button><button data-f="meet">In conversation (6)</button>
+  </div>
+  <div class="card"><div class="tw"><table id="ppl-table">
+    <thead><tr><th>Person</th><th>Company · role</th><th>Stage</th><th>Working on</th><th>Email</th><th>Next step</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div class="note"><b>How "Working on" is filled.</b> 1 About PoC cell. 2 Latest paper title from the paper link or OpenAlex by name. 3 News stories that name the person or the company (news tables). 4 A teammate answer when Saley is tagged: "@Saley what is Amos working on now?" Saley stores the answer with the date and the author.</div>
+</section>
+
+<!-- ===================== SUGGESTIONS ===================== -->
+<section class="view" id="v-suggest">
+  <div class="top"><div><h1>Suggestions</h1><p class="sub">New companies and people worth contacting, with the reason. One click adds them to the pipeline.</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div class="tabs" id="sug-tabs">
+    <button class="on" data-f="warm">Best chance to connect (86)</button><button data-f="best">Best person per company</button><button data-f="newco">New companies (161)</button><button data-f="res">Researchers (89)</button>
+  </div>
+  <div id="sug-warm" class="sug">
+    <div class="note">Rule: not yet contacted, and a teammate is already connected to someone at the same company. Score = connection in company (+3) · email known (+2) · decision role (+2) · paper link (+1) · same city as a teammate (+1).</div>
+    <div class="card"><div class="tw"><table><thead><tr><th>Person</th><th>Company · role</th><th>Why now</th><th class="num">Score</th><th>Via</th><th></th></tr></thead><tbody>
+      <tr><td>Piotr Dabkowski</td><td>ElevenLabs · Co-founder, CTO</td><td>Angelos (ElevenLabs) is connected and emailed. CTO owns data buying. Has a paper.</td><td class="num">8</td><td>Sid → Angelos</td><td><button class="btn">Draft intro</button></td></tr>
+      <tr><td>Sahaj Garg</td><td>Wisprflow.ai · Co-founder, CTO</td><td>Ariya (Wisprflow) is connected, email 3 next. CTO, paper, email known.</td><td class="num">8</td><td>Sid → Ariya</td><td><button class="btn">Draft intro</button></td></tr>
+      <tr><td>Allegra Molinaro</td><td>Wisprflow.ai · Data Annotation Lead</td><td>Owns annotation. Closest to our offer. Email known.</td><td class="num">7</td><td>Sid → Ariya</td><td><button class="btn">Draft intro</button></td></tr>
+      <tr><td>Malte Kosub</td><td>Parloa · CEO</td><td>Already connected 7 Oct. 2 more Parloa leads connected. No email sent yet.</td><td class="num">7</td><td>Direct</td><td><button class="btn">Draft email 1</button></td></tr>
+      <tr><td>Mati Staniszewski</td><td>ElevenLabs · Co-founder, CEO</td><td>Second route into ElevenLabs. Email known.</td><td class="num">6</td><td>Sid → Angelos</td><td><button class="btn">Draft intro</button></td></tr>
+      <tr><td>Dr. Amol Gite</td><td>BharatGen · VP Ops and AI Partnerships</td><td>Connected 7 Oct. Partnerships role. Goal 3 account.</td><td class="num">7</td><td>Direct</td><td><button class="btn">Draft email 1</button></td></tr>
+    </tbody></table></div></div>
+  </div>
+  <div id="sug-best" class="sug" hidden>
+    <div class="note">Rule: in each company, rank people by role in the deal. Budget (CEO, CTO, VP) · Research/Eval lead · Data/annotation lead · User. The "New AI Verticals" tab already has a Role in Deal column. Outreach PoCs does not. Saley adds it.</div>
+    <div class="card"><div class="tw"><table><thead><tr><th>Company</th><th>Budget</th><th>Research / Eval</th><th>Data / Annotation</th><th>Who we know</th><th>Saley says</th></tr></thead><tbody>
+      <tr><td>Google DeepMind (22 mapped)</td><td>—</td><td>Senior Staff RS, VOICES team (Gemini alignment)</td><td>Dinesh Tewari · Sr Research Program Manager</td><td>Dinesh (connected)</td><td>Email Dinesh first. Ask for the VOICES lead.</td></tr>
+      <tr><td>AI Security Institute UK (17)</td><td>—</td><td>Katarina Slama, Lennart Luettgau</td><td>Ishan Mishra · Human Influence team</td><td>Amos Wittenberg (Demo stage)</td><td>Amos is the champion. Add Human Influence team to the demo.</td></tr>
+      <tr><td>Sarvam AI (18)</td><td>Aditya Dhavala · Voice Products</td><td>Sshubam Verma · frontier speech models</td><td>—</td><td>Both connected</td><td>Goal 3 account. Send Hinglish package to Sshubam. Ask Aditya for a meeting.</td></tr>
+      <tr><td>BharatGen (15)</td><td>Dr. Amol Gite · VP Partnerships</td><td>Vivek Patel · Evals and NLP</td><td>Piyush Sawarkar · Tech Lead GenAI</td><td>All 3 connected</td><td>Goal 3 account. Best covered account we have. One meeting ask to all three.</td></tr>
+      <tr><td>Cartesia.ai (17)</td><td>—</td><td>12 people with papers</td><td>Amin Al-Baghdadi · Voice Production Ops</td><td>Amin (connected 9 Oct)</td><td>Amin runs voice data production. Email 1 today.</td></tr>
+      <tr><td>OpenAI (13 P1)</td><td>—</td><td>Frontier Evals lead (GDPval, expert graders)</td><td>Human Data buying team</td><td>Nobody yet</td><td>Try the Human Data buying team first. It is the buyer, not the researcher.</td></tr>
+    </tbody></table></div></div>
+  </div>
+  <div id="sug-newco" class="sug" hidden>
+    <div class="note">Rule: company is in Master Pipeline and has no person in Outreach PoCs. 161 companies. Saley ranks by goal fit, funding and news. Then it finds public profiles for 3 roles and proposes rows through <code>row_add</code>.</div>
+    <div class="card"><div class="tw"><table><thead><tr><th>Company</th><th>Industry · geo</th><th>Funding</th><th>Goal fit</th><th>Why</th><th></th></tr></thead><tbody>
+      <tr><td>AI4Bharat</td><td>AI Labs · India</td><td>$12M</td><td>G3</td><td>Indic speech and text. The reference lab for sovereign models.</td><td><button class="btn">Find 3 people</button></td></tr>
+      <tr><td>Sesame AI</td><td>Voice Agents · USA</td><td>$250M</td><td>G1, G2</td><td>Conversational speech model. Needs human preference data.</td><td><button class="btn">Find 3 people</button></td></tr>
+      <tr><td>Decagon</td><td>Voice Agents · USA</td><td>$250M</td><td>G1</td><td>Enterprise agents. Evals at scale.</td><td><button class="btn">Find 3 people</button></td></tr>
+      <tr><td>Cohere</td><td>AI Labs · Canada</td><td>$1.6B</td><td>G1, G4</td><td>Multilingual (Aya). Buys human data.</td><td><button class="btn">Find 3 people</button></td></tr>
+      <tr><td>Haptik (Jio)</td><td>Voice Agents · India</td><td>acquired</td><td>G3</td><td>Indian languages at Jio scale.</td><td><button class="btn">Find 3 people</button></td></tr>
+      <tr><td>Inworld AI</td><td>Voice Agents · USA</td><td>$120M</td><td>G2</td><td>Character voice. Training data for persona agents.</td><td><button class="btn">Find 3 people</button></td></tr>
+      <tr><td>Stability AI</td><td>AI Labs · UK</td><td>$350M</td><td>G1</td><td>London. Audio models. Event week 20–21 Oct.</td><td><button class="btn">Find 3 people</button></td></tr>
+    </tbody></table></div></div>
+    <p class="sub" style="margin-top:8px">Also 50 AI Content Apps and 11 AI Shopping Agents with no people. These are Phase 2. Saley parks them until the strategy tab says otherwise.</p>
+  </div>
+  <div id="sug-res" class="sug" hidden>
+    <div class="note">Rule: Academia, has a paper link, not contacted. 89 people. Rank by topic match (evals, human feedback, multilingual speech, safety), recency of last paper, and city near a teammate or an event. Goal 5 wants one research team by 31 Dec.</div>
+    <div class="card"><div class="tw"><table><thead><tr><th>Researcher</th><th>Institution · city</th><th>Working on (from paper link)</th><th>Fit</th><th></th></tr></thead><tbody>
+      <tr><td>Massimo Poesio</td><td>Queen Mary University of London · London</td><td>Computational linguistics, disagreement in annotation, Turing Fellow</td><td><span class="pill ok">G5 · London · annotation</span></td><td><button class="btn">Draft outreach</button></td></tr>
+      <tr><td>Dr. Martyn Harris</td><td>Birkbeck, University of London · London</td><td>Computer science programme director</td><td><span class="pill acc">G5 · London</span></td><td><button class="btn">Draft outreach</button></td></tr>
+      <tr><td>Maarten Sap</td><td>Carnegie Mellon · Pittsburgh</td><td>Social NLP, AI safety lead at Ai2</td><td><span class="pill ok">G5 · safety · human feedback</span></td><td><button class="btn">Draft outreach</button></td></tr>
+      <tr><td>Barbara Plank</td><td>LMU Munich · Munich</td><td>Human label variation, MaiNLP lab</td><td><span class="pill ok">G5 · annotation · multilingual</span></td><td><button class="btn">Draft outreach</button></td></tr>
+      <tr><td>Valentina Pyatkin</td><td>Ai2 / UW · Zurich</td><td>Post-training, preference data</td><td><span class="pill ok">G5 · preference data</span></td><td><button class="btn">Draft outreach</button></td></tr>
+      <tr><td>Tatsunori Hashimoto</td><td>Stanford · Stanford</td><td>Statistical ML, evaluation of LMs</td><td><span class="pill acc">G5 · evals · 13 Stanford PoCs</span></td><td><button class="btn">Draft outreach</button></td></tr>
+    </tbody></table></div></div>
+  </div>
+</section>
+
+<!-- ===================== SIGNALS ===================== -->
+<section class="view" id="v-signals">
+  <div class="top"><div><h1>Signals</h1><p class="sub">News about our companies and people first. All news on the second tab.</p></div><span class="stamp">Source: news_stories · news_sent</span></div>
+  <div class="tabs" id="sig-tabs"><button class="on" data-f="linked">Linked to accounts and people</button><button data-f="all">All news</button></div>
+  <div id="sig-all" hidden>
+    <div class="tabs"><button class="on">Today</button><button>Week</button><button>Month</button><button>Year</button><span class="stamp" style="align-self:center;margin-left:8px">Filters: category · source · tag · importance ≥</span></div>
+    <div class="card"><p class="sample">Sample rows · sorted by score · every story stored, not only the ones sent</p>
+    <div class="tw"><table><thead><tr><th class="num">Imp.</th><th>Story</th><th>Category</th><th>Outlets</th><th>Source</th><th>Published</th><th>Sent?</th></tr></thead><tbody>
+      <tr><td class="num">5</td><td>Government agency opens a grant call for Indic language datasets</td><td>C Tenders</td><td class="num">3</td><td>PIB</td><td>Thu 16 Oct 09:40</td><td><span class="pill ok">digest 13:00</span></td></tr>
+      <tr><td class="num">4</td><td>Account announces a new multilingual voice model</td><td>A Ours</td><td class="num">6</td><td>Sarvam blog</td><td>Fri 17 Oct 09:10</td><td><span class="pill ok">breaking</span></td></tr>
+      <tr><td class="num">4</td><td>Frontier lab publishes human preference evaluation paper</td><td>G Research</td><td class="num">2</td><td>arXiv</td><td>Thu 16 Oct</td><td><span class="pill gray">no</span></td></tr>
+      <tr><td class="num">3</td><td>Competitor raises a round for RLHF data services</td><td>E Competitors</td><td class="num">4</td><td>TechCrunch</td><td>Wed 15 Oct</td><td><span class="pill ok">digest 18:00</span></td></tr>
+      <tr><td class="num">2</td><td>Voice startup launches a consumer app update</td><td>H Voice</td><td class="num">1</td><td>VentureBeat</td><td>Wed 15 Oct</td><td><span class="pill gray">no</span></td></tr>
+    </tbody></table></div><p class="sub" style="margin-top:8px">Today: 212 stored · 38 scored ≥ 3 · 9 sent. Click a row for outlets, why, and who saw it.</p></div>
+  </div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div id="sig-linked">
+  <div class="card">
+    <p class="sample">Sample rows · layout only · real rows come from the news tables</p>
+    <div class="tw"><table><thead><tr><th>When</th><th>Story</th><th>Linked to</th><th>Tag</th><th class="num">Imp.</th><th>Saley says</th><th></th></tr></thead><tbody>
+      <tr><td>Today 09:10</td><td>Account announces a new multilingual voice model</td><td>Sarvam AI · 2 connected</td><td><span class="pill acc">Opportunity</span></td><td class="num">4</td><td>Send Hinglish evals package to Sshubam. Mention the launch.</td><td><button class="btn">Add to action</button></td></tr>
+      <tr><td>Yesterday</td><td>Lab publishes a paper on human preference evaluation</td><td>Google DeepMind · Dinesh Tewari</td><td><span class="pill acc">People</span></td><td class="num">3</td><td>Update "Working on" for the author. Open with the paper.</td><td><button class="btn">Add to action</button></td></tr>
+      <tr><td>2 days ago</td><td>Government agency opens a grant call for Indic language datasets</td><td>MeitY · 1 connected</td><td><span class="pill warn">Tender</span></td><td class="num">5</td><td>Deadline in 21 days. Ask Sid: do we apply?</td><td><button class="btn">Ask Sid</button></td></tr>
+      <tr><td>3 days ago</td><td>Competitor raises a round for RLHF data services</td><td>Competitor set</td><td><span class="pill bad">Risk</span></td><td class="num">3</td><td>Add to Monday pack. No action.</td><td><button class="btn">Dismiss</button></td></tr>
+    </tbody></table></div>
+  </div>
+  </div>
+</section>
+
+<!-- ===================== BLOCKERS ===================== -->
+<section class="view" id="v-blockers">
+  <div class="top"><div><h1>Blockers</h1><p class="sub">Late items that stop a goal or a deal. Who owns them.</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div class="card"><div class="tw"><table><thead><tr><th>Item</th><th>Owner</th><th>Due</th><th>Late by</th><th>Blocks</th><th>Status</th><th></th></tr></thead><tbody>
+    <tr><td>NDA</td><td>Legal</td><td>18 Sep</td><td class="num">29 d</td><td>All 5 goals</td><td><span class="pill bad">not started</span></td><td><button class="btn">Ask for a date</button></td></tr>
+    <tr><td>Master Service Agreement</td><td>Legal</td><td>9 Oct</td><td class="num">8 d</td><td>All 5 goals · SoW template</td><td><span class="pill bad">not started</span></td><td><button class="btn">Ask for a date</button></td></tr>
+    <tr><td>Pulse Product Overview Document</td><td>Design</td><td>30 Sep</td><td class="num">17 d</td><td>Motions 1, 2, 3, 4, 5 · all goals</td><td><span class="pill warn">in progress</span></td><td><button class="btn">Ask for a date</button></td></tr>
+    <tr><td>Participant T&amp;Cs</td><td>Legal · Sid</td><td>25 Sep</td><td class="num">22 d</td><td>Compliance bucket</td><td><span class="pill warn">review pending</span></td><td><button class="btn">Remind</button></td></tr>
+    <tr><td>External Dashboard · Demo for PoCs</td><td>Engineering</td><td>30 Sep</td><td class="num">17 d</td><td>Motion 5 · Motion 7</td><td><span class="pill bad">not started</span></td><td><button class="btn">Ask for a date</button></td></tr>
+    <tr><td>Hinglish STT training set (33 %)</td><td>Sales</td><td>14 Sep</td><td class="num">33 d</td><td>Goal 3 · Motion 4</td><td><span class="pill warn">in progress</span></td><td><button class="btn">Remind</button></td></tr>
+  </tbody></table></div></div>
+</section>
+
+<!-- ===================== EVENTS ===================== -->
+<section class="view" id="v-events">
+  <div class="top"><div><h1>Events</h1><p class="sub">Upcoming events, who we could meet there, and whether we are registered.</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div class="grid2">
+    <div class="card"><h2 style="margin-top:0">AI LIVE: The London Summit <span class="pill warn">in 3 days</span></h2><p class="sub">20–21 Oct · Olympia · registration not confirmed</p>
+      <div class="tiles" style="margin:10px 0"><div class="tile"><div class="l">PoCs in London</div><div class="v">92</div></div><div class="tile"><div class="l">Connected</div><div class="v">13</div></div><div class="tile"><div class="l">P1 in London</div><div class="v">14</div></div></div>
+      <p style="font-size:13px">Saley proposes: 5 meeting asks to connected London people. 2 LI notes to AISI UK P1 people. Who attends from our side?</p>
+      <div style="display:flex;gap:6px"><button class="btn p">Build target list</button><button class="btn">Ask: who attends?</button></div></div>
+    <div class="card"><h2 style="margin-top:0">Future of AI Summit (FT) <span class="pill gray">in 18 days</span></h2><p class="sub">4–5 Nov · 22 Bishopsgate, London</p><p style="font-size:13px">Speaker list is linked. Saley checks the list against Outreach PoCs and Master Pipeline on 25 Oct.</p><button class="btn">Match speakers</button></div>
+    <div class="card"><h2 style="margin-top:0">Symphony · Voice AI (Bolna) <span class="pill gray">in 34 days</span></h2><p class="sub">20 Nov · Bengaluru · registered: yes</p><p style="font-size:13px">111 PoCs are in Bangalore. 12 Voice AI accounts. Goal 3 event. Key people: Manish Gupta (DeepMind), Srinivas Narayanan.</p><button class="btn">Build target list</button></div>
+    <div class="card"><h2 style="margin-top:0">AI World Congress <span class="pill gray">in 39 days</span></h2><p class="sub">25–26 Nov · Kensington, London</p><p style="font-size:13px">Registration not confirmed. Motion 7 target is 1 event per quarter. Two London events are closer. Saley suggests: skip, unless a P1 speaks.</p><button class="btn">Match speakers</button></div>
+  </div>
+</section>
+
+<!-- ===================== ASKS ===================== -->
+<section class="view" id="v-asks">
+  <div class="top"><div><h1>Inbox</h1><p class="sub">Things Saley needs a human to decide. Questions you asked Saley. Your reminders. Nothing you already told Saley to do shows here.</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div class="grid2">
+    <div class="card"><h2 style="margin-top:0">Saley's ideas waiting for a yes <span class="hint">one click. Things you asked for are already done.</span></h2>
+      <div class="act"><div><div class="t">Add 3 rows: AI4Bharat (CEO, speech lead, data lead)</div><div class="w">Proposed from Suggestions · New companies. Public profile links found by web search. <span class="why">row_add · Goal 3</span></div></div><div class="b"><button class="btn p">Approve</button><button class="btn">Edit</button><button class="btn">Reject</button></div></div>
+      <div class="act"><div><div class="t">Email 1 to Amin Al-Baghdadi, Cartesia</div><div class="w">Connected 9 Oct. Draft uses template E1-voice-v3. <span class="why">cell write · 1st Email Sent, 1st Email Date</span></div></div><div class="b"><button class="btn p">Approve</button><button class="btn">Edit</button><button class="btn">Reject</button></div></div>
+      <div class="act"><div><div class="t">Park 14 people: 3 touches, no reply, 30+ days</div><div class="w">Sets Reconnect Date +60 days. <span class="why">batch · Reconnect Date</span></div></div><div class="b"><button class="btn p">Approve</button><button class="btn">See list</button><button class="btn">Reject</button></div></div>
+    </div>
+    <div class="card"><h2 style="margin-top:0">Saley asked the team</h2>
+      <div class="ask"><b>@Sid · 16 Oct</b>ARTPARK asked for the low-resource language list. Which languages do we cover today? <span class="pill warn">open 1 day</span></div>
+      <div class="ask" style="margin-top:8px"><b>@Vaishnavi · 15 Oct</b>274 PoCs have no industry. May I fill it from the Master Pipeline company row? <span class="pill warn">open 2 days</span></div>
+      <div class="ask" style="margin-top:8px"><b>@Sid · 14 Oct</b>NDA is 4 weeks late. Who owns it and when? <span class="pill bad">open 3 days</span></div>
+      <h2>Team asked Saley</h2>
+      <div class="ask"><b>Vaishnavi · 16 Oct</b>"@Saley who in Sarvam is working on evals?" → answered from People view, 2 names. <span class="pill ok">done</span></div>
+      <div class="ask" style="margin-top:8px"><b>Sid · 15 Oct</b>"@Saley remind me Friday to send the Middlesex SoW draft." <span class="pill acc">reminder set · Fri 10:00</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== COMMITMENTS ===================== -->
+<section class="view" id="v-commit">
+  <div class="top"><div><h1>Commitments</h1><p class="sub">Every "I will send X by Friday" from Discord or a meeting. One nudge, one on the due day, then the weekly pack. Never "overdue".</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div class="tabs"><button class="on">Open</button><button>Done this week</button><button>By owner</button></div>
+  <div class="card"><div class="tw"><table><thead><tr><th>Owner</th><th>Commitment</th><th>Source</th><th>Made</th><th>Due</th><th>Nudges</th><th>State</th><th></th></tr></thead><tbody>
+    <tr><td>Sid</td><td>Send Middlesex SoW draft</td><td>Discord · 16 Oct</td><td>16 Oct</td><td>Fri 24 Oct</td><td class="num">0 / 2</td><td><span class="pill acc">open</span></td><td><button class="btn">Done</button> <button class="btn">Move date</button></td></tr>
+    <tr><td>Sid</td><td>Language list to ARTPARK</td><td>Meeting note · 2 Oct</td><td>2 Oct</td><td>Mon 20 Oct</td><td class="num">1 / 2</td><td><span class="pill warn">due Monday</span></td><td><button class="btn">Done</button> <button class="btn">Move date</button></td></tr>
+    <tr><td>Vaishnavi</td><td>Confirm industry fill for 274 rows</td><td>Saley ask · 15 Oct</td><td>15 Oct</td><td>Tue 21 Oct</td><td class="num">0 / 2</td><td><span class="pill acc">open</span></td><td><button class="btn">Done</button> <button class="btn">Move date</button></td></tr>
+    <tr><td>Kushal</td><td>Date for NDA</td><td>Saley ask · 14 Oct</td><td>14 Oct</td><td>Wed 22 Oct</td><td class="num">0 / 2</td><td><span class="pill acc">open</span></td><td><button class="btn">Done</button> <button class="btn">Move date</button></td></tr>
+    <tr><td>Vaishnavi</td><td>Register for AI LIVE London</td><td>Events · 10 Oct</td><td>10 Oct</td><td>Sat 18 Oct</td><td class="num">2 / 2</td><td><span class="pill gray">in weekly pack</span></td><td><button class="btn">Done</button></td></tr>
+  </tbody></table></div></div>
+</section>
+
+<!-- ===================== DECISIONS ===================== -->
+<section class="view" id="v-decisions">
+  <div class="top"><div><h1>Decisions</h1><p class="sub">Choices the team made, who confirmed them, and when. Saley follows only confirmed ones.</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div class="card"><div class="tw"><table><thead><tr><th>Id</th><th>Decision</th><th>Proposed by</th><th>State</th><th>Signature</th><th>Applies to</th><th></th></tr></thead><tbody>
+    <tr><td>D23</td><td>Add Stage, Motion, Goal columns to Outreach PoCs</td><td>Saley · rule R-GAP</td><td><span class="pill warn">proposed</span></td><td>—</td><td>sheet sync, People view</td><td><button class="btn p">Confirm</button> <button class="btn">Reject</button></td></tr>
+    <tr><td>D22</td><td>Per-user seen on every bot answer</td><td>Trishi</td><td><span class="pill ok">active</span></td><td>Trishi · 18 Oct 11:02 · dashboard</td><td>bot answers, user_seen</td><td></td></tr>
+    <tr><td>D19</td><td>Email sending stays off. Drafts only.</td><td>Trishi</td><td><span class="pill ok">active</span></td><td>Trishi · 18 Oct 10:40 · dashboard</td><td>templates, approval cards</td><td></td></tr>
+    <tr><td>D7</td><td>Weekly pack Monday 14:00 IST</td><td>Trishi</td><td><span class="pill ok">active</span></td><td>Trishi · 18 Oct 09:55 · dashboard</td><td>weekly_pack job</td><td></td></tr>
+    <tr><td>D1</td><td>Operating model: B labs and sovereign, C academia, A voice startups</td><td>Claude (plan)</td><td><span class="pill acc">confirmed</span></td><td>Trishi · 18 Oct 09:50 · dashboard</td><td>motion tags, metrics</td><td><button class="btn">Activate</button></td></tr>
+  </tbody></table></div></div>
+</section>
+
+<!-- ===================== WEEKLY PACK ===================== -->
+<section class="view" id="v-pack">
+  <div class="top"><div><h1>Weekly pack</h1><p class="sub">Every Monday at 2 pm. This week against last week, and one suggestion to change the plan.</p></div><span class="stamp">This week: Mon 13 – Sun 19 Oct</span></div>
+  <div class="grid2">
+    <div class="card"><h2 style="margin-top:0">Scoreboard</h2><div class="tw"><table style="min-width:360px"><tr><th>Goal</th><th>Active</th><th>Δ week</th><th>State</th></tr>
+      <tr><td>G1 Evals</td><td class="num">1</td><td class="num">+1</td><td><span class="pill warn">at risk</span></td></tr>
+      <tr><td>G2 Training</td><td class="num">0</td><td class="num">0</td><td><span class="pill bad">blocked</span></td></tr>
+      <tr><td>G3 Hinglish</td><td class="num">0</td><td class="num">0</td><td><span class="pill bad">blocked</span></td></tr>
+      <tr><td>G4 Global lab</td><td class="num">2</td><td class="num">+1</td><td><span class="pill warn">at risk</span></td></tr>
+      <tr><td>G5 University</td><td class="num">1</td><td class="num">0</td><td><span class="pill ok">on track</span></td></tr></table></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+    <div class="card"><h2 style="margin-top:0">Funnel vs last week</h2><div class="tw"><table style="min-width:360px"><tr><th>Step</th><th>This week</th><th>Last week</th></tr>
+      <tr><td>First contacts</td><td class="num">50</td><td class="num">91</td></tr><tr><td>Connects</td><td class="num">14</td><td class="num">22</td></tr><tr><td>Emails sent</td><td class="num">3</td><td class="num">4</td></tr><tr><td>Replies</td><td class="num">1</td><td class="num">0</td></tr><tr><td>Meetings</td><td class="num">1</td><td class="num">1</td></tr></table></div></div>
+    <div class="card"><h2 style="margin-top:0">Motions: target vs actual</h2><div class="tw"><table style="min-width:360px"><tr><th>Motion</th><th>Target / wk</th><th>Actual</th><th>Meetings / 100</th></tr>
+      <tr><td>Founder-led</td><td class="num">1.2 ICP</td><td class="num">30</td><td class="num">1.5</td></tr><tr><td>Academic</td><td class="num">1.2</td><td class="num">4</td><td class="num">0</td></tr><tr><td>Demo datasets</td><td class="num">0.7</td><td class="num">0</td><td class="num">—</td></tr><tr><td>Events</td><td class="num">1 / qtr</td><td class="num">0</td><td class="num">—</td></tr></table></div></div>
+    <div class="card"><h2 style="margin-top:0">One plan suggestion</h2><p style="font-size:13.5px">Academic outreach ran at 4 against a target of 5 per week for 2 weeks. Goal 5 is on track, so no change there. Goal 3 has zero conversations. Suggest: move 2 h per week from Voice AI first contacts to BharatGen, Sarvam and ARTPARK follow-through. <span class="why">based on the last two weeks</span></p><div style="display:flex;gap:6px"><button class="btn p">Accept</button><button class="btn">Edit</button><button class="btn">Reject</button></div></div>
+    <div class="card"><h2 style="margin-top:0">1:1 agenda · Sid and Vaishnavi</h2><ul style="font-size:13.5px;margin:0;padding-left:18px"><li>Wins: AISI reply, Middlesex &gt;50 %.</li><li>Stuck: NDA and MSA not started. Overview doc 17 days late.</li><li>Asks open: 3 (language list, industry fill, NDA owner).</li><li>Decisions needed: D23 new columns.</li><li>Next week top 3: BharatGen meeting ask · 10 backlog emails · London summit list.</li></ul></div>
+    <div class="card"><h2 style="margin-top:0">Slips</h2><div class="tw"><table style="min-width:360px"><tr><th>Item</th><th>Late by</th><th>Blocks</th></tr><tr><td>NDA</td><td class="num">30 d</td><td>all goals</td></tr><tr><td>MSA</td><td class="num">9 d</td><td>all goals</td></tr><tr><td>Overview doc</td><td class="num">18 d</td><td>5 motions</td></tr></table></div></div>
+  </div>
+</section>
+
+<!-- ===================== SCORECARD ===================== -->
+<section class="view" id="v-scorecard">
+  <div class="top"><div><h1>Scorecard</h1><p class="sub">Which kinds of companies answer us. One line per industry.</p></div><span class="stamp">Live sheet numbers, 16 Oct</span></div>
+  <div class="card"><div class="tw"><table><thead><tr><th>Industry</th><th class="num">People</th><th class="num">Contacted</th><th class="num">Connect %</th><th class="num">Reply %</th><th class="num">Meetings</th><th class="num">Deals</th><th>7-day</th></tr></thead><tbody>
+    <tr><td>AI Labs</td><td class="num">167</td><td class="num">80</td><td class="num">20</td><td class="num">—</td><td class="num">1</td><td class="num">0</td><td><span class="pill acc">+12 contacted</span></td></tr>
+    <tr><td>AI Voice Agents</td><td class="num">205</td><td class="num">74</td><td class="num">35</td><td class="num">—</td><td class="num">0</td><td class="num">0</td><td><span class="pill acc">+31 contacted</span></td></tr>
+    <tr><td>Academia</td><td class="num">143</td><td class="num">24</td><td class="num">17</td><td class="num">—</td><td class="num">1</td><td class="num">0</td><td><span class="pill gray">+4</span></td></tr>
+    <tr><td>Voice / Productivity</td><td class="num">25</td><td class="num">13</td><td class="num">46</td><td class="num">—</td><td class="num">0</td><td class="num">0</td><td><span class="pill gray">0</span></td></tr>
+    <tr><td>Robotics</td><td class="num">2</td><td class="num">1</td><td class="num">100</td><td class="num">—</td><td class="num">1</td><td class="num">0</td><td><span class="pill gray">0</span></td></tr>
+    <tr><td>Consumer AI apps</td><td class="num">184</td><td class="num">2</td><td class="num">—</td><td class="num">—</td><td class="num">0</td><td class="num">0</td><td><span class="pill gray">Phase 2</span></td></tr>
+    <tr><td>No industry</td><td class="num">274</td><td class="num">3</td><td class="num">—</td><td class="num">—</td><td class="num">0</td><td class="num">0</td><td><span class="pill warn">fix: D23</span></td></tr>
+  </tbody></table></div><p class="sub" style="margin-top:8px">Reply % needs the cc mailbox (I-2). Until then it shows —.</p></div>
+</section>
+
+<!-- ===================== SOURCES ===================== -->
+<section class="view" id="v-sources">
+  <div class="top"><div><h1>Sources and health</h1><p class="sub">Is everything working? Green means yes. This page is for Trishi.</p></div></div>
+  <input class="vsearch" placeholder="Search in this page…" style="width:100%;font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);margin:0 0 12px">
+  <div class="card" style="margin-bottom:12px"><h2 style="margin-top:0">Health</h2><div class="tw"><table><thead><tr><th>Job</th><th>Last run</th><th>Status</th><th>Note</th></tr></thead><tbody>
+    <tr><td>sheet_sync</td><td>14:10:02</td><td><span class="pill ok">ok</span></td><td>998 rows · 3 changed · 2 bad dates</td></tr>
+    <tr><td>rules_tick</td><td>14:05</td><td><span class="pill ok">ok</span></td><td>7 proposals open</td></tr>
+    <tr><td>signal_match</td><td>12:04</td><td><span class="pill ok">ok</span></td><td>212 stories · 9 signals</td></tr>
+    <tr><td>llm</td><td>today</td><td><span class="pill ok">142 / 400</span></td><td>cache hits 61 %</td></tr>
+    <tr><td>egress</td><td>today</td><td><span class="pill warn">2 hosts 429</span></td><td>venturebeat.com, aim</td></tr>
+    <tr><td>mail_read</td><td>—</td><td><span class="pill gray">off</span></td><td>cc mailbox not set</td></tr>
+  </tbody></table></div></div>
+  <div class="card" style="margin-bottom:12px"><h2 style="margin-top:0">News today <span class="hint">read left to right: what came in, what was thrown away, what reached people</span></h2>
+  <div class="rows">
+    <div class="row"><span>Sources tried</span><div class="bar"><i style="width:100%"></i></div><span class="n">94</span></div>
+    <div class="row"><span>Sources that answered</span><div class="bar"><i style="width:91%"></i></div><span class="n">86</span></div>
+    <div class="row"><span>Items pulled</span><div class="bar"><i style="width:100%"></i></div><span class="n">1 412</span></div>
+    <div class="row"><span>Dropped: seen before</span><div class="bar"><i style="width:58%"></i></div><span class="n">818</span></div>
+    <div class="row"><span>Dropped: duplicate story</span><div class="bar"><i style="width:19%"></i></div><span class="n">267</span></div>
+    <div class="row"><span>Dropped: not relevant</span><div class="bar"><i style="width:8%"></i></div><span class="n">115</span></div>
+    <div class="row"><span>Stored as stories</span><div class="bar"><i style="width:15%"></i></div><span class="n">212</span></div>
+    <div class="row"><span>Scored</span><div class="bar"><i style="width:15%"></i></div><span class="n">212</span></div>
+    <div class="row"><span>Scored 4 or 5</span><div class="bar"><i style="width:2.7%"></i></div><span class="n">38</span></div>
+    <div class="row"><span>About our companies or people</span><div class="bar"><i style="width:.6%"></i></div><span class="n">9</span></div>
+    <div class="row"><span>Sent to Discord</span><div class="bar"><i style="width:.6%"></i></div><span class="n">9</span></div>
+  </div>
+  <div class="tw" style="margin-top:12px"><table><thead><tr><th>Failed or slow sources</th><th>Problem</th><th>Since</th><th>Fallback used</th></tr></thead><tbody>
+    <tr><td>venturebeat.com feed</td><td>429 too many requests</td><td>2 days</td><td>Google News site: lane</td></tr>
+    <tr><td>analyticsindiamag.com</td><td>returns HTML, not a feed</td><td>5 days</td><td>page watch</td></tr>
+    <tr><td>reuters.com</td><td>401</td><td>always</td><td>Google News lane</td></tr>
+    <tr><td>moneycontrol.com</td><td>feed frozen since 2024</td><td>always</td><td>removed</td></tr>
+  </tbody></table></div>
+  <p class="sub" style="margin-top:8px">A check job compares this page with the sheet and the news tables every hour: row counts, last story time, stage counts. A mismatch shows red here and pings Trishi.</p>
+  </div>
+  <div class="src">
+    <div class="card"><h3>Reads today <span class="pill ok">live</span></h3><ul><li>GTM Playbook, 8 tabs, every 60 s</li><li>News tables: stories, sent, dropped index</li><li>Discord: channels it is in, @Saley tags</li><li>Meeting notes folder on Drive</li><li>Web search: SearXNG, DuckDuckGo, Google News RSS</li></ul></div>
+    <div class="card"><h3>Can add, no new access <span class="pill acc">build</span></h3><ul><li>OpenAlex and arXiv by author name → "Working on", latest paper, co-authors</li><li>Hugging Face: model and dataset releases by org</li><li>GitHub org activity (public) for labs and startups</li><li>Company blogs and careers pages (page watch): hires show priorities</li><li>Event speaker lists → match to PoCs</li></ul></div>
+    <div class="card"><h3>Needs your decision <span class="pill warn">ask</span></h3><ul><li><b>Sales mailbox, read-only.</b> Replies and bounces. Without it the reply log is manual.</li><li><b>Google Calendar.</b> Meetings in, briefs out, follow-up after.</li><li><b>Apollo.</b> Emails and titles. Rule today says no paid APIs. Allow with a cap?</li><li><b>Google Alerts account</b> for 225 name alerts.</li><li><b>X/Twitter handles</b> column exists (143 filled). Read public posts? Rate limits apply.</li><li><b>Meeting recorder notes</b> (if you use one) for "next steps" after a call.</li></ul></div>
+    <div class="card"><h3>Never <span class="pill bad">rule</span></h3><ul><li>linkedin.com content. Public search for a profile link only.</li><li>Writes without an approval.</li><li>Invented names, emails, dates, URLs.</li></ul></div>
+  </div>
+</section>
+
+</main>
+</div>
+<div class="toast" id="toast">Mock only. Nothing is written.</div>
+
+<script>
+(function(){
+  // ---------- data from the live sheet (16 Oct) ----------
+  var actions=[
+    ["Email 1 to 10 connected people with an email, oldest first","Connected 2–40 days ago. No email, no DM. Amin (Cartesia), Daisy, Harry, Oliver, Isobel (PolyAI), Ioana (Agoda), Mouparna, Rohit (Gnani), Larissa, Sybille (Parloa).","backlog · 42 rows · writes 1st Email Sent + Date"],
+    ["Meeting ask to BharatGen: Amol, Vivek, Piyush","All three connected 7 Oct. Best covered Goal 3 account. One email to all three.","Goal 3 · 0 conversations today"],
+    ["Hinglish evals package to Sshubam Verma, Sarvam","Connected 7 Oct. Builds frontier speech models. Package 7 is complete.","Goal 3 · Package 7 ready"],
+    ["Email Dinesh Tewari, DeepMind: ask for the VOICES team lead","Only connected person in 22 mapped. Research Program Manager. 6 P1 people in the account wait on LI.","Goal 4 · P1 account"],
+    ["Email the 31 P1 people whose LI request is older than 14 days","39 P1 people did not accept. 31 have an email. Template E1-lab-v2.","P1 · 14-day rule"],
+    ["Middlesex: send SoW draft by Fri","Meeting done. Lead >50 %. Only lead above 50 % this quarter. SoW template waits on MSA. Send a simple letter of intent instead.","Goal 5 · blocker MSA"],
+    ["ARTPARK: reply with the language list","Meeting done. Sujith asked for the low-resource language list. Sid has not answered my ask from 16 Oct.","Goal 3 · open ask"],
+    ["London summit 20–21 Oct: 5 meeting asks","13 connected people in London. Event in 3 days. Registration not confirmed.","Motion 7 · Events"],
+    ["Fill Industry for 274 people from Master Pipeline","Needed to link people to goals. Waits on Vaishnavi's yes since 15 Oct.","data quality · approval open"],
+    ["Add AI4Bharat with 3 people","In Master Pipeline, no people. Goal 3 reference lab. Public profiles found.","new company · row_add"]
+  ];
+  var el=document.getElementById('actions');
+  if(el) el.innerHTML=actions.map(function(a,i){return '<div class="act"><div><div class="t">'+(i+1)+'. '+a[0]+'</div><div class="w">'+a[1]+' <span class="why">'+a[2]+'</span></div></div><div class="b"><button class="btn p" data-t>Approve</button><button class="btn" data-t>Edit</button><button class="btn" data-t>Reject</button></div></div>';}).join('');
+
+  var goals=[
+    ["G1","Close one evals project with a tier-one AI team","USD 30–50k","1 (AISI UK · Demo)","3","Evals packages: 2 of 4 complete · Overview doc · NDA · MSA","warn","at risk"],
+    ["G2","Close one training project with a leading AI team","USD 30–50k","0","3","Training packages: Hinglish STT 33 %, Image-to-Prompt not started · NDA · MSA","bad","blocked"],
+    ["G3","Close one Hinglish STT/TTS/TTT project with an Indian sovereign model","USD 10–20k","0 (Sarvam 2 connected, BharatGen 3 connected, ARTPARK meeting)","2","Hinglish package · Evals benchmark tab · NDA · MSA","bad","blocked"],
+    ["G4","Active commercial conversation with one leading global AI lab, >50 %","USD 50–100k","2 (AISI UK, Middlesex) · DeepMind 1 connected","3","Demo packages · Overview doc","warn","at risk"],
+    ["G5","Land one researcher project at a leading university","—","1 (Middlesex · Lead >50 %)","1 team + 2 referrals","Free API credits · Overview doc · External dashboard demo","ok","on track"]
+  ];
+  document.getElementById('goals').innerHTML=goals.map(function(g){return '<div class="card"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span class="why">'+g[0]+' · '+g[2]+' · due 31 Dec</span><span class="pill '+g[6]+'">'+g[7]+'</span></div><h2 style="margin:6px 0 8px;font-size:15px">'+g[1]+'</h2><div class="tw"><table style="min-width:0"><tr><th>Active conversations</th><td>'+g[3]+'</td></tr><tr><th>Need by December</th><td>'+g[4]+'</td></tr><tr><th>Blockers</th><td>'+g[5]+'</td></tr><tr><th>Weighted pipeline</th><td>≈ USD 0 · deal size fields are empty</td></tr></table></div></div>';}).join('');
+
+  // accounts: [name, industry, goal, people, contacted, connected, emailed, warmth, p1, says]
+  var accounts=[
+    ["BharatGen","AI Voice Agents","G3",15,15,4,0,"Connected",0,"3 decision roles connected. Ask for one meeting."],
+    ["Sarvam AI","AI Voice Agents","G3",18,17,2,0,"Connected",0,"Send Hinglish package. Launch news this week."],
+    ["ARTPARK","AI Labs","G3",15,15,8,1,"Meeting",0,"Reply with the language list. Then propose a pilot."],
+    ["AI Security Institute (UK Govt.)","Academia","G1, G4",17,16,4,1,"Demo",13,"Amos is the champion. 13 P1 wait on LI."],
+    ["Google DeepMind","AI Labs","G4",22,12,1,0,"Connected",6,"Email Dinesh. Ask for VOICES lead."],
+    ["PolyAI","AI Voice Agents","G1",17,9,6,2,"Engaged",0,"4 connected with no email. Email 1 this week."],
+    ["Cartesia.ai","AI Voice Agents","G2",17,2,1,0,"Connected",0,"Amin runs voice data production. Email 1 today."],
+    ["ElevenLabs","AI Voice Agents","G1, G2",11,2,1,1,"Engaged",0,"Ask Angelos for an intro to Piotr (CTO)."],
+    ["Wisprflow.ai","Voice/Productivity","G2",14,2,1,1,"Engaged",0,"Email 3 to Ariya. Then Allegra (annotation lead)."],
+    ["Parloa","AI Voice Agents","G1",9,9,3,0,"Connected",0,"CEO connected 7 Oct. Email 1."],
+    ["Gnani.ai","AI Voice Agents","G3",12,3,3,1,"Engaged",0,"Two connected with no email."],
+    ["Yellow.ai","Voice/Productivity","G3",11,11,5,0,"Connected",0,"5 connected, none emailed."],
+    ["OpenAI","AI Labs","G1, G4",13,13,0,0,"Contacted",13,"No accept yet. Try the Human Data buying team by email."],
+    ["Anthropic","AI Labs","G4",8,8,0,0,"Contacted",8,"No accept yet. 14-day rule: email."],
+    ["Middlesex University London","Academia","G5",2,1,1,1,"Qualified",1,"Lead >50 %. Send SoW draft."],
+    ["Telekinesis AI","Robotics","G2",1,1,1,0,"Meeting",0,"Lead <50 %. Record the package and value."],
+    ["Rime.ai","AI Voice Agents","G2",12,7,2,0,"Connected",0,"Guillermo: research the PoC, then email."],
+    ["NVIDIA","AI Labs","G1",1,1,1,0,"Connected",0,"Principal speech scientist connected 7 Oct."]
+  ];
+  var warmRank={"Listed":0,"Contacted":1,"Connected":2,"Engaged":3,"Meeting":4,"Qualified":5};
+  function warmPill(w){var c=w==="Qualified"||w==="Meeting"?"ok":w==="Engaged"||w==="Connected"?"acc":"gray";return '<span class="pill '+c+'">'+w+'</span>';}
+  function renderAcc(f){
+    var rows=accounts.filter(function(a){
+      if(f==="p1")return a[8]>0; if(f==="warm")return a[5]>0; if(f==="g3")return a[2].indexOf("G3")>=0; if(f==="g5")return a[2].indexOf("G5")>=0; return true;});
+    rows.sort(function(x,y){return warmRank[y[7]]-warmRank[x[7]]||y[5]-x[5];});
+    document.querySelector('#acc-table tbody').innerHTML=rows.map(function(a){var cov=Math.round(a[4]/a[3]*100);var bg=a[5]>=3?'<span class="pill ok">3 roles</span>':a[5]>=1?'<span class="pill warn">single-threaded</span>':'<span class="pill gray">none</span>';return '<tr><td><b>'+a[0]+'</b>'+(a[8]?' <span class="pill warn">P1 ×'+a[8]+'</span>':'')+'</td><td>'+a[1]+'</td><td>'+a[2]+'</td><td class="num">'+a[3]+'</td><td class="num">'+a[4]+'</td><td class="num">'+a[5]+'</td><td class="num">'+a[6]+'</td><td><div class="bar" title="'+cov+'%"><i style="width:'+cov+'%"></i></div></td><td>'+warmPill(a[7])+'</td><td>'+bg+'</td><td>'+a[9]+'</td></tr>';}).join('');
+  }
+  renderAcc('all');
+  tabs('acc-tabs',renderAcc);
+
+  // people: [name, company role, stage, working on, email, next]
+  var people={
+    backlog:[
+      ["Amin Al-Baghdadi","Cartesia.ai · Product and Research Ops, Voice Production","Connected","Voice production ops. Sheet note empty. Saley: 12 Cartesia papers on SSM speech models.","yes","Send email 1"],
+      ["Daisy Leigh","PolyAI · Agent Design Engineer","Connected","Agent design. Connected 8 Sep, 39 days ago.","yes","Send email 1"],
+      ["Guillermo Cámbara","Rime.ai · GenAI Researcher, Speech and Audio","Connected","Paper link on file. Saley pulls latest title from arXiv.","yes","Research the PoC"],
+      ["Dinesh Tewari","Google DeepMind · Senior Research Program Manager","Connected","Programme management for research. Route to VOICES team.","yes","Send email 1"],
+      ["Piotr Żelasko","NVIDIA · Principal Research Scientist, Speech","Connected","Speech and language AI. Lhotse, NeMo contributor (public).","yes","Research the PoC"],
+      ["Malte Kosub","Parloa · CEO and Co-Founder","Connected","Enterprise voice agents, Europe.","yes","Send email 1"],
+      ["Sshubam Verma","Sarvam AI · ML Engineer, frontier speech","Connected","Frontier speech models for Indian languages.","yes","Research the PoC"],
+      ["Dr. Amol Gite","BharatGen · VP Ops and AI Partnerships","Connected","Partnerships. Sovereign model consortium.","yes","Send email 1"],
+      ["Katarina Slama","AI Security Institute (UK) · AI Research Scientist","Connected","Safety evals. Paper on file.","yes","Research the PoC"],
+      ["Gina Neff","Independent · Responsible AI evaluator","Connected","Advisor to frontier models. Could refer.","yes","Research the PoC"]
+    ],
+    p1:[
+      ["Frontier Evaluations lead","OpenAI · Leads Frontier Evaluations","Contacted","GDPval (ICLR 2026). Relies on expert human graders.","no","LI sent, no accept · 14-day rule: find email"],
+      ["Collective Alignment founding member","OpenAI · Collective Alignment team","Contacted","Gathers public input for the Model Spec.","no","Same"],
+      ["Human Data buying team","OpenAI · Human data procurement","Contacted","Buys human data. The buyer role.","no","Priority: find email, not LI"],
+      ["VOICES team founder","Google DeepMind · Senior Staff Research Scientist","Contacted","Gemini alignment. ICML 2026 invited talk.","no","Route via Dinesh Tewari"],
+      ["Amos Wittenberg","AI Security Institute (UK)","Qualified","Replied 13 Oct. Shared official email. Demo stage.","yes","Meeting TBD · set a date"]
+    ],
+    meet:[
+      ["Dr. David Gamez","Middlesex University London","Qualified","Consciousness and AI. Meeting done. Lead >50 %.","yes","Send SoW draft Fri"],
+      ["Amos Wittenberg","AI Security Institute (UK)","Qualified","Demo stage. Meeting TBD.","yes","Set meeting date"],
+      ["Sujith P","ARTPARK","Meeting","Asked for low-resource language list.","yes","Send list · email 2"],
+      ["Wendi L","Telekinesis AI · Chief of Staff","Meeting","Robotics. Lead <50 %.","no","Record package and value"],
+      ["Ariya Rastrow","Wisprflow.ai","Engaged","Email 2 sent, DM sent.","yes","Send email 3"],
+      ["Angelos Perivolaropoulos","ElevenLabs","Engaged","Email 2 sent, DM sent.","yes","Send email 3 · ask intro to CTO"]
+    ]
+  };
+  function renderPpl(f){
+    document.querySelector('#ppl-table tbody').innerHTML=people[f].map(function(p){return '<tr><td><b>'+p[0]+'</b></td><td>'+p[1]+'</td><td>'+warmPill(p[2])+'</td><td style="max-width:320px">'+p[3]+'</td><td>'+(p[4]==="yes"?'<span class="pill ok">yes</span>':'<span class="pill gray">no</span>')+'</td><td>'+p[5]+'</td><td><button class="btn" data-t>Act</button></td></tr>';}).join('');
+  }
+  renderPpl('backlog'); tabs('ppl-tabs',renderPpl);
+
+  tabs('sig-tabs',function(f){document.getElementById('sig-all').hidden=f!=='all';document.getElementById('sig-linked').hidden=f!=='linked';});
+  tabs('sug-tabs',function(f){document.querySelectorAll('.sug').forEach(function(s){s.hidden=s.id!=='sug-'+f;});});
+
+  function tabs(id,fn){var box=document.getElementById(id);box.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;box.querySelectorAll('button').forEach(function(x){x.classList.remove('on')});b.classList.add('on');fn(b.dataset.f);});}
+
+  // views
+  var links=document.querySelectorAll('.rail a[data-v]');
+  function show(v){if(!document.getElementById('v-'+v))v='today';document.querySelectorAll('.view').forEach(function(s){s.classList.toggle('on',s.id==='v-'+v)});links.forEach(function(a){a.classList.toggle('on',a.dataset.v===v)});window.scrollTo(0,0);}
+  links.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();show(a.dataset.v);try{history.replaceState(null,'','#'+a.dataset.v)}catch(x){}});});
+  var h=(location.hash||'').replace('#',''); if(h)show(h);
+
+  // ---------- today's tasks per signed-in person ----------
+  var tasks={
+    vr:[
+      ["Send email 1 to 5 connected people","Amin (Cartesia), Daisy and Harry (PolyAI), Mouparna (Gnani), Larissa (Parloa). Drafts are ready. Tick when sent and Saley marks 1st Email Sent + Date in the sheet.","rule R13 · backlog",["Open drafts","Done"]],
+      ["Research 2 people before email 1","Guillermo (Rime) and Piotr Żelasko (NVIDIA). Saley pulled their latest papers. Read, then tick.","rule R13 · Research the PoC",["Open cards","Done"]],
+      ["Pick 5 new people to contact this week","Scored list for Voice AI and Labs. Tick the ones you take. Saley sets First Contact = VR.","rule R05",["See the 5","Done"]],
+      ["Meeting brief: BharatGen, Mon 11:00","Three people connected. Package 7 ready. Brief is written. Read it before Monday.","rule R08",["Open brief"]],
+      ["Confirm: fill Industry for 274 people","One yes. Saley writes the column from Master Pipeline.","data quality",["Yes, fill it"]]
+    ],
+    sid:[
+      ["Send LinkedIn requests to 5 priority people","OpenAI 2, Anthropic 2, DeepMind 1. Names and profile links below. Tick when sent and Saley marks Sid - LI Addition = Sent.","rule R05 · P1",["See the 5","Done"]],
+      ["Email 3 to Ariya (Wisprflow) and Angelos (ElevenLabs)","Email 2 went 7 days ago. No reply. Drafts ready.","rule R13",["Open drafts","Done"]],
+      ["Reply to Amos (AISI UK)","He replied 13 Oct with his official email. 4 days silent on our side.","reply watch",["Draft reply","Done"]],
+      ["Send the language list to ARTPARK","Promised 2 Oct. Due Monday. Saley has a draft list from the Hinglish package.","commitment",["Open draft","Done"]],
+      ["Call: Wendi (Telekinesis)","LI DM sent 9 Sep, meeting done, no next step recorded. 3-day call reminder.","rule R13 · call",["Done","Skip 3 days"]],
+      ["Send Middlesex the SoW draft by Friday","Only lead above 50 %. MSA is not ready; a letter of intent works.","commitment",["Done","Move date"]]
+    ],
+    kushal:[
+      ["Give a date for the NDA and MSA","Both block every Q4 goal. Legal owns them. Saley asked on 14 Oct.","deliverables",["Set a date"]],
+      ["Decide: grant call for Indic datasets","21 days left. Fits Goal 3. Yes, no, or ask Sid.","news · tender",["Yes","No","Ask Sid"]],
+      ["Confirm decision D23: new Stage / Motion / Goal columns","Saley proposed. Needs one human yes.","decisions",["Confirm","Reject"]]
+    ]
+  };
+  var names={vr:"Vaishnavi",sid:"Sid",kushal:"Kushal"};
+  function renderTasks(u){
+    document.getElementById('hello').textContent="Good afternoon, "+names[u];
+    document.getElementById('mytasks').innerHTML=tasks[u].map(function(t,i){return '<div class="act"><div><div class="t">'+(i+1)+'. '+t[0]+'</div><div class="w">'+t[1]+' <span class="why">'+t[2]+'</span></div></div><div class="b">'+t[3].map(function(b,j){return '<button class="btn'+(j===0?' p':'')+'" data-t>'+b+'</button>'}).join('')+'</div></div>';}).join('');
+  }
+  renderTasks('vr');
+  tabs('who',renderTasks);
+  // tiles navigate
+  document.querySelectorAll('.tile[data-v]').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();show(a.dataset.v);var f=a.dataset.f;if(f&&a.dataset.v==='people'){var b=document.querySelector('#ppl-tabs button[data-f="'+f+'"]');if(b)b.click();}});});
+
+
+  // search: filter rows/cards in the active view
+  document.querySelectorAll('.vsearch').forEach(function(inp){inp.addEventListener('input',function(){var q=inp.value.toLowerCase();var view=inp.closest('.view');view.querySelectorAll('tbody tr, .act').forEach(function(r){r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)>=0)?'':'none';});});});
+  var g=document.getElementById('gsearch');g.addEventListener('input',function(){var q=g.value.toLowerCase();var inp=document.querySelector('.view.on .vsearch');if(inp){inp.value=g.value;inp.dispatchEvent(new Event('input'));}});
+  // mock buttons
+  var toast=document.getElementById('toast'),tm;
+  document.addEventListener('click',function(e){var b=e.target.closest('button.btn');if(!b||b.closest('.tabs'))return;toast.classList.add('show');clearTimeout(tm);tm=setTimeout(function(){toast.classList.remove('show')},1600);});
+})();
+</script>

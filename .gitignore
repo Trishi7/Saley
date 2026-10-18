@@ -1,0 +1,9 @@
+.env
+*.json.key
+*-write.json
+__pycache__/
+.venv/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/
