@@ -7,3 +7,44 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 data/
+
+# service-account keys must live outside the repo; this one was found at the root
+saley-v2.json
+*service-account*.json
+.coverage
+
+# any other env file or key material
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+*credentials*.json
+*-key.json
+
+# Gate run logs: saley dev output during /verify
+docs/test-reports/*-dev.log
+
+# Repo hygiene (/tidy): caches, build output, scratch, editor and OS files
+.mypy_cache/
+.hypothesis/
+.coverage.*
+htmlcov/
+coverage.xml
+venv/
+*.egg-info/
+build/
+dist/
+.scratch/
+*.log
+logs/
+tmp/
+*.tmp
+docs/test-reports/*-screens/
+email-sink/
+*.sqlite
+*.db
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

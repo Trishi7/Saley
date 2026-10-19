@@ -21,7 +21,7 @@ flowchart LR
     BRAIN["Intelligence worker"]
     DB[("PostgreSQL")]
   end
-  LLM["LLM via OpenRouter"]
+  LLM["LLM via Anthropic API"]
   V -->|"look · approve · ask"| DASH
   V <-->|"ping · chat"| BOT
   SH <-->|"sync 60 s"| BRAIN
@@ -58,7 +58,7 @@ flowchart TB
   WORKER --> PROXY
   NEWS --> PROXY
   BOT --> PROXY
-  PROXY --> OUT["Sheets API · Apollo · feeds · OpenAlex · OpenRouter · IMAP"]
+  PROXY --> OUT["Sheets API · Apollo · feeds · OpenAlex · Anthropic API · IMAP"]
   PG --> BK["nightly pg_dump<br/>encrypted · off-server"]
 ```
 
@@ -212,13 +212,15 @@ sequenceDiagram
 * Sheet wins on identity, step and commercial columns. DB wins on derived fields.
 * Allowed writes: First Contact, First Contact Type, First Contact Date, Sid - LI Addition, LI Connected Date, Meeting Date, Meeting Status. Plus Email via `email_write` and new rows via `row_add`. Plus Stage, Motion, Goal after D6.
 * First migration is reviewed: diff report, human fixes, then cutover.
+* One sheet read = one snapshot with a `sync_id` (`sheet_snapshot.id`). A new snapshot is made only when the sheet changed. Every API request reads one snapshot in one read-only transaction and returns its `sync_id`. A stale `?sync_id=` gets 409 "Data changed. Reload the page." (D40)
+* Headers are found by name, never by letter. A required header that is missing or renamed stops that tab only: its last good data stays, `sheet_tab_status` marks it stale, and Sources and health shows a red line with the header. The other tabs sync. Outreach PoCs depends on Master Pipeline. Unknown headers are listed as "new columns". (D41)
 
 ## 09 · Egress proxy
 
 ```mermaid
 flowchart LR
   W["worker · news · bot"] --> X["egress"]
-  X -->|allow| OK["sheets.googleapis.com<br/>api.apollo.io (later)<br/>openrouter.ai<br/>api.openalex.org<br/>export.arxiv.org<br/>feed hosts (94)<br/>imap.gmail.com"]
+  X -->|allow| OK["sheets.googleapis.com<br/>api.apollo.io (later)<br/>api.anthropic.com<br/>api.openalex.org<br/>export.arxiv.org<br/>feed hosts (94)<br/>imap.gmail.com"]
   X -->|block| NO["linkedin.com<br/>everything else"]
   X --> LOG["egress_log<br/>host · count · status"]
 ```
@@ -233,7 +235,7 @@ flowchart LR
   C -->|yes| R["reuse"]
   C -->|no| K{"under daily cap?"}
   K -->|no| Q["queue to tomorrow<br/>rules still run"]
-  K -->|yes| O["OpenRouter<br/>LLM_SMALL · LLM_MID"]
+  K -->|yes| O["Anthropic API<br/>LLM_SMALL · LLM_MID"]
   O --> V["validator<br/>schema · no new names, emails, dates"]
   V --> S["store output + tokens"]
 ```
@@ -277,7 +279,7 @@ flowchart TB
 | Intelligence | 10 | What Saley knows, proposes, asks, remembers, measures, and what each person has seen | worker, humans (decide) |
 | News | 8 | Sources, pulls, stories, what was sent, what was dropped | news container |
 | Operations | 9 | Sync queue and audit, Apollo raw, mail, aliases, do-not-contact, logs, users | worker, bot, web-api |
-| **Total** | 37 | One database `saley`. Three roles: `saley_rw` (worker, news, bot), `saley_ro` (web-api), `saley_admin` (migrations). | |
+| **Total** | 37 | One database `saley`. Three roles: `saley` (worker, news, bot; read-write rows), `saley_ro` (web-api; read-only, views only for personal data), `saley_admin` (migrations, owns the schema). Created by `deploy/sql/roles.sql`. | |
 
 ## 12 · Schemas and relations
 
@@ -410,7 +412,7 @@ erDiagram
 ```mermaid
 pie showData title Monthly run cost, USD (mid case ≈ 128)
   "Apollo credits (plan set Wed)" : 60
-  "LLM via OpenRouter" : 45
+  "LLM via Anthropic API" : 45
   "Backup storage" : 5
   "Domain + TLS" : 2
   "Hetzner server (already paid)" : 0
@@ -421,7 +423,7 @@ pie showData title Monthly run cost, USD (mid case ≈ 128)
 | Item | Low / month | Mid / month | High / month | Note |
 | --- | --- | --- | --- | --- |
 | Hetzner server | $0 | $0 | $0 | Existing. Adds ~1.5 GB RAM, ~2 GB disk. |
-| LLM (OpenRouter) | $15 | $45 | $90 | ≈ 310 calls/day. Small model for 2/3 of calls. |
+| LLM (Anthropic API) | $15 | $45 | $90 | ≈ 310 calls/day. Small model for 2/3 of calls. |
 | Apollo credits | $0 (not used yet) | $60 | $120 | Direct API plan. Decided Wed 22 Oct. Apollo MCP not used: too costly. Cap in D9. |
 | Backup storage | $3 | $5 | $8 | Object storage, 20–50 GB encrypted. |
 | Domain + TLS | $1 | $2 | $2 | Caddy gets certificates free. |

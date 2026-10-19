@@ -1,0 +1,23 @@
+# One image for web, bot, worker and news. The service is the command: `saley <service>`.
+# Stage 1 builds the virtualenv with uv from the lock file; stage 2 runs it as a non-root user.
+
+FROM ghcr.io/astral-sh/uv:0.13.1-python3.12-bookworm-slim AS build
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+WORKDIR /app
+COPY pyproject.toml uv.lock README.md ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
+COPY src ./src
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
+
+FROM python:3.12-slim-bookworm AS run
+RUN useradd --create-home --uid 10001 saley
+WORKDIR /app
+COPY --from=build --chown=saley:saley /app/.venv /app/.venv
+COPY --chown=saley:saley src ./src
+COPY --chown=saley:saley alembic.ini ./
+COPY --chown=saley:saley migrations ./migrations
+COPY --chown=saley:saley docs/DECISIONS.md docs/goal-deliverable-map.yaml ./docs/
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+USER saley
+EXPOSE 8090
+CMD ["saley", "web"]

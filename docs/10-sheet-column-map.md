@@ -48,6 +48,8 @@ Planned columns after decision D6 (Saley may write, human can override): `Stage`
 
 Rules:
 - A restricted role that maps to no column stops every write to the tab until it maps again.
+- A required header that maps to no column stops that tab's sync; other tabs go on. The tab keeps its last good data and shows as stale on Sources and health (D41).
+- Estd. Deal Size (USD) may be a band ("USD 30–50k"). The deal value is its midpoint (40k); an exact value counts as given (D42).
 - Rule R13 never writes the step block. It asks people to update it.
 - Meeting Status values: booked, completed, no-show, rescheduled, TBD. Normalise before compare.
 - Dates arrive as real dates or text like `02.09.2026`. Parse both. Flag the text ones in data quality.

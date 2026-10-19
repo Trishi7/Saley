@@ -1,0 +1,6 @@
+# Gate step 8: browser QA searches these five terms (real names in the sheet copy).
+deepmind
+sarvam
+london
+nda
+gamez

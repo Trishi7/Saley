@@ -1,0 +1,115 @@
+# Saley v2. Same file on the laptop and the server (CLAUDE.md).
+#   laptop:  docker compose up -d postgres   then   uv run saley <service>
+#   server:  docker compose --profile migrate run --rm migrate && docker compose up -d
+# Secrets come from .env (never baked into the image). Inside compose the services reach
+# postgres by its service name, so DATABASE_URL* are overridden to host "postgres".
+
+x-app: &app
+  build: .
+  image: saley:local
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+# Each service gets only the database role it needs (docs/01 §11). Values set here win over
+# .env. The admin (DDL) URL exists only in the one-shot `migrate` service.
+x-db-rw: &db-rw
+  SALEY_ENV: prod
+  DATABASE_URL: postgresql+psycopg://saley:${SALEY_PASSWORD:-saley}@postgres:5432/saley
+  DATABASE_URL_RO: ""
+  DATABASE_URL_ADMIN: ""
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_local}
+      POSTGRES_DB: postgres
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *app
+    profiles: ["migrate"]
+    restart: "no"
+    command: ["saley", "db-upgrade"]
+    environment:
+      SALEY_ENV: prod
+      DATABASE_URL: postgresql+psycopg://saley_admin:${SALEY_ADMIN_PASSWORD:-saley_admin}@postgres:5432/saley
+      DATABASE_URL_ADMIN: postgresql+psycopg://saley_admin:${SALEY_ADMIN_PASSWORD:-saley_admin}@postgres:5432/saley
+
+  web:
+    <<: *app
+    command: ["saley", "web"]
+    expose: ["8090"]
+    environment:
+      # Public-facing: read-only role only, and none of the other services' secrets.
+      SALEY_ENV: prod
+      DATABASE_URL: ""
+      DATABASE_URL_ADMIN: ""
+      DATABASE_URL_RO: postgresql+psycopg://saley_ro:${SALEY_RO_PASSWORD:-saley_ro}@postgres:5432/saley
+      DISCORD_BOT_TOKEN: ""
+      ANTHROPIC_API_KEY: ""
+      MAIL_APP_PASSWORD: ""
+      APOLLO_API_KEY: ""
+      GOOGLE_SERVICE_ACCOUNT_FILE: ""
+
+  bot:
+    <<: *app
+    command: ["saley", "bot"]
+    environment: *db-rw
+
+  worker:
+    <<: *app
+    command: ["saley", "worker"]
+    volumes:
+      # The service account key lives outside the repo; mount it read-only.
+      - type: bind
+        source: ${GOOGLE_SERVICE_ACCOUNT_HOST_FILE:-/run/missing-saley-key.json}
+        target: /run/secrets/google-sa.json
+        read_only: true
+    environment:
+      <<: *db-rw
+      GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/google-sa.json
+
+  news:
+    <<: *app
+    command: ["saley", "news"]
+    environment: *db-rw
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [web]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SALEY_DOMAIN: ${SALEY_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+  # egress: one forward proxy with the same allowlist, as a second wall (docs/01 §09).
+  # Stub until a decision on its shape (docs/QUESTIONS.md). The in-process guard in
+  # saley.core.egress already enforces the allowlist and blocks linkedin.com.
+  # egress:
+  #   profiles: ["egress"]
+  #   image: ubuntu/squid:latest
+  #   volumes:
+  #     - ./deploy/squid.conf:/etc/squid/squid.conf:ro
+
+volumes:
+  pgdata:
+  caddy_data:

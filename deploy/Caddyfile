@@ -1,0 +1,10 @@
+# Caddy: HTTPS in, proxy to the web container. Set SALEY_DOMAIN in the server env.
+# Until Google sign-in (R4) the web-api refuses every /api call outside dev mode.
+{$SALEY_DOMAIN:localhost} {
+	encode gzip
+	reverse_proxy web:8090
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}

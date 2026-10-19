@@ -112,3 +112,5 @@ v2 is a fresh build. The design lives in `docs/`. Read the docs before you write
   ticket: done, open, NEW / CHANGED-default / RETIRED env variables.
 - Docstrings explain WHY. Tests live in `tests/`, one file per package, fixtures in `tests/conftest.py`.
 - Write docs and messages in plain, short sentences (ASD-STE100 style).
+- Every release ends with `/verify`. GATE: PASS is required before `notify.py --release`. A failed step is fixed and `/verify` runs again from step 1.
+- Temporary files, scripts, dumps and screenshots go in .scratch/ or docs/test-reports/<release>-screens/. Never in the repo root, src, or tests.

@@ -1,0 +1,11 @@
+# Words and phrases the STE lint (gate step 3) rejects in UI and bot text. One per line.
+utilize
+leverage
+facilitate
+ensure
+robust
+seamless
+in order to
+prior to
+currently
+please note

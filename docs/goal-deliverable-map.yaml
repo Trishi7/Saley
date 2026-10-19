@@ -1,0 +1,21 @@
+# Goal → deliverable override (decision D34).
+#
+# For each goal code listed here (G1…G5, in the order of the Q4 goal tab), Saley ignores the
+# goal's Dependencies text and uses this list of Deliverables Checklist items instead.
+# Goals that are not listed keep the text rule.
+#
+# Case does not matter. A full item name matches that item only. A name without " - "
+# also matches the part of an item before " - ": "NDA" matches
+# "NDA - to be prepared and vetted by legal". A name that matches no item shows on Sources
+# and health as "map unknown item"; a goal code that does not exist as "map unknown goal".
+#
+# Saley reads this file on every sheet sync. Edit, save, and the next sync uses it.
+
+goals: {}
+
+# Example:
+# goals:
+#   G4:
+#     - Pulse Product Overview Document
+#     - External Dashboard - Demo for PoCs
+#     - New Hinglish STT Demo/Sales Package

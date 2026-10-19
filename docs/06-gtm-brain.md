@@ -249,15 +249,21 @@ erDiagram
 
 ### 6.1 Stage rules (derived, no new column needed)
 
-| Stage | Rule from existing columns | Today |
-| --- | --- | --- |
-| Listed | First Contact = FALSE | 802 |
-| Contacted | First Contact = TRUE and Sid-LI ≠ Connected | 143 |
-| Connected | Sid-LI = Connected, no email or DM sent | 42 |
-| Engaged | Any email sent or LI DM sent, no meeting | 8 |
-| Meeting | Meeting Date set or Meeting Status set | 2 |
-| Qualified | Status = Lead or Demo | 4 |
-| Won / Lost / Parked | Deal Status, or Reconnect Date set | 0 / 0 / 1 |
+Rules are checked top-down; the first match wins (decisions D29, D31, confirmed 18 Oct).
+
+| Order | Stage | Rule from existing columns | Today (18 Oct) |
+| --- | --- | --- | --- |
+| 1 | Won | Deal Status says "won", "signed" or "closed won" | 0 |
+| 1 | Lost | Deal Status says "lost", "dead" or "closed lost", or Closure Prob = 0 % | 0 |
+| 2 | Qualified | Status is "lead", "demo", "quote" or "deal", or Closure Prob ≥ 50 % ("<50%" counts as below 50) | 4 |
+| 3 | Meeting | Meeting Date set or Meeting Status set | 0 |
+| 4 | Parked | Reconnect Date set (only reached below Meeting) | 0 |
+| 5 | Engaged | Any email sent or LI DM sent | 8 |
+| 6 | Connected | Sid - LI Addition = Connected | 41 |
+| 7 | Contacted | First Contact = TRUE (checkbox; "VR" / "Sid" text also counts) | 143 |
+| 8 | Listed | none of the above | 528 |
+
+Words match as whole words and not when negated ("Not won", "Unsigned", "not a lead", "won't").
 
 Saley computes the stage on every sync. If you later add a `Stage` column, Saley fills it and a human can override it.
 

@@ -1,0 +1,17 @@
+.env
+*.json
+!package.json
+*.key
+*-write.json
+.git
+.venv
+.claude
+data
+docs/test-reports
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.coverage
+.env.*
+*.pem
+*.p12

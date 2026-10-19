@@ -21,7 +21,7 @@ flowchart LR
     ENT["Entity resolver"]
     FACT["Fact store"]
     RULE["Rules engine<br/>deterministic"]
-    LLM["LLM jobs<br/>via OpenRouter"]
+    LLM["LLM jobs<br/>via Anthropic API"]
     PROP["Proposal queue"]
     MET["Metric snapshots"]
   end
@@ -318,9 +318,9 @@ The dashboard calls read-only endpoints. Each endpoint maps to one SQL view. Eac
 | rank\_reason | ≤ 20 | 1k → 40 | small |
 | note\_extract | ≤ 10 | 5k → 400 | mid |
 | brief, pack, replan | ≤ 3 | 6k → 600 | mid |
-| **Total** | ≈ 300 | ≈ 0.7 M in · 40k out | ≈ USD 0.5–2 / day at OpenRouter mid-tier prices |
+| **Total** | ≈ 300 | ≈ 0.7 M in · 40k out | ≈ USD 0.5–2 / day at Anthropic API prices |
 
-* Model names live in `.env`: `LLM_SMALL`, `LLM_MID`. OpenRouter routes. Swap without code.
+* Model names live in `.env`: `LLM_SMALL`, `LLM_MID`. They are Anthropic model ids (D28). Swap without code.
 * Every LLM output is cached by input hash for 7 days. Same story, same hint.
 * Daily cap `LLM_DAILY_CALL_CAP`. Over the cap: rules still run, text jobs queue to tomorrow.
 * Scorer backend for news (stage 2) is separate. Jev can take tags and gates there. It cannot write text.
@@ -343,7 +343,7 @@ The dashboard calls read-only endpoints. Each endpoint maps to one SQL view. Eac
 | Failure | Effect | Response |
 | --- | --- | --- |
 | Sheet API down | No new touches. Dashboard shows last sync time amber. | Retry with back-off. Health line at 23:45. Proposals that need a write wait. |
-| OpenRouter down or cap hit | No new drafts or hints. | Rules continue. Text jobs queue. Brief says "text jobs delayed". |
+| Anthropic API down or cap hit | No new drafts or hints. | Rules continue. Text jobs queue. Brief says "text jobs delayed". |
 | News module stops | No new signals. | Other views unaffected. News health line already exists. |
 | Egress proxy blocks a host | One source fails. | Fallback chain from stage 1. Source marked in Sources view. |
 | Bad row in sheet (date text, merged cells) | Row skipped. | Row listed in Data quality panel with the cell address. |
