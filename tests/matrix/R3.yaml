@@ -1,0 +1,194 @@
+# Test matrix R3 (docs/16-verification-standard.md §3). Never edit a row to make it pass.
+# LLM tests use recorded fixtures in tests/fixtures/llm/; one live call per release, counted.
+release: R3
+rows:
+  - id: R3-N01
+    feature: F-R3-01
+    layer: unit
+    what: scoring is deterministic - the same story scores the same 3 times
+    tool: pytest
+    command: pytest tests/test_news.py::test_scoring_is_deterministic
+    pass: test passes
+  - id: R3-N02
+    feature: F-R3-01
+    layer: unit
+    what: the same story from 2 sources becomes 1 signal
+    tool: pytest
+    command: pytest tests/test_news.py::test_dedupe_two_sources_one_signal
+    pass: test passes
+  - id: R3-G01
+    feature: F-R3-02
+    layer: guardrails
+    what: the validator rejects a URL, name or number not in the input facts
+    tool: pytest
+    command: pytest tests/test_intel.py::test_validator_rejects_values_not_in_facts
+    pass: test passes
+  - id: R3-G02
+    feature: F-R3-02
+    layer: guardrails
+    what: linkedin.com fetch is blocked in 3 URL shapes
+    tool: pytest
+    command: pytest tests/test_egress.py::test_linkedin_blocked_three_shapes
+    pass: test passes
+  - id: R3-G03
+    feature: F-R3-02
+    layer: guardrails
+    what: a host outside EGRESS_ALLOWLIST is blocked
+    tool: pytest
+    command: pytest tests/test_egress.py::test_host_outside_allowlist_blocked
+    pass: test passes
+  - id: R3-U01
+    feature: F-R3-03
+    layer: api
+    what: seen per user - A sees, B still sees, A gets "left out 1 you saw"
+    tool: pytest
+    command: pytest tests/test_seen.py::test_seen_is_per_user_with_left_out_count
+    pass: test passes
+  - id: R3-S01
+    feature: F-R3-04
+    layer: sheet
+    what: add-to-pipeline row_add lands with a signature (fake sheet) and shows after one sync
+    tool: pytest
+    command: pytest tests/test_writer.py::test_row_add_with_signature_visible_after_sync
+    pass: test passes
+  - id: R3-S02
+    feature: F-R3-04
+    layer: sheet
+    what: live row_add in SALEY_TEST with signature, then the tab is deleted
+    tool: shell
+    command: python -m saley.cli sheet roundtrip --test-tab --row-add
+    writes: test_tab
+    pass: exit 0; exit 3 NOT CONFIGURED with a Q id = PENDING
+  - id: R3-A01
+    feature: F-R3-05
+    layer: api
+    what: news funnel fetched >= deduped >= scored >= linked, each number links to its list
+    tool: pytest
+    command: pytest tests/test_news.py::test_funnel_is_monotone_and_clickable
+    pass: test passes
+  - id: R3-L01
+    feature: F-R3-06
+    layer: guardrails
+    what: LLM calls stay <= LLM_DAILY_CALL_CAP and a repeat is a cache hit
+    tool: pytest
+    command: pytest tests/test_core.py::test_cap_stops_calls tests/test_news.py::test_repeat_scoring_is_a_cache_hit
+    pass: both tests pass
+  - id: R3-A02
+    feature: F-R3-07
+    layer: api
+    what: Signals All by range and score, Linked, Events, Suggestions endpoints
+    tool: pytest
+    command: pytest tests/test_signals.py
+    pass: every test in the file passes
+  - id: R3-B01
+    feature: F-R3-07
+    layer: browser
+    what: Signals, Events, Suggestions pages and Today "needs a look" / "Saley suggests"
+    tool: browser
+    command: browser signals_pages
+    pass: named browser check passes
+  - id: R3-G04
+    feature: F-R3-08
+    layer: guardrails
+    what: Apollo stays off and Sources and health says "off"
+    tool: pytest
+    command: pytest tests/test_signals.py::test_apollo_is_off
+    pass: test passes
+  - id: R3-L02
+    feature: F-R3-09
+    layer: guardrails
+    what: one live LLM call scores one fixture story, logged in llm_calls, under the cap
+    tool: shell
+    command: python -m saley.cli llm smoke --live
+    pass: exit 0; exit 3 NOT CONFIGURED with a Q id = PENDING
+  - id: R3-G05
+    feature: F-R3-10
+    layer: guardrails
+    what: SearXNG then DuckDuckGo; only result URLs stored; a linkedin.com result is never fetched
+    tool: pytest
+    command: pytest tests/test_search.py::test_profile_links_searx_then_ddg_never_fetch
+    pass: test passes
+  - id: R3-N03
+    feature: F-R3-11
+    layer: unit
+    what: live fetch, 1 request per source kind, 3 items max, no scoring, through egress
+    tool: shell
+    command: python -m saley.cli news fetch --live --once --limit 3 --no-score
+    pass: exit 0
+  - id: R3-C01
+    feature: F-R3-12
+    layer: unit
+    what: meeting-note Next steps lines "[Name] action" become that team member's commitments; non-team owners skipped and counted; alias only from TEAM_NAME_ALIASES, never a prefix guess (D92)
+    tool: pytest
+    command: pytest tests/test_r3_review3.py::test_d92_team_steps_are_stored_and_others_are_counted_unknown
+    pass: test passes
+  - id: R3-C02
+    feature: F-R3-12
+    layer: unit
+    what: a name that only starts with a team short code does not match without an alias (D92, Q-R3-8)
+    tool: pytest
+    command: pytest tests/test_r3_review3.py::test_d92_an_alias_maps_to_the_short_code_and_a_prefix_does_not
+    pass: test passes
+  - id: R3-C03
+    feature: F-R3-12
+    layer: unit
+    what: in Drive and folder notes, a line by a person outside the team becomes a fact on that person ("said they will ...") with the note file + line as source, only when exactly one contact matches; never a commitment, never a new contact (D108)
+    tool: pytest
+    command: pytest tests/test_r3_review3.py::test_r6_an_outsider_step_with_one_matching_contact_becomes_a_fact
+    pass: test passes
+  - id: R3-C04
+    feature: F-R3-12
+    layer: unit
+    what: an alias two people list in TEAM_NAME_ALIASES maps to nobody, in any order of the setting, with one team_alias_ignored warning (D102)
+    tool: pytest
+    command: pytest tests/test_r3_review3.py::test_d102_an_alias_two_people_list_maps_to_nobody_in_any_order
+    pass: test passes
+  - id: R3-S03
+    feature: F-R3-13
+    layer: api
+    what: a second add of the same person and company is a 409 "Already added by <who>"; the claim key (company, name) refuses the add even when the in-function check is passed, and rolls back the decision (D111)
+    tool: pytest
+    command: pytest tests/test_rowadd.py::test_d111_the_key_holds_when_the_check_is_passed
+    pass: test passes
+  - id: R3-S04
+    feature: F-R3-13
+    layer: api
+    what: undo, a cancelled push and a push that failed before the write free the claim; a failed add with a saved plan keeps it until the undo (D111, D86)
+    tool: pytest
+    command: pytest tests/test_rowadd.py::test_d111_undo_and_a_failed_or_cancelled_push_free_the_claim
+    pass: test passes
+  - id: R3-S05
+    feature: F-R3-13
+    layer: api
+    what: the web answer names who added the person; a person only in the sheet keeps the old text (D111)
+    tool: pytest
+    command: pytest tests/test_rowadd.py::test_d111_a_second_add_says_who_added_the_person
+    pass: test passes
+  - id: R3-S06
+    feature: F-R3-13
+    layer: unit
+    what: the row-add advisory lock is on the name, not the company, so two adds of one person in two companies cannot both pass the duplicate check (D111)
+    tool: pytest
+    command: pytest tests/test_rowadd.py::test_d111_the_row_add_lock_is_on_the_name_not_the_company
+    pass: test passes
+  - id: R3-N04
+    feature: F-R3-13
+    layer: unit
+    what: news_seen has an index on story_id, so the nightly story cleanup does not scan news_seen per story (D111)
+    tool: pytest
+    command: pytest tests/test_rowadd.py::test_d111_news_seen_has_an_index_on_story_id
+    pass: test passes
+  - id: R3-Q01
+    feature: F-R3-14
+    layer: unit
+    what: low memory runs browser QA as one process per width (1440 all groups, 1024 and 390 views only); the merged result fails if any width fails or crashes (D112)
+    tool: pytest
+    command: pytest tests/test_verify.py::test_d112_the_per_width_runs_merge_into_one_result
+    pass: test passes
+  - id: R3-Q02
+    feature: F-R3-14
+    layer: unit
+    what: step 6 first removes `qa:` seed rows that a stopped run left behind, names the count, and fails if the teardown fails (D112)
+    tool: pytest
+    command: pytest tests/test_verify.py::test_d112_step_6_removes_leftover_qa_seed_rows_first
+    pass: test passes

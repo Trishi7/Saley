@@ -121,7 +121,7 @@ Seen is per person, not per channel. Every answer states its time window and how
 
 * The bot does three things: ping, chat, approve. No schedule of its own.
 * Per-user seen applies to every query answer: news, people lists, suggestions, reminders.
-* Caps: 3 posts a day, 2 h gap, weekend silence. Meetings and reconnects are the exception.
+* Caps (D132): 4 posts per person per day, DMs and @mentions counted together. A channel post with no mention counts for nobody. 2 h gap per person. Weekend silence. Meetings and reconnects are the exception.
 * Instructions only from the allowlist. Everyone else gets answers.
 
 ## 05 · Worker: Intelligence
@@ -150,7 +150,7 @@ Rules decide. The LLM only reads and writes words. Humans approve. The loop lear
 | working\_on\_refresh | 05:00, 1/7 of contacts | facts |
 | mail\_read | every 10 min | replies, bounces, meeting notes → facts |
 | apollo\_pull | weekly + on demand · to do, Wed 22 Oct | candidate companies and people |
-| daily\_brief | 08:30 | Discord: top 5 + count |
+| daily\_brief | `DAILY_BRIEF_TIME` 14:00 IST, weekdays (D128) | Discord DM per person: 3 lines + count |
 | metrics\_snapshot | 23:50 | metric rows |
 | weekly\_pack | Mon 14:00 | pack page + Discord summary |
 | expire | 00:30 | expired facts and proposals |
@@ -423,7 +423,7 @@ pie showData title Monthly run cost, USD (mid case ≈ 128)
 | Item | Low / month | Mid / month | High / month | Note |
 | --- | --- | --- | --- | --- |
 | Hetzner server | $0 | $0 | $0 | Existing. Adds ~1.5 GB RAM, ~2 GB disk. |
-| LLM (Anthropic API) | $15 | $45 | $90 | ≈ 310 calls/day. Small model for 2/3 of calls. |
+| LLM (Anthropic API) | $15 | $45 | $90 | ≈ 310 calls/day. Small model (`LLM_SMALL=claude-haiku-5-5`) for 2/3 of calls; mid model `LLM_MID=claude-sonnet-5-5` for the rest (D80). Hard cap `LLM_DAILY_CALL_CAP`. |
 | Apollo credits | $0 (not used yet) | $60 | $120 | Direct API plan. Decided Wed 22 Oct. Apollo MCP not used: too costly. Cap in D9. |
 | Backup storage | $3 | $5 | $8 | Object storage, 20–50 GB encrypted. |
 | Domain + TLS | $1 | $2 | $2 | Caddy gets certificates free. |

@@ -1,0 +1,221 @@
+# Test matrix R4 (docs/16-verification-standard.md §3). Never edit a row to make it pass.
+# Bot tests run in the test channel with [TEST]; each test reads back and deletes its own post.
+release: R4
+rows:
+  - id: R4-P01
+    feature: F-R4-01
+    layer: unit
+    what: the weekly-pack cron fires once Mon 14:00 IST (mocked clock); pack = Scorecard
+    tool: pytest
+    command: pytest tests/test_pack.py::test_cron_fires_once_monday_1400_ist tests/test_pack.py::test_pack_matches_scorecard
+    pass: both tests pass
+  - id: R4-P02
+    feature: F-R4-01
+    layer: unit
+    what: '"last week N" is the last Monday snapshot'
+    tool: pytest
+    command: pytest tests/test_pack.py::test_last_week_is_last_monday_snapshot
+    pass: test passes
+  - id: R4-P03
+    feature: F-R4-01
+    layer: bot
+    what: the pack posts in the test channel with [TEST]; read back, then delete
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case pack
+    pass: exit 0 with the post read back and deleted
+  - id: R4-A01
+    feature: F-R4-02
+    layer: guardrails
+    what: sign-in - allowlisted in, others refused, no /api without a session
+    tool: pytest
+    command: pytest tests/test_auth.py::test_allowlisted_in_others_refused tests/test_auth.py::test_no_api_without_session
+    pass: both tests pass
+  - id: R4-Q01
+    feature: F-R4-03
+    layer: bot
+    what: '@Saley answers from the DB only, with per-user seen'
+    tool: pytest
+    command: pytest tests/test_bot.py::test_answer_from_db_only_with_seen
+    pass: test passes
+  - id: R4-Q02
+    feature: F-R4-03
+    layer: bot
+    what: live @Saley answer in the test channel; read back, then delete
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case answer
+    pass: exit 0 with the answer read back and deleted
+  - id: R4-C01
+    feature: F-R4-04
+    layer: guardrails
+    what: caps per person (D132) - 20 queued for one person give <= 4 a day for that person (DMs and @mentions together), >= 2 h apart; a channel post with no mention counts for nobody; a meeting in < 24 h skips the gap; Saturday 0 except meeting / reconnect
+    tool: pytest
+    command: pytest tests/test_bot.py::test_caps_four_per_person_two_hours_weekend_silence
+    pass: test passes
+  - id: R4-C02
+    feature: F-R4-05
+    layer: guardrails
+    what: approver instruction writes with a signature; a non-approver gets a polite refusal, no write
+    tool: pytest
+    command: pytest tests/test_bot.py::test_approver_instruction_writes_non_approver_refused
+    pass: test passes
+  - id: R4-C03
+    feature: F-R4-06
+    layer: guardrails
+    what: EMAIL_SEND_ENABLED=false sends to the sink file, never SMTP
+    tool: pytest
+    command: pytest tests/test_mail.py::test_send_disabled_goes_to_sink_never_smtp
+    pass: test passes
+  - id: R4-B01
+    feature: F-R4-02
+    layer: browser
+    what: sign-in page
+    tool: browser
+    command: browser sign_in_page
+    pass: named browser check passes
+  - id: R4-B02
+    feature: F-R4-01
+    layer: browser
+    what: weekly pack page
+    tool: browser
+    command: browser weekly_pack_page
+    pass: named browser check passes
+  - id: R4-B03
+    feature: F-R4-03
+    layer: browser
+    what: '@Saley card on the dashboard'
+    tool: browser
+    command: browser saley_card
+    pass: named browser check passes
+  - id: R4-H01
+    feature: F-R4-07
+    layer: unit
+    what: Sid's hours 14:00-24:00 IST bound his posts (D126); a post outside waits for the next start
+    tool: pytest
+    command: pytest tests/test_bot.py::test_sid_hours_window_14_to_24
+    pass: test passes
+  - id: R4-S01
+    feature: F-R4-08
+    layer: bot
+    what: the docs/09 shapes are live in test mode; BOT_SHAPES_DRAFT is retired; on the laptop every shape goes to the test channel only (D127)
+    tool: pytest
+    command: pytest tests/test_bot.py::test_shapes_live_in_test_mode_flag_retired
+    pass: test passes
+  - id: R4-G00
+    feature: F-R4-00
+    layer: unit
+    what: gate runs while a dev server is up on WEB_PORT - steps 7-9 use GATE_PORT, saley_test and worker slot worker:gate; the dev listener is never stopped (D113)
+    tool: pytest
+    command: pytest tests/test_verify.py::test_d113_gate_runs_while_a_dev_server_is_up_on_web_port
+    pass: test passes
+  - id: R4-G01
+    feature: F-R4-00
+    layer: unit
+    what: a worker reaps and counts only its own slot; lock names stay global, so two slots never run one job at once (D113)
+    tool: pytest
+    command: pytest tests/test_worker.py::test_d113_a_worker_reaps_and_counts_only_its_own_slot
+    pass: test passes
+  - id: R4-A02
+    feature: F-R4-01
+    layer: api
+    what: /api/pack and /api/scorecard return allowed fields only; a bad week gives 422; no session gives 401
+    tool: pytest
+    command: pytest tests/test_api_abuse.py::test_r4_pack_and_scorecard_contract
+    pass: test passes
+  - id: R4-P04
+    feature: F-R4-09
+    layer: unit
+    what: Scorecard shows "last week N" per industry from the snapshot 7 days back; no snapshot shows "—"
+    tool: pytest
+    command: pytest tests/test_pack.py::test_scorecard_delta_last_week_or_dash
+    pass: test passes
+  - id: R4-A03
+    feature: F-R4-02
+    layer: guardrails
+    what: with Google configured, dev mode is off - mock sign-in 404, X-Saley-As refused, no loopback bypass
+    tool: pytest
+    command: pytest tests/test_auth.py::test_dev_mode_off_when_google_configured
+    pass: test passes
+  - id: R4-A04
+    feature: F-R4-02
+    layer: guardrails
+    what: the callback refuses a bad state, a wrong aud or iss, an unverified email; the cookie is HttpOnly and SameSite=Lax; expiry or removal from the allowlist ends the session
+    tool: pytest
+    command: pytest tests/test_auth.py::test_callback_checks_state_token_and_cookie tests/test_auth.py::test_session_ends_on_expiry_or_allowlist_removal
+    pass: both tests pass
+  - id: R4-Q03
+    feature: F-R4-03
+    layer: guardrails
+    what: an unknown question gets the docs/09 unknown line; no answer holds a value that is not in the DB rows; every answer has citations and the window + seen footer
+    tool: pytest
+    command: pytest tests/test_bot.py::test_unknown_question_and_no_invented_values
+    pass: test passes
+  - id: R4-C04
+    feature: F-R4-04
+    layer: guardrails
+    what: per item, 1 reminder + 1 on the due day, then the weekly pack only; no bot, pack or word-file text contains "overdue"
+    tool: pytest
+    command: pytest tests/test_bot.py::test_politeness_budget_and_no_overdue_word
+    pass: test passes
+  - id: R4-C05
+    feature: F-R4-05
+    layer: guardrails
+    what: the same instruction in chat and on the dashboard gives one write; the second answer says "already done" (D24)
+    tool: pytest
+    command: pytest tests/test_bot.py::test_chat_then_dashboard_is_one_write
+    pass: test passes
+  - id: R4-S02
+    feature: F-R4-10
+    layer: guardrails
+    what: test and live use one render path; only the [TEST] tag and the channel differ; with SALEY_ENV=dev a channel other than the test channel is refused
+    tool: pytest
+    command: pytest tests/test_bot.py::test_test_mode_equals_live_and_laptop_never_posts_live
+    pass: test passes
+  - id: R4-D01
+    feature: F-R4-11
+    layer: guardrails
+    what: DM_ENABLED=false - no daily brief DM is sent and the health line says "DMs off" (D128)
+    tool: pytest
+    command: pytest tests/test_bot.py::test_dm_off_sends_nothing_and_health_says_dms_off
+    pass: test passes
+  - id: R4-D02
+    feature: F-R4-11
+    layer: guardrails
+    what: DM_USERS leaves a person out - that person gets no DM; empty DM_USERS = nobody (D128)
+    tool: pytest
+    command: pytest tests/test_bot.py::test_dm_users_excludes_a_person
+    pass: test passes
+  - id: R4-D03
+    feature: F-R4-11
+    layer: unit
+    what: the daily brief goes at 14:00 IST to two users in DM_USERS (mocked clock), not before (D128)
+    tool: pytest
+    command: pytest tests/test_bot.py::test_brief_at_1400_for_two_users
+    pass: test passes
+  - id: R4-E01
+    feature: F-R4-12
+    layer: bot
+    what: Edit in the Discord modal writes the edited text with a signature, surface=discord (D129)
+    tool: pytest
+    command: pytest tests/test_bot.py::test_discord_modal_edit_writes_with_signature
+    pass: test passes
+  - id: R4-E02
+    feature: F-R4-12
+    layer: api
+    what: the same card edited on the dashboard after Discord - the second saver gets "already done by X at HH:MM", one write only (D129)
+    tool: pytest
+    command: pytest tests/test_bot.py::test_second_saver_gets_already_done
+    pass: test passes
+  - id: R4-P05
+    feature: F-R4-01
+    layer: unit
+    what: on a mocked Monday the pack posts at 14:00 IST and the blocker note at 16:00 (BLOCKER_NOTE_DELAY_MINUTES), at most 5 lines with owner and what it blocks (D130)
+    tool: pytest
+    command: pytest tests/test_pack.py::test_pack_1400_and_blocker_note_1600
+    pass: test passes
+  - id: R4-Q04
+    feature: F-R4-03
+    layer: guardrails
+    what: answer citations are by name ([sheet - person], [note date, company], [news - title]); no citation is a digits-only reference (D131)
+    tool: pytest
+    command: pytest tests/test_bot.py::test_citations_by_name_never_digits
+    pass: test passes

@@ -1,0 +1,181 @@
+# Test matrix R2 (docs/16-verification-standard.md §3). Never edit a row to make it pass;
+# a wrong row is a docs/QUESTIONS.md entry. Feature ids match docs/plans/R2.md.
+# Write tests touch only the scratch tab SALEY_TEST in the sheet copy, never Outreach PoCs rows.
+release: R2
+rows:
+  - id: R2-W01
+    feature: F-R2-01
+    layer: sheet
+    what: write round trip on a fake sheet - cell + decision row + Name note, read back equal
+    tool: pytest
+    command: pytest tests/test_writer.py::test_write_round_trip_cell_decision_and_note
+    pass: test passes
+  - id: R2-W02
+    feature: F-R2-01
+    layer: sheet
+    what: live round trip in SALEY_TEST - create tab, write, read back, undo, delete tab (always)
+    tool: shell
+    command: python -m saley.cli sheet roundtrip --test-tab
+    writes: test_tab
+    pass: exit 0 with values read back equal and the tab deleted; exit 3 NOT CONFIGURED with a Q id = PENDING
+  - id: R2-W03
+    feature: F-R2-02
+    layer: unit
+    what: undo inside UNDO_MINUTES restores the old value; after the window it is refused
+    tool: pytest
+    command: pytest tests/test_writer.py::test_undo_inside_window_restores tests/test_writer.py::test_undo_after_window_is_refused
+    pass: both tests pass
+  - id: R2-W04
+    feature: F-R2-03
+    layer: guardrails
+    what: a write to a locked column is refused with 403 and logged
+    tool: pytest
+    command: pytest tests/test_writer.py::test_locked_column_write_is_403_and_logged
+    pass: test passes
+  - id: R2-W05
+    feature: F-R2-03
+    layer: guardrails
+    what: the Email column is refused while EMAIL_WRITE_ALLOWED=false
+    tool: pytest
+    command: pytest tests/test_writer.py::test_email_write_refused_while_not_allowed
+    pass: test passes
+  - id: R2-W06
+    feature: F-R2-04
+    layer: api
+    what: two users on one row within 2 s - the second gets "already done by X at HH:MM"
+    tool: pytest
+    command: pytest tests/test_act.py::test_second_user_gets_already_done
+    pass: test passes
+  - id: R2-W07
+    feature: F-R2-04
+    layer: api
+    what: the same instruction twice (chat + dashboard) is one write (D24)
+    tool: pytest
+    command: pytest tests/test_act.py::test_same_instruction_twice_is_one_write
+    pass: test passes
+  - id: R2-G01
+    feature: F-R2-01
+    layer: guardrails
+    what: the web process has no write credential and no write scope
+    tool: pytest
+    command: pytest tests/test_writer.py::test_web_process_has_no_write_credential
+    pass: test passes
+  - id: R2-T01
+    feature: F-R2-05
+    layer: api
+    what: my tasks per person - Sid LinkedIn, Vaishnavi research, Kushal approvals (D31)
+    tool: pytest
+    command: pytest tests/test_tasks.py::test_my_tasks_per_person
+    pass: test passes
+  - id: R2-T02
+    feature: F-R2-05
+    layer: api
+    what: Done writes at once with a signature and returns an undo id
+    tool: pytest
+    command: pytest tests/test_act.py::test_done_writes_with_signature_and_undo
+    pass: test passes
+  - id: R2-I01
+    feature: F-R2-06
+    layer: api
+    what: an Inbox card shows once; a dismissed card never returns
+    tool: pytest
+    command: pytest tests/test_inbox.py::test_card_once_and_dismissed_never_returns
+    pass: test passes
+  - id: R2-C01
+    feature: F-R2-07
+    layer: unit
+    what: commitments from meeting notes; mail shows "not configured" without an IMAP login
+    tool: pytest
+    command: pytest tests/test_commitments.py::test_commitments_from_notes tests/test_commitments.py::test_mail_not_configured
+    pass: both tests pass
+  - id: R2-C02
+    feature: F-R2-07
+    layer: guardrails
+    what: reminder politeness - one reminder, one on the due day, then the weekly pack; never "overdue"
+    tool: pytest
+    command: pytest tests/test_commitments.py::test_reminder_politeness_budget
+    pass: test passes
+  - id: R2-D01
+    feature: F-R2-08
+    layer: api
+    what: Decisions view lists decision rows with filters person / surface / undo state
+    tool: pytest
+    command: pytest tests/test_act.py::test_decisions_view_filters
+    pass: test passes
+  - id: R2-P01
+    feature: F-R2-09
+    layer: api
+    what: People drawer "working on" comes from facts with source and date
+    tool: pytest
+    command: pytest tests/test_tasks.py::test_drawer_working_on_from_facts
+    pass: test passes
+  - id: R2-B01
+    feature: F-R2-10
+    layer: browser
+    what: click-path Done -> toast -> Undo restores
+    tool: browser
+    command: browser done_undo
+    pass: named browser check passes
+  - id: R2-B02
+    feature: F-R2-10
+    layer: browser
+    what: click-path Confirm on a decision and dismiss on an Inbox card
+    tool: browser
+    command: browser confirm_dismiss
+    pass: named browser check passes
+  - id: R2-B03
+    feature: F-R2-10
+    layer: browser
+    what: click-path audit of every state-changing control (gate step 9)
+    tool: gate
+    command: step 9
+    pass: gate step 9 PASS
+  - id: R2-S01
+    feature: F-R2-11
+    layer: sheet
+    what: parity holds after 10 random writes and 5 undos
+    tool: pytest
+    command: pytest tests/test_writer.py::test_parity_after_random_writes_and_undos
+    pass: test passes
+  - id: R2-G02
+    feature: F-R2-12
+    layer: guardrails
+    what: the web role has no table grants; it may only EXECUTE the saley_* act functions
+    tool: pytest
+    command: pytest tests/test_act.py::test_ro_role_has_only_act_functions
+    pass: test passes
+  - id: R2-N01
+    feature: F-R2-13
+    layer: unit
+    what: Drive notes folder read (fake Drive, subfolders, Docs/.md/.txt/.pdf/.docx) -> notes in the DB, one parser
+    tool: pytest
+    command: pytest tests/test_notes_drive.py::test_folder_read_puts_notes_in_the_db
+    pass: test passes
+  - id: R2-N02
+    feature: F-R2-13
+    layer: unit
+    what: a changed Drive file (new modifiedTime) is parsed again exactly once; an unchanged file is not
+    tool: pytest
+    command: pytest tests/test_notes_drive.py::test_changed_file_is_parsed_again_once
+    pass: test passes
+  - id: R2-N03
+    feature: F-R2-13
+    layer: unit
+    what: a removed Drive file is marked gone; its commitments stay with "source removed"
+    tool: pytest
+    command: pytest tests/test_notes_drive.py::test_removed_file_marked_gone_commitments_kept
+    pass: test passes
+  - id: R2-N04
+    feature: F-R2-13
+    layer: guardrails
+    what: a 403 on the folder gives the health line "notes - folder not shared" with the folder id, no crash
+    tool: pytest
+    command: pytest tests/test_notes_drive.py::test_403_gives_health_line_no_crash
+    pass: test passes
+  - id: R2-N05
+    feature: F-R2-13
+    layer: sheet
+    what: live read-only Drive sync of the notes folder through egress (never a write)
+    tool: shell
+    command: python -m saley.cli notes sync --live --once
+    pass: exit 0 with the file count; exit 3 NOT CONFIGURED with an open Q id = PENDING

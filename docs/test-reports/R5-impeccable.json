@@ -1,0 +1,277 @@
+{
+  "release": "R5",
+  "method": "Impeccable text guidance only (D196, D200): reference/shape.md, critique.md, audit.md, polish.md read by hand; scores per reference/audit.md (5 dimensions x 0-4). The bundled detector step is skipped (no engine). Scored from the code; the main session adds the browser screenshots.",
+  "pages": {
+    "today": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Order follows the brief: funnel and tiles, tasks, needs a look, Saley suggests, Ask card at the foot.",
+          "A11y: h1 then h2 per section; every control is a button or a link with a name; Done/Undo carry 'Mark done: <task>' / 'Undo: <task>'; inputs are labelled; refusals show in role=status lines. Funnel bars have 'label: n' names.",
+          "P2 a11y: phone buttons are 40 px high (h-10), not 44 px.",
+          "P2 performance: one 524 kB JS chunk (Vite warns above 500 kB); paging refetches the whole /api/today (the last answer stays on screen).",
+          "Theming: stage, state and touch colours are tokens (D201, D203); stage marks 3:1 on the card in both themes. P3: --touch-meet (T12 token) is 2.8:1 on the light card; it is a dot next to a written kind, never the only cue.",
+          "Responsive: grids collapse to one column; task rows stack below 640 px; no fixed widths.",
+          "Integrity: shared Shell components reused (ViewPage, Legend, Tag, Tile, Funnel, Pager, ClickCard, ComingSoon, Sheet); no invented values; unknown shows the dash."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark uses its own token values; every stage mark is 4.5:1 or more on the dark card.",
+          "The blockers line uses the bad-soft wash and the bad ink, both tokens with AA text in dark.",
+          "Same P2 items as light (40 px phone buttons, one large JS chunk)."
+        ]
+      }
+    },
+    "goals": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape: one uniform card per goal, header (text, value band, days left, state tag) -> ring -> compact people table -> blockers; '+N more' Buttons open rows in place (aria-expanded, aria-controls). No page search.",
+          "A11y: h1 page, h2 per goal, h3 per list; the ring is role=img with 'N won of M needed'; truncated names and notes are focusable with the full text in a tooltip. P2: '+N more' and tooltip targets are 32 px, under 44 px on a phone.",
+          "Theming: state tags use the good/warn/bad tokens; stage badges use the D201/D203 stage tokens (dot) with ink text; legend adds Late, Due today, Due later for the blocker tags.",
+          "Responsive: one column below 1280 px, two above; the people table is table-fixed with truncation, so the card never widens the page at 390 px.",
+          "Performance: the ring is now plain SVG (D211, proposed): the bundle went from 887 kB (Recharts ring) to 598 kB. Lists page on the server (10 rows); the last answer stays on screen while the next loads.",
+          "Integrity: real values only; no need -> ring shows the dash (D159); pct above 100 shown as is (D171). P3: the 8-person API cap shows a line 'N more people are on this goal' with no link to the list (no goal filter on People yet)."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Same structure; tokens switch with the theme; the ring track is --muted and the arc --chart-1, both theme tokens.",
+          "P2 as light: 32 px secondary targets on a phone."
+        ]
+      }
+    },
+    "accounts": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape: numbers first (coverage stamp, 'People contacted, by industry' bars that filter the list), then filters, page search and the list, 10 per page with 'N more'.",
+          "Rows: '13 people · 9 P1' from people_label and a stage bar from stage_counts (segments carry data-n; tooltip per stage; bar is role=img with a full text label). Tags Qualified / Engaged / Single-threaded are legend tags.",
+          "Company drawer: no Evidence row; people of the company are Buttons that open the person drawer; touches as the 12-month TouchTimeline strip; stage history as a short list.",
+          "A11y: the company name is a real Button (keyboard), the row click is a pointer shortcut. P2: filter Buttons are 32 px high.",
+          "Responsive: the table scrolls inside its own box below 704 px; filters and search wrap. No page scroll at 390 px.",
+          "Performance: the ring is now plain SVG (D211, proposed): the bundle went from 887 kB (Recharts ring) to 598 kB. Lists page on the server (10 rows); the last answer stays on screen while the next loads.",
+          "Integrity: the legend is the shared view legend (no page-local colour); the industry bars use one hue (primary) on the muted track."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Stage segments use the dark stage tokens; the industry bar uses --primary on --muted, readable in dark.",
+          "Same P2 as light."
+        ]
+      }
+    },
+    "people": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape: counts line, filters with counts ('P1 waiting · 4'), page search, list 10 per page with 'N more'. Funnel links (reached_*) show a named filter ('Contacted or later').",
+          "Person drawer: 'Follow-up by' with an info Button whose tooltip says 'from rule D31' (the one rule id allowed on the page, brief); papers as an 'N papers' Button with a popover of short links (stored text only, new tab, rel noopener, no underline); Working on with 'Source: <column or note date>'; TouchTimeline; stage history. The Email field stays for a person with no email (FeatureGate badge when email_write is off).",
+          "A11y: name Buttons per row; drawer has a Dialog title and description; external links have aria-labels from W. P2: the info Button is 24 px.",
+          "Responsive: table scrolls inside its box below 768 px; the drawer is full width on a phone.",
+          "Performance: the ring is now plain SVG (D211, proposed): the bundle went from 887 kB (Recharts ring) to 598 kB. Lists page on the server (10 rows); the last answer stays on screen while the next loads.",
+          "Integrity: link text and hrefs only from the API (papers[].text, safe_href); unknown values show the dash. P3: paper text derived from a URL (host/last part) reads like a URL; a stored title shows when one exists (people_model)."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Popover and tooltip use the popover/foreground tokens; the P1 tag uses warn-soft/warn, AA in dark.",
+          "Same P2 as light."
+        ]
+      }
+    },
+    "suggestions": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape (R5 T15): New / Seen earlier tabs with counts first (Gmail model, D157), the four kinds as a filter group in the hash (#suggest?tab=newco), then cards 10 a page. Each card leads with the API's one checked line ('Add X (Y) to pipeline — reason'), then score parts, evidence, acts.",
+          "A11y: tabs are toggle Buttons with aria-pressed in a labelled group; Open the person / company opens the T14 drawers and focus returns to the opener; the Add form inputs are inside their labels; refusals show in role=status. P2: sm Buttons are 32 px on a phone.",
+          "Find people is off: the control sits in a FeatureGate (inert) with the 'Coming soon' badge; Add to pipeline keeps the legacy POST /api/act row_add body and data-act=add, and turns into Undo in place (no timer, no toast).",
+          "Integrity: no invented value; a hit link shows only when it is https; titles and parts render as text. P3: score parts are plain chips (no legend entry, they carry their own words).",
+          "Responsive: the card is one column; the hit row wraps; the Add form is one column below 640 px."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the chips use --secondary and --muted tokens; the New count pill uses --primary on the active tab; all text pairs AA.",
+          "Same P2 as light (32 px secondary Buttons)."
+        ]
+      }
+    },
+    "signals": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape: tabs with counts first, then one filter card: the six categories by name as chips (D156, never letters), the window (24 hours … 12 months), the tag select, the source search and (Linked) the company search; then the stories 10 a page.",
+          "A11y: chips and tabs are Buttons with aria-pressed; the select and both search boxes have labels; each story link is an outline Button named 'Open the story: <title>' (new tab, rel noopener noreferrer). News text renders as text only.",
+          "Theming: category dots use the --cat-1..6 tokens (the validated categorical set) on a neutral badge, state tags (Ours, Important, Check the match) use the primary and warn tokens; the legend explains each.",
+          "Responsive: the filter card wraps; the outlets line truncates; no fixed widths. P2: four rows of controls on a phone before the list (the categories wrap to three lines).",
+          "Integrity: 'Nothing new since your last visit' on an empty New tab, never a 'left out' line. The legacy client-side sort (rank/newest/importance) is dropped: it sorted only the 10 rows on screen (D216). P3: no per-category counts (the API has none)."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the --cat tokens have their own dark values (3:1 on the dark card for the dots); the important/verify tags use warn-soft with warn ink (AA).",
+          "Same P2 as light."
+        ]
+      }
+    },
+    "events": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape: tabs with counts, the Upcoming / Past filter, then one table, 10 a page: Event (name, Registered tag, the event page Button), City (Bangalore, London or Other), Venue (the full address on one line, tooltip for the rest), Dates, People in city, Connected, P1.",
+          "Registered events come first (server order, D160) and wear the Registered tag; speaker matches are off and show the 'Coming soon' badge in the page strip (the column is gone, D216).",
+          "A11y: real table headers; the venue cut is focusable with the full text in a tooltip; the event link is an outline Button with the event name in its label.",
+          "Responsive: the table is table-fixed with a min width and scrolls inside its own box (no page scroll at 390 px). P2: on a phone the table needs a sideways swipe.",
+          "Integrity: City is the API's value only (no guess); a blank Location shows the dash."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the Registered tag is good-soft with good ink (AA); table borders use --border.",
+          "Same P2 as light."
+        ]
+      }
+    },
+    "blockers": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape (numbers first): Late items, Packages not ready and the Money blocked tile (a link to #money) in one row; then the late items (most late first) and the packages, each 10 a page with its own pager.",
+          "A11y: h2 per list; tables with headers; long item names cut to one line with the full text in a tooltip on focus; the package meter is role=img with 'N %'.",
+          "Theming: late tags use the bad tokens; the meter uses --primary on --muted; no page-local colour (D203).",
+          "Responsive: the number row is one column below 640 px; tables scroll inside their own box.",
+          "Money blocked (not in PAGES; scored here, D216): numbers first (deal value that waits, '—' when no deal has a value; deals; deals with no value), then the deals 10 a page; a row opens the person drawer; a 'Back to Blockers' Button. Scores for Money: accessibility 3, performance 3, theming 3, responsive 3, integrity 3."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: same tokens switch with the theme; the meter track is --muted and readable on the dark card.",
+          "Money dark: same structure; stage dots use the D201 stage tokens with ink text."
+        ]
+      }
+    }
+  }
+}

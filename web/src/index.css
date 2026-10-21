@@ -1,0 +1,261 @@
+/* Saley dashboard v2 tokens (R5 T10, design system T12). Tailwind v4, CSS-first. Dark via the
+   .dark class (D163). Fonts are bundled files from @fontsource-variable (no CDN, egress rule).
+
+   Direction (D197): "a calm ledger". Warm paper and ink neutrals, one deep teal for action and
+   progress, and colour only where it carries a meaning (state, stage, touch type). Sid and
+   Vaishnavi read numbers at a glance, so numbers use Geist Mono with tabular figures, and the
+   chrome stays quiet. Dark is its own palette (cool ink surfaces), not an inverted light.
+   Contrast: every text pair below is WCAG AA (4.5:1) in both themes; chart marks are 3:1 on
+   the card where they carry meaning alone (.scratch/contrast.py checked the values). */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.982 0.004 85);
+  --foreground: oklch(0.23 0.014 250);
+  --card: oklch(0.998 0.002 85);
+  --card-foreground: oklch(0.23 0.014 250);
+  --popover: oklch(0.998 0.002 85);
+  --popover-foreground: oklch(0.23 0.014 250);
+  --rail: oklch(0.962 0.006 85);
+  --primary: oklch(0.46 0.085 200);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --secondary: oklch(0.935 0.012 200);
+  --secondary-foreground: oklch(0.3 0.04 205);
+  --muted: oklch(0.95 0.006 85);
+  --muted-foreground: oklch(0.47 0.014 250);
+  --accent: oklch(0.945 0.014 200);
+  --accent-foreground: oklch(0.28 0.04 205);
+  --destructive: oklch(0.52 0.18 27);
+  --border: oklch(0.9 0.008 85);
+  --input: oklch(0.88 0.01 85);
+  --ring: oklch(0.58 0.1 200);
+
+  /* State tones: an ink for text and marks, a soft wash for the badge ground. */
+  --good: oklch(0.47 0.11 155);
+  --good-soft: oklch(0.95 0.035 155);
+  --warn: oklch(0.5 0.11 65);
+  --warn-soft: oklch(0.955 0.045 85);
+  --bad: oklch(0.5 0.18 27);
+  --bad-soft: oklch(0.955 0.025 27);
+  --info: oklch(0.47 0.12 255);
+  --info-soft: oklch(0.955 0.025 255);
+  --soon: oklch(0.47 0.14 300);
+  --soon-soft: oklch(0.955 0.03 300);
+  --neutral: oklch(0.45 0.014 250);
+  --neutral-soft: oklch(0.945 0.006 85);
+
+  /* Stages (D201): one named colour per stage, the SAME on every page (legend swatches, tags,
+     StageBar, the Today funnel): Listed grey, Contacted blue, Connected teal, Talking indigo,
+     Met amber, Qualified and Won green (Won deeper), Parked warm grey, Lost muted red. Marks
+     only: stage text stays ink on a neutral badge with a coloured dot, so text contrast is the
+     ink's (AA), and the stage name is always written next to the colour. */
+  --stage-listed: oklch(0.64 0.012 250);
+  --stage-contacted: oklch(0.58 0.14 252);
+  --stage-connected: oklch(0.6 0.1 200);
+  --stage-talking: oklch(0.5 0.16 282);
+  --stage-met: oklch(0.65 0.15 66);
+  --stage-qualified: oklch(0.64 0.14 150);
+  --stage-won: oklch(0.5 0.13 152);
+  --stage-parked: oklch(0.63 0.03 70);
+  --stage-lost: oklch(0.66 0.11 27);
+
+  /* Touch types: the first three slots of the validated categorical palette (dataviz
+     reference instance, all pairs pass CVD in both modes) plus a neutral for the rest. */
+  --touch-li: #2a78d6;
+  --touch-email: #eb6834;
+  --touch-meet: #1baf7a;
+  --touch-other: oklch(0.6 0.012 250);
+
+  /* Signal categories (D156): six fixed slots, always named in text beside the swatch. */
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
+  --cat-5: #e87ba4;
+  --cat-6: #6250d6;
+
+  --chart-1: oklch(0.55 0.09 200);
+  --chart-2: oklch(0.62 0.14 185);
+  --chart-3: oklch(0.7 0.15 75);
+  --chart-4: oklch(0.6 0.18 330);
+  --chart-5: oklch(0.65 0.16 145);
+  --chart-grid: oklch(0.9 0.008 85);
+  /* Card lift (D201: tokens only, no page-local values). */
+  --card-shadow: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+  --card-shadow-hover: 0 2px 8px -2px oklch(0 0 0 / 0.08);
+}
+
+.dark {
+  --background: oklch(0.17 0.01 250);
+  --foreground: oklch(0.95 0.006 85);
+  --card: oklch(0.205 0.012 250);
+  --card-foreground: oklch(0.95 0.006 85);
+  --popover: oklch(0.225 0.013 250);
+  --popover-foreground: oklch(0.95 0.006 85);
+  --rail: oklch(0.19 0.011 250);
+  --primary: oklch(0.76 0.09 195);
+  --primary-foreground: oklch(0.2 0.03 205);
+  --secondary: oklch(0.29 0.03 205);
+  --secondary-foreground: oklch(0.93 0.02 195);
+  --muted: oklch(0.25 0.012 250);
+  --muted-foreground: oklch(0.73 0.012 250);
+  --accent: oklch(0.27 0.025 205);
+  --accent-foreground: oklch(0.94 0.015 195);
+  --destructive: oklch(0.68 0.17 25);
+  --border: oklch(0.31 0.012 250);
+  --input: oklch(0.34 0.012 250);
+  --ring: oklch(0.7 0.09 195);
+
+  --good: oklch(0.78 0.12 155);
+  --good-soft: oklch(0.29 0.05 155);
+  --warn: oklch(0.8 0.11 75);
+  --warn-soft: oklch(0.3 0.05 70);
+  --bad: oklch(0.74 0.14 25);
+  --bad-soft: oklch(0.29 0.06 25);
+  --info: oklch(0.76 0.1 255);
+  --info-soft: oklch(0.29 0.05 255);
+  --soon: oklch(0.77 0.11 300);
+  --soon-soft: oklch(0.29 0.06 300);
+  --neutral: oklch(0.76 0.012 250);
+  --neutral-soft: oklch(0.27 0.012 250);
+
+  /* Dark (D201): the same named stage colours, lifted so each mark keeps 3:1 on the dark card. */
+  --stage-listed: oklch(0.6 0.012 250);
+  --stage-contacted: oklch(0.7 0.13 252);
+  --stage-connected: oklch(0.72 0.1 200);
+  --stage-talking: oklch(0.68 0.15 282);
+  --stage-met: oklch(0.8 0.14 75);
+  --stage-qualified: oklch(0.76 0.13 150);
+  --stage-won: oklch(0.68 0.14 152);
+  --stage-parked: oklch(0.6 0.025 70);
+  --stage-lost: oklch(0.62 0.12 25);
+
+  --touch-li: #3987e5;
+  --touch-email: #d95926;
+  --touch-meet: #199e70;
+  --touch-other: oklch(0.62 0.012 250);
+
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
+  --cat-5: #d55181;
+  --cat-6: #9085e9;
+
+  --chart-1: oklch(0.72 0.09 195);
+  --chart-2: oklch(0.72 0.12 185);
+  --chart-3: oklch(0.78 0.13 75);
+  --chart-4: oklch(0.7 0.16 330);
+  --chart-5: oklch(0.74 0.14 145);
+  --chart-grid: oklch(0.31 0.012 250);
+  --card-shadow: 0 1px 2px 0 oklch(0 0 0 / 0.3);
+  --card-shadow-hover: 0 2px 8px -2px oklch(0 0 0 / 0.45);
+}
+
+@theme inline {
+  --shadow-card: var(--card-shadow);
+  --shadow-card-hover: var(--card-shadow-hover);
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-rail: var(--rail);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-soon: var(--soon);
+  --color-soon-soft: var(--soon-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  /* Brief: never an underlined URL. Links look like Buttons or cards, never like text links. */
+  a,
+  a:hover {
+    text-decoration-line: none;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p,
+  li {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+  input {
+    caret-color: var(--primary);
+  }
+  /* Thin, themed scrollbars: the parts we did not draw still carry the palette. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

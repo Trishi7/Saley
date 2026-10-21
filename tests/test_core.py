@@ -36,11 +36,9 @@ def test_redaction_blanks_secret_keys_only() -> None:
 
 def test_read_only_role_cannot_write(engine: Engine) -> None:
     """The web role (DATABASE_URL_RO's login) must not write. roles.sql creates it."""
-    with engine.connect() as conn:
-        has_role = conn.execute(text("select 1 from pg_roles where rolname = 'saley_ro'")).first()
-    if not has_role:
-        pytest.skip("saley_ro role not created on this server (run deploy/sql/roles.sql)")
-    from tests.conftest import RO_TEST_URL
+    from tests.conftest import RO_TEST_URL, require_ro_role
+
+    require_ro_role()
 
     ro = create_engine(RO_TEST_URL["url"])
     try:
@@ -136,6 +134,30 @@ def test_cap_stops_calls(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> Non
         monkeypatch.delenv("LLM_DAILY_CALL_CAP")
         get_settings.cache_clear()
     assert msgs.calls == []
+
+    # A cap of 2: two different calls go out, the third is blocked and never reaches the model.
+    monkeypatch.setenv("LLM_DAILY_CALL_CAP", "2")
+    get_settings.cache_clear()
+    counted = FakeMessages({"summary": "x", "score": 1})
+    try:
+        for system in ("cap two a", "cap two b"):
+            llm.complete("m", system, [], Answer, job="cap", client_factory=fake_client(counted))
+        assert len(counted.calls) == 2 and llm.calls_today() == 2 and llm.cap_reached()
+        with pytest.raises(llm.LLMCapReached):
+            llm.complete(
+                "m", "cap two c", [], Answer, job="cap", client_factory=fake_client(counted)
+            )
+        assert len(counted.calls) == 2  # the third call never left
+        # A repeat of an answer already paid for is a cache hit: it costs nothing.
+        again = llm.complete(
+            "m", "cap two a", [], Answer, job="cap", client_factory=fake_client(counted)
+        )
+        assert again == Answer(summary="x", score=1) and len(counted.calls) == 2
+    finally:
+        monkeypatch.delenv("LLM_DAILY_CALL_CAP")
+        get_settings.cache_clear()
+        with engine.begin() as conn:
+            conn.execute(text("truncate llm_calls, llm_cache"))
 
 
 def test_no_key_means_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -84,5 +84,32 @@ BEGIN
 END
 $$;
 
+-- R2 (migrations 0006, 0008): the web writes only through seven SECURITY DEFINER functions.
+-- saley_ro gets EXECUTE on them and on nothing else. Nobody else (PUBLIC) may run them.
+-- Owner: `saley`, the read-write role, is the better owner (least rights that still work).
+-- A migration run by saley_admin cannot move the owner, because saley_admin is not a member
+-- of saley. This script runs as superuser, so it does that step. Safe to run again.
+-- After this step a migration DOWNGRADE (0006, 0008, 0009) must run as `saley`, the owner:
+-- only the owner can drop or replace the functions. The migrations switch to the owner with
+-- SET LOCAL ROLE when the migrating role is a member of it, else they stop with a clear text.
+DO $$
+DECLARE
+  f text;
+BEGIN
+  FOR f IN
+    SELECT p.oid::regprocedure::text FROM pg_proc p
+    WHERE p.pronamespace = 'public'::regnamespace
+      AND p.proname IN ('saley_act', 'saley_undo', 'saley_confirm', 'saley_dismiss',
+                    'saley_commitment_done', 'saley_mark_seen', 'saley_request_search',
+                    'saley_proposal_resolve', 'saley_undo_group',
+                    'saley_request_news_run')
+  LOOP
+    EXECUTE format('ALTER FUNCTION %s OWNER TO saley', f);
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO saley_ro', f);
+  END LOOP;
+END
+$$;
+
 -- Defence in depth only: what stops writes is that saley_ro has no write grants.
 ALTER ROLE saley_ro SET default_transaction_read_only = on;

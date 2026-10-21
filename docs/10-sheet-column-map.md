@@ -54,6 +54,15 @@ Rules:
 - Meeting Status values: booked, completed, no-show, rescheduled, TBD. Normalise before compare.
 - Dates arrive as real dates or text like `02.09.2026`. Parse both. Flag the text ones in data quality.
 
+## Writes (R2)
+- Saley writes a cell only from an approved instruction (D24). The worker pushes it to the sheet a few seconds later.
+- Each write adds one line to the Name cell (column C), in this form (D47):
+  `Saley · <column> = <value> · <user> · <surface> · <day time IST> · d<id>`
+  Example: `Saley · Meeting Date = 3 Nov 2026 · Sid · dashboard · Mon 19 Oct 14:05 IST · d42`
+- An undo adds: `Saley · undone d<id> · <user> · <surface> · <time> IST`.
+- The Name cell keeps the newest 10 Saley lines. Human text stays.
+- Formula rule: a value that starts with `=`, `+`, `-` or `@` is refused. Google would run it as a formula. The web, the SQL function and the worker all refuse it, including on undo (H1, D69).
+
 ## Other tabs (read-only)
 | Tab | Key | Columns used |
 | --- | --- | --- |

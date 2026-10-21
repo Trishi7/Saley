@@ -1,0 +1,604 @@
+# Test matrix R5 (docs/16-verification-standard.md §3). Never edit a row to make it pass.
+# Feature ids match docs/plans/R5.md §2. Live sheet rows touch only the scratch tab SALEY_TEST,
+# never Outreach PoCs rows; they declare `writes: test_tab` (D161).
+release: R5
+rows:
+  - id: R5-S01
+    feature: F-R5-01
+    layer: unit
+    what: / serves index.html from src/saley/web/dist/; the built app is under /static/app/ (D145)
+    tool: pytest
+    command: pytest tests/test_web_assets.py::test_index_served_from_dist
+    pass: test passes
+  - id: R5-S02
+    feature: F-R5-01
+    layer: guardrails
+    what: the built JS, CSS and fonts hold no external URL; no CDN at runtime (egress rule, D148)
+    tool: pytest
+    command: pytest tests/test_web_assets.py::test_built_assets_have_no_external_urls
+    pass: test passes
+  - id: R5-S03
+    feature: F-R5-01
+    layer: guardrails
+    what: CSP is script-src 'self' and style-src 'self' plus a new nonce per request; never unsafe-inline (D146)
+    tool: pytest
+    command: pytest tests/test_web_assets.py::test_csp_script_self_style_nonce_per_request
+    pass: test passes
+  - id: R5-S04
+    feature: F-R5-01
+    layer: unit
+    what: the build stamp of src/saley/web/dist/ matches web/ (gate step 1)
+    tool: gate
+    command: step 1
+    pass: gate step 1 PASS
+  - id: R5-S05
+    feature: F-R5-01
+    layer: unit
+    what: the Dockerfile builds web/ in a node stage; the runtime image has no node (D144)
+    tool: pytest
+    command: pytest tests/test_deploy.py::test_node_build_stage_no_node_at_runtime
+    pass: test passes
+  - id: R5-S06
+    feature: F-R5-01
+    layer: browser
+    what: zero console errors and zero CSP reports on every view, dark and light
+    tool: browser
+    command: browser csp_clean
+    pass: named browser check passes
+  - id: R5-S07
+    feature: F-R5-02
+    layer: unit
+    what: the STE lint reads web/src/words.ts; no literal text in TSX
+    tool: pytest
+    command: pytest tests/test_qa.py::test_ste_lint_reads_words_ts
+    pass: test passes
+  - id: R5-S08
+    feature: F-R5-02
+    layer: guardrails
+    what: STE lint on words.ts and index.html (gate step 3)
+    tool: gate
+    command: step 3
+    pass: gate step 3 PASS
+  - id: R5-Q01
+    feature: F-R5-03
+    layer: browser
+    what: a legend at the top of every page explains every tag and colour
+    tool: browser
+    command: browser legend_every_page
+    pass: named browser check passes
+  - id: R5-Q02
+    feature: F-R5-03
+    layer: browser
+    what: no underlined URL link anywhere; internal links are Buttons or clickable cards
+    tool: browser
+    command: browser no_underlined_links
+    pass: named browser check passes
+  - id: R5-Q03
+    feature: F-R5-03
+    layer: browser
+    what: every off feature shows a "coming soon" badge
+    tool: browser
+    command: browser coming_soon_badges
+    pass: named browser check passes
+  - id: R5-Q04
+    feature: F-R5-03
+    layer: browser
+    what: dark and light themes; the top-bar toggle switches and the choice is kept (D163)
+    tool: browser
+    command: browser themes
+    pass: named browser check passes
+  - id: R5-Q05
+    feature: F-R5-03
+    layer: browser
+    what: every view at 1440, 1024 and 390, one width at a time
+    tool: browser
+    command: browser views
+    pass: named browser check passes
+  - id: R5-Q06
+    feature: F-R5-03
+    layer: api
+    what: /api/me features match the settings flags, FIND_PEOPLE_ENABLED included (D164)
+    tool: pytest
+    command: pytest tests/test_web.py::test_me_features_match_settings
+    pass: test passes
+  - id: R5-Q07
+    feature: F-R5-03
+    layer: browser
+    what: long lists show 10 per page with an "N more" count
+    tool: browser
+    command: browser pagers
+    pass: named browser check passes
+  - id: R5-I01
+    feature: F-R5-04
+    layer: unit
+    what: the Impeccable score of every page is recorded in the test report
+    tool: shell
+    command: python scripts/impeccable_report.py --check --release R5
+    pass: exit 0 with every page score recorded
+  - id: R5-T01
+    feature: F-R5-05
+    layer: unit
+    what: the Today funnel counts equal the stage view, with the new labels
+    tool: pytest
+    command: pytest tests/test_web.py::test_today_funnel_matches_stage_view
+    pass: test passes
+  - id: R5-T02
+    feature: F-R5-05
+    layer: browser
+    what: the Today funnel chart and the blockers line with a count and "Open blockers"
+    tool: browser
+    command: browser today_funnel
+    pass: named browser check passes
+  - id: R5-T03
+    feature: F-R5-05
+    layer: browser
+    what: no page search on Today and Q4 goals; global search stays
+    tool: browser
+    command: browser no_page_search
+    pass: named browser check passes
+  - id: R5-T04
+    feature: F-R5-05
+    layer: sheet
+    what: saley sheet verify checks the funnel counts against the sheet
+    tool: pytest
+    command: pytest tests/test_qa.py::test_sheet_verify_checks_funnel
+    pass: test passes
+  - id: R5-T05
+    feature: F-R5-06
+    layer: unit
+    what: task order - due day, then kind (meeting > reconnect > email > LI), then PoC Priority (D152)
+    tool: pytest
+    command: pytest tests/test_intel.py::test_task_order_due_then_kind_then_priority
+    pass: test passes
+  - id: R5-T06
+    feature: F-R5-06
+    layer: unit
+    what: the due-day rule reads the named sheet columns; no due day counts as today (D152)
+    tool: pytest
+    command: pytest tests/test_intel.py::test_due_day_rule_reads_named_columns
+    pass: test passes
+  - id: R5-T07
+    feature: F-R5-06
+    layer: unit
+    what: tasks come 10 per page with an "N more" count
+    tool: pytest
+    command: pytest tests/test_web.py::test_tasks_page_of_10_with_more
+    pass: test passes
+  - id: R5-T08
+    feature: F-R5-06
+    layer: unit
+    what: UNDO_MINUTES defaults to 5 (D143)
+    tool: pytest
+    command: pytest tests/test_settings.py::test_undo_minutes_default_5
+    pass: test passes
+  - id: R5-T09
+    feature: F-R5-06
+    layer: browser
+    what: Done turns into Undo in place; no timer text, no bottom bar
+    tool: browser
+    command: browser done_undo
+    pass: named browser check passes
+  - id: R5-T10
+    feature: F-R5-06
+    layer: unit
+    what: Done writes a value the column already uses; none there gives 409 and no write (D153)
+    tool: pytest
+    command: pytest tests/test_web.py::test_done_value_is_one_the_column_uses
+    pass: test passes
+  - id: R5-T11
+    feature: F-R5-07
+    layer: unit
+    what: needs a look holds only news, event, blocker and waiting kinds; no redirect-only card (D158)
+    tool: pytest
+    command: pytest tests/test_web.py::test_needs_look_kinds_no_redirect_only
+    pass: test passes
+  - id: R5-T12
+    feature: F-R5-07
+    layer: unit
+    what: each Saley suggests line uses input facts only
+    tool: pytest
+    command: pytest tests/test_web.py::test_suggest_line_uses_input_facts_only
+    pass: test passes
+  - id: R5-T13
+    feature: F-R5-07
+    layer: browser
+    what: needs a look cards are clickable as a whole and carry a type badge
+    tool: browser
+    command: browser needs_look_cards
+    pass: named browser check passes
+  - id: R5-T14
+    feature: F-R5-08
+    layer: guardrails
+    what: Add email completes only when a valid email is written through email_write
+    tool: pytest
+    command: pytest tests/test_web.py::test_add_email_completes_on_valid_write
+    pass: test passes
+  - id: R5-T15
+    feature: F-R5-08
+    layer: guardrails
+    what: Add email is refused for a bad value or with EMAIL_WRITE_ALLOWED=false; no write (D154)
+    tool: pytest
+    command: pytest tests/test_web.py::test_add_email_refused_bad_value_or_flag_off
+    pass: test passes
+  - id: R5-T16
+    feature: F-R5-08
+    layer: browser
+    what: Add email has no Done; the click opens the drawer email field
+    tool: browser
+    command: browser add_email
+    pass: named browser check passes
+  - id: R5-G01
+    feature: F-R5-09
+    layer: unit
+    what: the goal ring is won / need, or "—" without a need (D159)
+    tool: pytest
+    command: pytest tests/test_web.py::test_goal_ring_won_of_need_or_dash
+    pass: test passes
+  - id: R5-G02
+    feature: F-R5-09
+    layer: browser
+    what: one card form per goal - ring, compact people table, blockers, "+N more" Button
+    tool: browser
+    command: browser goals_cards
+    pass: named browser check passes
+  - id: R5-A01
+    feature: F-R5-10
+    layer: unit
+    what: account counts read "13 people · 9 P1" with a stage bar
+    tool: pytest
+    command: pytest tests/test_web.py::test_account_people_p1_stage_counts
+    pass: test passes
+  - id: R5-A02
+    feature: F-R5-10
+    layer: unit
+    what: the touch timeline has one row per month and dots per touch type
+    tool: pytest
+    command: pytest tests/test_web.py::test_touch_timeline_by_month
+    pass: test passes
+  - id: R5-A03
+    feature: F-R5-10
+    layer: browser
+    what: Accounts page - legend, stage bar, drawer without Evidence, touch timeline
+    tool: browser
+    command: browser accounts_page
+    pass: named browser check passes
+  - id: R5-P01
+    feature: F-R5-11
+    layer: guardrails
+    what: the person drawer shows "Follow-up by" (D31), "N papers" and the working_on source
+    tool: pytest
+    command: pytest tests/test_web.py::test_person_follow_up_by_papers_source
+    pass: test passes
+  - id: R5-P02
+    feature: F-R5-11
+    layer: guardrails
+    what: paper link text comes from the input; never invented
+    tool: pytest
+    command: pytest tests/test_web.py::test_paper_link_text_never_invented
+    pass: test passes
+  - id: R5-P03
+    feature: F-R5-11
+    layer: browser
+    what: People drawer - Follow-up by tooltip, papers popover, timeline
+    tool: browser
+    command: browser people_drawer
+    pass: named browser check passes
+  - id: R5-N01
+    feature: F-R5-12
+    layer: unit
+    what: Suggestions and Signals have a New tab and a Seen earlier tab, 10 per page (D157)
+    tool: pytest
+    command: pytest tests/test_news.py::test_new_and_seen_tabs_paged_10
+    pass: test passes
+  - id: R5-N02
+    feature: F-R5-12
+    layer: unit
+    what: no "left out" line; with nothing new the text is "Nothing new since your last visit"
+    tool: pytest
+    command: pytest tests/test_web.py::test_no_left_out_line_nothing_new_text
+    pass: test passes
+  - id: R5-N03
+    feature: F-R5-12
+    layer: browser
+    what: New and Seen earlier tabs with counts
+    tool: browser
+    command: browser seen_tabs
+    pass: named browser check passes
+  - id: R5-N04
+    feature: F-R5-13
+    layer: unit
+    what: a story topic is one of the six names or Other; never a letter (D156)
+    tool: pytest
+    command: pytest tests/test_news.py::test_story_topic_six_names_never_letters
+    pass: test passes
+  - id: R5-N05
+    feature: F-R5-13
+    layer: browser
+    what: Signals categories show real names, never letters
+    tool: browser
+    command: browser signals_categories
+    pass: named browser check passes
+  - id: R5-N06
+    feature: F-R5-14
+    layer: unit
+    what: the dev worker runs news once at start, main slot only, when the last run is over 6 h old (D151)
+    tool: pytest
+    command: pytest tests/test_worker.py::test_dev_worker_runs_news_once_main_slot_only
+    pass: test passes
+  - id: R5-N07
+    feature: F-R5-14
+    layer: api
+    what: '"Run news now" is admin only, with one open request at a time (D150)'
+    tool: pytest
+    command: pytest tests/test_web.py::test_run_news_now_admin_only_one_open
+    pass: test passes
+  - id: R5-N08
+    feature: F-R5-14
+    layer: unit
+    what: a news request runs once under the lock
+    tool: pytest
+    command: pytest tests/test_news.py::test_news_request_runs_once_under_lock
+    pass: test passes
+  - id: R5-N09
+    feature: F-R5-14
+    layer: browser
+    what: '"Run news now" on Sources and health for the admin'
+    tool: browser
+    command: browser run_news_now
+    pass: named browser check passes
+  - id: R5-E01
+    feature: F-R5-15
+    layer: unit
+    what: events have City (Bangalore / London / Other) and Venue; registered events first (D160)
+    tool: pytest
+    command: pytest tests/test_web.py::test_events_city_venue_registered_first
+    pass: test passes
+  - id: R5-E02
+    feature: F-R5-15
+    layer: browser
+    what: Events page - City and Venue columns, registered badge, speaker matches "coming soon"
+    tool: browser
+    command: browser events_page
+    pass: named browser check passes
+  - id: R5-C01
+    feature: F-R5-16
+    layer: guardrails
+    what: Commitment Done by a non-owner gets a refusal and no write (D155)
+    tool: pytest
+    command: pytest tests/test_web.py::test_commitment_done_owner_only_no_write
+    pass: test passes
+  - id: R5-C02
+    feature: F-R5-16
+    layer: guardrails
+    what: the SQL function saley_commitment_done refuses a non-owner (D155)
+    tool: pytest
+    command: pytest tests/test_r5_schema.py::test_commitment_done_function_refuses_non_owner
+    pass: test passes
+  - id: R5-C03
+    feature: F-R5-16
+    layer: browser
+    what: a non-owner who presses Done gets the owner toast
+    tool: browser
+    command: browser commitment_owner_toast
+    pass: named browser check passes
+  - id: R5-W01
+    feature: F-R5-06
+    layer: sheet
+    what: live in SALEY_TEST - Done writes a value the column already uses, Undo restores the old value, both with a signature
+    tool: shell
+    command: python -m saley.cli sheet roundtrip --test-tab --case done-undo
+    pass: exit 0 with values read back and the tab deleted; exit 3 NOT CONFIGURED with a Q id = PENDING
+    writes: test_tab
+  - id: R5-W02
+    feature: F-R5-08
+    layer: sheet
+    what: live in SALEY_TEST - Add email writes the email cell only after validation; the task goes (D165)
+    tool: shell
+    command: python -m saley.cli sheet roundtrip --test-tab --case add-email
+    pass: exit 0 with values read back and the tab deleted; exit 3 NOT CONFIGURED with a Q id = PENDING
+    writes: test_tab
+  - id: R5-W03
+    feature: F-R5-16
+    layer: sheet
+    what: live in SALEY_TEST - Commitment Done by a non-owner writes nothing
+    tool: shell
+    command: python -m saley.cli sheet roundtrip --test-tab --case commitment-nonowner
+    pass: exit 0 with values read back and the tab deleted; exit 3 NOT CONFIGURED with a Q id = PENDING
+    writes: test_tab
+  - id: R5-W04
+    feature: F-R5-17
+    layer: sheet
+    what: live in SALEY_TEST - after 20 random Done/Undo, sheet = DB = dashboard
+    tool: shell
+    command: python -m saley.cli sheet roundtrip --test-tab --case parity --n 20 --seed 20261021
+    pass: exit 0 with values read back and the tab deleted; exit 3 NOT CONFIGURED with a Q id = PENDING
+    writes: test_tab
+  - id: R5-W05
+    feature: F-R5-17
+    layer: sheet
+    what: sheet copy = DB = dashboard (saley sheet verify)
+    tool: gate
+    command: step 6
+    pass: gate step 6 PASS
+  - id: R5-K01
+    feature: F-R5-18
+    layer: browser
+    what: click path on Done, Undo, Add email, Commitment Done and Run news now
+    tool: browser
+    command: browser click_path
+    pass: named browser check passes
+  - id: R5-K02
+    feature: F-R5-18
+    layer: browser
+    what: click-path audit of every state-changing control (gate step 9)
+    tool: gate
+    command: step 9
+    pass: gate step 9 PASS
+  - id: R5-X01
+    feature: F-R5-19
+    layer: unit
+    what: shell rows run with SHEET_WRITE_ENABLED=false unless they declare writes test_tab (D161)
+    tool: pytest
+    command: pytest tests/test_qa.py::test_shell_rows_writes_off_unless_test_tab
+    pass: test passes
+  - id: R5-X02
+    feature: F-R5-19
+    layer: unit
+    what: browser QA uses mock sign-ins only before the first control press; the count is in the report (D162)
+    tool: pytest
+    command: pytest tests/test_verify.py::test_mock_signins_only_before_first_press
+    pass: test passes
+  - id: R5-X03
+    feature: F-R5-19
+    layer: unit
+    what: wait_fresh signs in once (D162)
+    tool: pytest
+    command: pytest tests/test_verify.py::test_wait_fresh_signs_in_once
+    pass: test passes
+  - id: R5-X04
+    feature: F-R5-20
+    layer: api
+    what: the R5 params and routes return allowed fields only; bad input gives 422; no session gives 401
+    tool: pytest
+    command: pytest tests/test_api_abuse.py::test_r5_contract
+    pass: test passes
+  - id: R5-X05
+    feature: F-R5-20
+    layer: api
+    what: API contract and abuse suite (gate step 5)
+    tool: gate
+    command: step 5
+    pass: gate step 5 PASS
+  - id: R5-D01
+    feature: F-R5-21
+    layer: unit
+    what: docs, README and STATUS checks (gate step 11)
+    tool: gate
+    command: step 11
+    pass: gate step 11 PASS
+  - id: R5-D02
+    feature: F-R5-21
+    layer: unit
+    what: .env.example lists every variable the code reads, NEWS_RUN_AT_START and FIND_PEOPLE_ENABLED included
+    tool: pytest
+    command: pytest tests/test_env_example.py
+    pass: every test in the file passes
+  - id: R5-L01
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5 sign-in failure page says the reason: an email not on WEB_ALLOWED_EMAILS gets 403 and 'Your email is not on the list.'"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_signin_reason_allowlist
+    pass: test passes
+  - id: R5-L02
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5 sign-in failure page says the reason: a wrong state or a lost state cookie gets 'Sign-in link expired, start again.' and the address to use; Google is not called"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_signin_reason_state
+    pass: test passes
+  - id: R5-L03
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5 sign-in failure page says the reason: Google refuses the code: 'Google did not accept the sign-in code'; Google down: 502 'Google did not answer'"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_signin_reason_token_exchange
+    pass: test passes
+  - id: R5-L04
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5 sign-in failure page says the reason: an error from Google (access_denied) gets 'Google stopped the sign-in. Start again.'"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_signin_reason_google_stopped
+    pass: test passes
+  - id: R5-L05
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5 sign-in failure page says the reason: an unverified email or a failed id_token check names the reason, never only 'Try again'"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_signin_reason_claims
+    pass: test passes
+  - id: R5-L06
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5: state cookie survives the Google round trip: HttpOnly, SameSite=Lax, Path=/auth, no Domain, not Secure on http://localhost in dev; the callback passes the state check and clears the cookie"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_state_cookie_survives_the_google_round_trip
+    pass: test passes
+  - id: R5-L07
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5: state TTL 10 min (Max-Age=600)"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_state_ttl_is_10_minutes
+    pass: test passes
+  - id: R5-L08
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5: saley dev and saley web refuse a port another server holds (Windows lets two servers share a port and split the sign-in)"
+    tool: pytest
+    command: pytest tests/test_cli.py::test_dev_and_web_refuse_a_port_another_server_holds
+    pass: test passes
+  - id: R5-L09
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5: Google error invalid_client: page \"Google refused the client id or secret. Tell the admin.\"; the log has google_error and google_error_description, never the code or secret"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_google_token_error_gets_its_own_page_and_log[invalid_client]
+    pass: test passes
+  - id: R5-L10
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5: Google error redirect_uri_mismatch: page \"The sign-in address and Google setup differ. Tell the admin.\""
+    tool: pytest
+    command: pytest tests/test_auth.py::test_google_token_error_gets_its_own_page_and_log[redirect_uri_mismatch]
+    pass: test passes
+  - id: R5-L11
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5: Google error invalid_grant: page \"The sign-in code expired or was used. Start again.\""
+    tool: pytest
+    command: pytest tests/test_auth.py::test_google_token_error_gets_its_own_page_and_log[invalid_grant]
+    pass: test passes
+  - id: R5-L12
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5: any other Google token error: page \"Google did not accept the sign-in code. Start again.\""
+    tool: pytest
+    command: pytest tests/test_auth.py::test_google_token_error_gets_its_own_page_and_log[other]
+    pass: test passes
+  - id: R5-L13
+    feature: F-R5-22
+    layer: api
+    what: "Q-N5: at start-up the log shows the redirect URI Saley sends and the client id's last 6 characters, never the secret"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_start_up_logs_the_redirect_uri_and_client_id_end
+    pass: test passes
+  - id: R5-V01
+    feature: F-R5-23
+    layer: browser
+    what: "browser load_error_retry: a failed load names the data and offers Retry; never 'Failed to fetch' (both apps)"
+    tool: browser
+    command: browser load_error_retry
+    pass: named browser check passes
+  - id: R5-V02
+    feature: F-R5-23
+    layer: browser
+    what: "the top bar has no View as / Viewing as in any mode: no #act-as, #viewing-as, #who person tabs, no [data-person]; Today asks /api/today with no user= (D207, both apps)"
+    tool: browser
+    command: browser no_view_as
+    pass: named browser check passes
+  - id: R5-V03
+    feature: F-R5-23
+    layer: api
+    what: "/api/me has no view_as or picker field; /api/today with no ?user= is the signed-in person; Google ignores ?user= (D207)"
+    tool: pytest
+    command: pytest tests/test_auth.py::test_no_view_as_in_me_and_today_is_the_signed_in_person
+    pass: test passes
+  - id: R5-V04
+    feature: F-R5-23
+    layer: unit
+    what: "the pure rules of load_error_retry and no_view_as: named error, reason, Retry button, no raw fetch text; no picker hooks, no user= on /api/today"
+    tool: pytest
+    command: pytest tests/test_qa_browser.py::test_load_error_and_view_as_rules
+    pass: test passes

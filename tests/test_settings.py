@@ -17,8 +17,8 @@ def test_defaults_load_without_env_file() -> None:
 
 def test_llm_defaults_are_anthropic_models_d28() -> None:
     s = Settings(_env_file=None)
-    assert s.llm_small == "claude-haiku-4-5"
-    assert s.llm_mid == "claude-sonnet-4-5"
+    assert s.llm_small == "claude-haiku-5-5"  # D80 (proposed)
+    assert s.llm_mid == "claude-sonnet-5-5"
     assert "api.anthropic.com" in s.allowlist
     assert not any("openrouter" in host for host in s.allowlist)
 
@@ -69,3 +69,11 @@ def test_bad_number_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SHEET_SYNC_SECONDS", "1")
     with pytest.raises(ValueError, match="sheet_sync_seconds"):
         Settings(_env_file=None)
+
+
+def test_undo_minutes_default_5(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D143: the undo window is 5 minutes unless UNDO_MINUTES says otherwise."""
+    monkeypatch.delenv("UNDO_MINUTES", raising=False)
+    assert Settings(_env_file=None).undo_minutes == 5
+    monkeypatch.setenv("UNDO_MINUTES", "7")
+    assert Settings(_env_file=None).undo_minutes == 7

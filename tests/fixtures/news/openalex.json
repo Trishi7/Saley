@@ -1,0 +1,34 @@
+{
+  "meta": {"count": 2, "page": 1, "per_page": 3},
+  "results": [
+    {
+      "id": "https://openalex.org/W1000001",
+      "doi": "https://doi.org/10.1234/speech.eval.1",
+      "display_name": "Evaluating speech models across Indian languages",
+      "publication_date": "2026-10-10",
+      "abstract_inverted_index": {"We": [0], "evaluate": [1], "speech": [2], "models": [3], "in": [4], "Hindi": [5]},
+      "authorships": [
+        {
+          "author": {"display_name": "Dinesh Tewari"},
+          "institutions": [{"display_name": "Indian Institute of Science"}]
+        },
+        {"author": {"display_name": "Asha Rao"}, "institutions": []}
+      ]
+    },
+    {
+      "id": "https://openalex.org/W1000002",
+      "doi": null,
+      "display_name": "Human feedback at scale",
+      "publication_date": "2026-10-12",
+      "abstract_inverted_index": null,
+      "authorships": []
+    },
+    {
+      "id": "https://openalex.org/W1000003",
+      "doi": null,
+      "display_name": "",
+      "publication_date": "not-a-date",
+      "authorships": []
+    }
+  ]
+}

@@ -7,14 +7,19 @@ Tests never read `.env`; settings come from the process environment and defaults
 
 from __future__ import annotations
 
+import json
 import os
-from collections.abc import Iterator
+import re
+from collections.abc import Callable, Iterator
 from datetime import date, timedelta
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import psycopg
 import pytest
 from alembic import command
+from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -25,8 +30,40 @@ from saley.core.settings import Settings, get_settings
 Settings.model_config["env_file"] = None  # never read .env in tests
 
 RO_TEST_URL: dict[str, str] = {}
+# Does the saley_ro login exist on the test server? Set once per session (`_ensure_roles`).
+RO_ROLE_STATE: dict[str, bool] = {"ok": False}
+RO_ROLE_MISSING = (
+    "role saley_ro missing and the test login cannot create it (run deploy/sql/roles.sql)"
+)
 
 DATA_TABLES = (
+    "bot_exchange",
+    "bot_post",
+    "weekly_pack",
+    "scorecard_snapshot",
+    "web_session",
+    "notes_sync_state",
+    "notes_file",
+    "search_hit",
+    "search_request",
+    "news_run_request",
+    "signal",
+    "news_sent",
+    "news_dropped",
+    "news_seen",
+    "news_stories",
+    "news_source_runs",
+    "news_editions",
+    "news_sources",
+    "user_seen",
+    "ask",
+    "reminder",
+    "commitment",
+    "fact",
+    "sync_audit",
+    "sync_outbox",
+    "decision",
+    "proposal",
     "touch",
     "stage_log",
     "opportunity",
@@ -73,10 +110,83 @@ def _ensure_database(url: str) -> None:
             conn.execute(f'create database "{u.database}"')
 
 
+def _ensure_roles(url: str) -> bool:
+    """Make the web and admin roles when they are missing and this login may (B2).
+
+    Why: CI starts an empty server. `deploy/sql/roles.sql` is the real script and CI runs it,
+    but a developer who forgot it should not see bare failures. A superuser login creates the
+    two roles with the same names and passwords as roles.sql (idempotent). Any other login
+    cannot: then the role tests skip with a clear reason (`require_ro_role`).
+    The roles must exist BEFORE the migrations run: they grant to saley_ro only if it exists.
+    """
+    u = make_url(url)
+    with psycopg.connect(
+        host=u.host,
+        port=u.port or 5432,
+        user=u.username,
+        password=u.password,
+        dbname="postgres",
+        autocommit=True,
+        connect_timeout=5,
+    ) as conn:
+        have = {
+            r[0]
+            for r in conn.execute(
+                "select rolname from pg_roles where rolname in ('saley_ro', 'saley_admin')"
+            )
+        }
+        if "saley_ro" in have:
+            return True
+        row = conn.execute("select rolsuper from pg_roles where rolname = current_user").fetchone()
+        if not (row and row[0]):
+            return False
+        for role in ("saley_ro", "saley_admin"):
+            if role not in have:
+                conn.execute(f"create role {role} login password '{role}'")
+        conn.execute(f'grant connect on database "{u.database}" to saley_ro')
+        conn.execute("alter role saley_ro set default_transaction_read_only = on")
+        return True
+
+
+# One owner of the test database at a time: a pytest session or the gate's server (D113).
+from saley.qa.gate import TEST_DB_LOCK, TEST_DB_LOCK_WAIT  # noqa: E402
+
+
+def _own_test_database(url: str) -> psycopg.Connection:
+    """Wait until no other pytest session uses this database, then hold it until we are done.
+
+    Why: a session starts with `drop schema public cascade`. A second pytest run against the same
+    database (a reviewer agent, a CI step, a second terminal) would drop the tables under the
+    first run and give random setup ERRORs in unrelated tests (the test_signals flake). An
+    advisory lock on a held connection serialises the runs. It is freed when the process ends.
+    """
+    u = make_url(url)
+    conn = psycopg.connect(
+        host=u.host,
+        port=u.port or 5432,
+        user=u.username,
+        password=u.password,
+        dbname=u.database,
+        autocommit=True,
+        connect_timeout=5,
+    )
+    conn.execute(f"set lock_timeout = '{TEST_DB_LOCK_WAIT}'")
+    conn.execute("select pg_advisory_lock(%s)", (TEST_DB_LOCK,))
+    return conn
+
+
+def require_ro_role() -> None:
+    """Skip a test that needs the real web role when the role is not there (B2)."""
+    if not RO_ROLE_STATE["ok"]:
+        pytest.skip(RO_ROLE_MISSING)
+
+
 @pytest.fixture(scope="session")
 def test_db_url() -> Iterator[str]:
     url = _test_url()
     _ensure_database(url)
+    owner = _own_test_database(url)
+    RO_ROLE_STATE["ok"] = _ensure_roles(url)
     # The real read-only login, pointed at the test database (test_core checks it cannot write).
     RO_TEST_URL["url"] = (
         make_url(Settings().database_url_ro)
@@ -103,6 +213,7 @@ def test_db_url() -> Iterator[str]:
     dispose_engines()
     mp.undo()
     get_settings.cache_clear()
+    owner.close()  # the next waiting session may start
 
 
 @pytest.fixture(scope="session")
@@ -490,6 +601,96 @@ def default_sheet(today: date) -> dict[str, list[list[Any]]]:
     }
 
 
+# ------------------------------------------------------------------ write helpers (R2)
+
+
+def contact_id(db: Session, name: str) -> int:
+    """The id of a synced fixture person, by name."""
+    return db.execute(text("select id from contact where name = :n"), {"n": name}).scalar_one()
+
+
+def sql_act(
+    db: Session,
+    user: str,
+    cells: list[dict[str, str]],
+    targets: list[int],
+    *,
+    action: str = "write",
+    surface: str = "dashboard",
+    key: str | None = None,
+    task: str | None = None,
+    cooldown: int = 2,
+    allow_email: bool = False,
+) -> dict[str, Any]:
+    """Call saley_act directly (what the web and the chat bot do), and commit."""
+    import json
+    import secrets
+
+    payload: dict[str, Any] = {"task": task} if task else {"cells": cells}
+    result = db.execute(
+        text("select saley_act(:u, :s, :a, cast(:t as jsonb), cast(:p as jsonb), :k, :c, 10, :e)"),
+        {
+            "u": user,
+            "s": surface,
+            "a": action,
+            "t": json.dumps(targets),
+            "p": json.dumps(payload),
+            "k": key or secrets.token_hex(16),
+            "c": cooldown,
+            "e": allow_email,
+        },
+    ).scalar_one()
+    db.commit()
+    return result
+
+
+def sql_row_add(
+    db: Session,
+    user: str,
+    account_id: int,
+    fields: dict[str, str],
+    *,
+    surface: str = "dashboard",
+    key: str | None = None,
+    allow_email: bool = False,
+) -> dict[str, Any]:
+    """Call saley_act(row_add) directly: one new person row for a company, and commit."""
+    import json
+    import secrets
+
+    payload = {"fields": [{"role": r, "value": v} for r, v in fields.items()]}
+    result = db.execute(
+        text(
+            "select saley_act(:u, :s, 'row_add', cast(:t as jsonb), cast(:p as jsonb), "
+            ":k, 2, 10, :e)"
+        ),
+        {
+            "u": user,
+            "s": surface,
+            "t": json.dumps([account_id]),
+            "p": json.dumps(payload),
+            "k": key or secrets.token_hex(16),
+            "e": allow_email,
+        },
+    ).scalar_one()
+    db.commit()
+    return result
+
+
+def sql_call(db: Session, sql: str, **params: Any) -> dict[str, Any]:
+    result = db.execute(text(sql), params).scalar_one()
+    db.commit()
+    return result
+
+
+@pytest.fixture
+def fake_sheet(raw_sheet: dict[str, list[list[Any]]]):
+    """A FakeSheet holding the same cells as the synced fixture sheet."""
+    from saley.sales.writer import FakeSheet
+
+    return FakeSheet(raw_sheet)
+
+
 @pytest.fixture
 def sheet_today() -> date:
     from saley.core.clock import today_ist
@@ -518,3 +719,160 @@ def synced(db: Session, raw_sheet: dict[str, list[list[Any]]]) -> Session:
     )
     db.commit()
     return db
+
+
+# ------------------------------------------------------------------ LLM fixtures (R3)
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def llm_fixture(name: str) -> dict[str, Any]:
+    """A recorded model answer from tests/fixtures/llm/<name>.json."""
+    return json.loads((FIXTURES / "llm" / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def score_everything(content: str) -> dict[str, Any]:
+    """An answer that scores every `id: N` found in the prompt (for batch and cap tests)."""
+    ids = [int(n) for n in re.findall(r"^id: (\d+)$", content, flags=re.MULTILINE)]
+    return {
+        "items": [{"id": i, "importance": 3, "impact": 1, "tag": "Market", "why": ""} for i in ids]
+    }
+
+
+class FixtureLLM:
+    """A fake Anthropic client. No network: each call answers from a recorded fixture.
+
+    `answers` is a list of fixture names or dicts, used in order (the last one repeats), or a
+    function from the prompt text to an answer dict. `calls` holds every request sent.
+    """
+
+    def __init__(self, answers: list[str | dict[str, Any]] | Callable[[str], dict[str, Any]]):
+        self.answers = answers
+        self.calls: list[dict[str, Any]] = []
+        self.messages = self
+
+    def client_factory(self) -> Any:
+        return SimpleNamespace(messages=self)
+
+    def create(self, **kwargs: Any) -> Any:
+        from saley.core import llm
+
+        self.calls.append(kwargs)
+        content = kwargs["messages"][0]["content"]
+        if callable(self.answers):
+            answer: Any = self.answers(content)
+        else:
+            answer = self.answers[min(len(self.calls), len(self.answers)) - 1]
+            answer = llm_fixture(answer) if isinstance(answer, str) else answer
+        block = SimpleNamespace(type="tool_use", name=llm.TOOL_NAME, input=answer)
+        return SimpleNamespace(
+            content=[block],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=100, output_tokens=40),
+        )
+
+
+@pytest.fixture
+def set_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., None]]:
+    """Change settings for one test: set_env(SCORER_BATCH="2"). The cache is reset after."""
+
+    def apply(**values: str) -> None:
+        for name, value in values.items():
+            monkeypatch.setenv(name, value)
+        get_settings.cache_clear()
+
+    yield apply
+    monkeypatch.undo()
+    get_settings.cache_clear()
+
+
+# ------------------------------------------------------------------ sign-in (R4, D114-D116)
+
+
+def sign_in(client: Any, email: str | None = None) -> Any:
+    """Sign a TestClient in through POST /auth/mock (dev + loopback). Returns the client.
+
+    Why: since R4 every /api route needs a session in every mode. No `email` signs in as
+    DEV_USER_EMAIL (DEV_USER_SHORT). An `email` must be on WEB_ALLOWED_EMAILS.
+    """
+    data = {"email": email} if email else None
+    response = client.post("/auth/mock", data=data, follow_redirects=False)
+    assert response.status_code == 303, response.text
+    return client
+
+
+class SignedClient(TestClient):
+    """A TestClient that signs in as the dev user when its `with` block opens."""
+
+    def __enter__(self) -> SignedClient:
+        super().__enter__()
+        sign_in(self)
+        return self
+
+
+@pytest.fixture
+def signed_in() -> Callable[..., Any]:
+    """`signed_in(client, email=None)` signs a client in (see `sign_in`)."""
+    return sign_in
+
+
+# ------------------------------------------------------------------ chat instructions (R4 ticket 7)
+
+# Fake Discord ids (never real ones). Approvers = Kushal, Sid, Vaishnavi; Trishi may only
+# instruct (D135).
+TEAM_IDS = {
+    "sid": "300000000000000003",
+    "kushal": "400000000000000004",
+    "vaishnavi": "500000000000000005",
+    "trishi": "600000000000000006",
+}
+STRANGER_ID = 777
+
+
+@pytest.fixture
+def team(synced: Session, set_env: Callable[..., None]) -> Iterator[Session]:
+    """The synced sheet, the four people mapped to fake Discord ids, and the D135 allowlists."""
+    from saley.bot import identity
+
+    approvers = ",".join(TEAM_IDS[s] for s in ("kushal", "sid", "vaishnavi"))
+    set_env(
+        DISCORD_USER_MAP=";".join(f"{short}:{i}" for short, i in TEAM_IDS.items()),
+        DISCORD_APPROVER_IDS=approvers,
+        DISCORD_INSTRUCT_IDS=",".join(TEAM_IDS.values()),
+        SALEY_ENV="dev",
+        TEST_MODE="true",
+    )
+    identity.sync_user_map(synced, get_settings())
+    yield synced
+    synced.rollback()
+    synced.execute(text("update users set discord_id = null"))
+    synced.commit()
+
+
+def make_card(
+    db: Session, name: str = "Alex Search", role: str = "meeting_status", value: str = "completed"
+) -> int:
+    """One open action card (a proposal with one cell) for a synced person. Returns its id."""
+    person = db.execute(
+        text("select contact_id as id, sheet_row_key, company from v_task_inputs where name = :n"),
+        {"n": name},
+    ).one()
+    payload = {
+        "contact_id": person.id,
+        "row": person.sheet_row_key,
+        "name": name,
+        "company": person.company,
+        "day": "2026-10-19",
+        "status": "booked",
+        "button": "mark_completed",
+        "cells": [{"role": role, "value": value}],
+    }
+    card_id = db.execute(
+        text(
+            "insert into proposal (type, card_key, entity_type, entity_id, payload) values "
+            "('meeting_status', :k, 'contact', :c, cast(:p as jsonb)) returning id"
+        ),
+        {"k": f"test:{person.sheet_row_key}:{role}", "c": person.id, "p": json.dumps(payload)},
+    ).scalar_one()
+    db.commit()
+    return int(card_id)

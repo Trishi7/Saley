@@ -1,17 +1,17 @@
-"""FastAPI dashboard: read-only JSON under /api, static page at /.
+"""FastAPI dashboard: JSON under /api, static page at /.
 
-Why: docs/08 is the contract. There is no write endpoint. Routes are plain `def` (FastAPI runs
-them in a thread pool) on the read-only engine. Each request reads ONE sheet snapshot in one
-REPEATABLE READ READ ONLY transaction and returns its `sync_id` (D40). Every response model
-lists only the fields its view shows (R1.1 C). Dev mode (SALEY_ENV=dev) signs in as
-DEV_USER_EMAIL, from this machine only; elsewhere every /api call gets 401 until R4.
+Why: docs/08 is the contract. Every GET is read-only. The only POST routes live in act.py and
+call fixed SQL functions (R2, D24); the web role has no table grant. Routes are plain `def`
+(FastAPI runs them in a thread pool) on the read-only engine. Each request reads ONE sheet
+snapshot in one REPEATABLE READ READ ONLY transaction and returns its `sync_id` (D40).
+Every response model lists only the fields its view shows (R1.1 C). Since R4 (D114-D116) every
+/api route needs a session from `web/auth.py` in every mode; there is no loopback bypass.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
@@ -19,18 +19,40 @@ from urllib.parse import quote, urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi import Path as PathParam
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Connection, text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from saley.core.clock import day_label, hhmm, now_ist
+from saley.core.clock import day_label, hhmm, now_ist, today_ist
 from saley.core.db import ro_engine
 from saley.core.logging import get_logger
 from saley.core.settings import get_settings
+from saley.intel import mail, metrics
 from saley.sales.parse import is_band
-from saley.web import queries, schemas
+from saley.web import (
+    accounts_model,
+    auth,
+    features,
+    goal_model,
+    mine,
+    newsfresh,
+    notes_health,
+    people_model,
+    queries,
+    schemas,
+)
 from saley.web import words as w
+from saley.web.auth import SignedIn, session_user
+from saley.web.guards import (
+    BodyLimit,
+    _bad_host,
+    _cross_site,
+    _security_headers,
+    csp_for,
+    reject_unknown_params,
+)
 from saley.web.queries import DEFAULT_LIMIT, MAX_LIMIT, BadFilter
 
 STATIC = Path(__file__).parent / "static"
@@ -38,32 +60,7 @@ STALE_FACTOR = 3  # "Updated" turns red after 3 × SHEET_SYNC_SECONDS without a 
 ACTIVE_SHOWN = 8
 SHORT_LIMIT = 40
 log = get_logger("saley.web")
-CSP = (
-    "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; "
-    "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
-    "form-action 'none'"
-)
 EMAIL_RE = re.compile(r"^[^@\s<>\"']+@[^@\s<>\"']+\.[^@\s<>\"']+$")
-LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
-NEWS_STEPS = (
-    "Sources tried",
-    "Sources that answered",
-    "Items pulled",
-    "Dropped: seen before",
-    "Dropped: duplicate story",
-    "Dropped: not relevant",
-    "Stored as stories",
-    "Scored",
-    "Scored 4 or 5",
-    "About our companies or people",
-    "Sent to Discord",
-)
-
-
-@dataclass(frozen=True)
-class SignedIn:
-    email: str
-    role: str
 
 
 class SnapshotChanged(Exception):
@@ -74,16 +71,15 @@ class SnapshotChanged(Exception):
 
 
 def current_user(request: Request) -> SignedIn:
-    """Dev sign-in only for SALEY_ENV=dev AND a client on this machine.
+    """The user of a valid session, else 401 (D114, D116).
 
-    Why: SALEY_ENV defaults to dev for laptops. A server that forgets to set it must still
-    refuse strangers, so a request that came through caddy (not loopback) gets 401 too.
+    Why: no mode skips sign-in. A server that forgets SALEY_ENV still refuses strangers, and a
+    laptop signs in through the mock provider like everybody else.
     """
-    settings = get_settings()
-    client = request.client.host if request.client else ""
-    if settings.is_dev and client in LOOPBACK:
-        return SignedIn(settings.dev_user_email, "admin")
-    raise HTTPException(status_code=401, detail=w.ERR_SIGN_IN)
+    user = session_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail=w.ERR_SIGN_IN)
+    return user
 
 
 def require_admin(user: Annotated[SignedIn, Depends(current_user)]) -> SignedIn:
@@ -92,23 +88,24 @@ def require_admin(user: Annotated[SignedIn, Depends(current_user)]) -> SignedIn:
     return user
 
 
-def _query_names(dependant: Any) -> set[str]:
-    """Every query parameter name a route accepts, its sub-dependencies included."""
-    names = {p.alias for p in dependant.query_params}
-    for sub in dependant.dependencies:
-        names |= _query_names(sub)
-    return names
+def validate_as_header(request: Request) -> None:
+    """L1: one door for X-Saley-As on EVERY /api route, GET and POST alike (D50).
 
-
-def reject_unknown_params(request: Request) -> None:
-    """Only the query parameters a route declares are allowed (R1.1 C)."""
-    route = request.scope.get("route")
-    if route is None or not hasattr(route, "dependant"):
+    Why: a name in the header must be a person in the team. Checked here once, so a new route
+    can never forget it. No session gets 401. A bad shape or a provider other than mock gets
+    ERR_AS_HEADER (D116), an unknown person gets ERR_AS_UNKNOWN (403 both). No header: the
+    signed-in user.
+    """
+    if not request.url.path.startswith("/api") or request.headers.get("x-saley-as") is None:
         return
-    allowed = _query_names(route.dependant)
-    for key in request.query_params:
-        if key not in allowed:
-            raise HTTPException(status_code=422, detail=w.fill(w.ERR_PARAM, x=key[:40]))
+    from saley.web.act import actor_short  # late import: act needs this module's helpers
+
+    who = actor_short(request, current_user(request))
+    with ro_engine().connect() as conn:
+        found = conn.execute(text("select 1 from v_team where short = :s"), {"s": who}).first()
+    if found is None:
+        log.warning("as_unknown", name=who)
+        raise HTTPException(status_code=403, detail=w.ERR_AS_UNKNOWN)
 
 
 def db(sync_id: Annotated[int | None, Query(ge=1, le=2**62)] = None) -> Iterator[Connection]:
@@ -168,11 +165,96 @@ def sync_state(conn: Connection) -> tuple[str, str]:
         return "partial", w.fill(w.TAB_STALE, t=stale[0])
     if stale:
         return "partial", w.fill(w.TABS_STALE, n=len(stale))
-    return "ok", w.fill(w.UPDATED, t=hhmm(good), s=hhmm(good), n="—")
+    return "ok", w.fill(w.UPDATED, t=hhmm(good), s=hhmm(good), n=newsfresh.top_bar(conn)[0])
+
+
+def write_counts(conn: Connection) -> dict[str, int]:
+    """Outbox rows the user should know about: waiting, held (writes off) and failed (H5)."""
+    row = (
+        conn.execute(
+            text(
+                "select count(*) filter (where state = 'pending') as pending, "
+                "count(*) filter (where state = 'held') as held, "
+                "count(*) filter (where state = 'failed') as failed from v_pending_write"
+            )
+        )
+        .mappings()
+        .one()
+    )
+    return {"pending": int(row["pending"]), "held": int(row["held"]), "failed": int(row["failed"])}
+
+
+def write_note(counts: dict[str, int]) -> tuple[str | None, bool]:
+    """The top bar line for sheet writes, and whether it is bad news.
+
+    A failed write is never hidden: the line stays while any row is failed (H5). Held rows say
+    that writes are off, not that the sheet "updates in a few seconds".
+    """
+    if counts["failed"]:
+        return w.fill(w.WRITE_FAILED, n=counts["failed"]), True
+    if counts["held"] and not get_settings().sheet_write_enabled:
+        return w.WRITES_OFF, False
+    if counts["pending"] or counts["held"]:
+        return w.PENDING_NOTE, False
+    return None, False
+
+
+def writes_state(conn: Connection) -> dict[str, Any]:
+    """Sources and health: are sheet writes on, and how many rows wait or failed (R2, Q-R2-1)."""
+    counts = (
+        conn.execute(
+            text(
+                "select count(*) filter (where open) as open, "
+                "count(*) filter (where state = 'failed') as failed from v_pending_write"
+            )
+        )
+        .mappings()
+        .one()
+    )
+    enabled = get_settings().sheet_write_enabled
+    return {
+        "enabled": enabled,
+        "message": None if enabled else w.WRITES_OFF,
+        "open": counts["open"],
+        "failed": counts["failed"],
+    }
+
+
+def working_on(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """The drawer line: text, source and date, else 'None on file' (R2, docs/03 §3.2)."""
+    return mine.working_on_block(raw, https_link)
+
+
+def mail_state(conn: Connection) -> dict[str, Any]:
+    """Sources and health: the cc mailbox is not configured, waiting, ok or failing (Q-R2-3)."""
+    settings = get_settings()
+    last = (
+        conn.execute(
+            text(
+                "select status, finished_at from v_job_runs where job = 'mail_poll' "
+                "order by started_at desc limit 1"
+            )
+        )
+        .mappings()
+        .first()
+    )
+    last_ok = queries.last_job(conn, "mail_poll")
+    state = mail.state(settings, last_ok, bool(last and last["status"] == "failed"))
+    messages = {
+        "not_configured": w.MAIL_NOT_CONFIGURED,
+        "failing": w.MAIL_FAILING,
+    }
+    return {
+        "state": state,
+        "message": messages.get(state, w.MAIL_READING),
+        "last_ok": last_ok,
+    }
 
 
 def _filter_or_422(exc: BadFilter) -> HTTPException:
-    return HTTPException(status_code=422, detail=w.fill(w.ERR_FILTER, x=str(exc)[:40]))
+    # L2: fixed text. The caller typed the filter, so it goes to the log, not the answer.
+    log.warning("bad_filter", filter=str(exc)[:40])
+    return HTTPException(status_code=422, detail=w.ERR_FILTER)
 
 
 def greeting(moment: datetime) -> str:
@@ -185,8 +267,10 @@ def days_text(days: int | None) -> str:
     if days is None:
         return w.NO_DUE_DATE
     if days > 0:
-        return w.fill(w.DAYS_LEFT, n=days)
-    return w.LAST_DAY if days == 0 else w.fill(w.QUARTER_ENDED, n=-days)
+        return w.fill_count(w.DAYS_LEFT_ONE, w.DAYS_LEFT, days)
+    if days == 0:
+        return w.LAST_DAY
+    return w.fill_count(w.QUARTER_ENDED_ONE, w.QUARTER_ENDED, -days)
 
 
 def _plural(word: str) -> str:
@@ -393,30 +477,6 @@ def money_tile(
     }
 
 
-def _security_headers(response: Response) -> Response:
-    response.headers["Content-Security-Policy"] = CSP
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    return response
-
-
-def _cross_site(request: Request) -> bool:
-    """Only same-origin pages and direct visits may call the API. A broken Origin is refused."""
-    if request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
-        return True
-    origin = request.headers.get("origin")
-    if not origin:
-        return False
-    try:
-        return urlsplit(origin).netloc != request.headers.get("host")
-    except ValueError:
-        return True
-
-
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Saley",
@@ -424,7 +484,7 @@ def create_app() -> FastAPI:
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
-        dependencies=[Depends(reject_unknown_params)],
+        dependencies=[Depends(reject_unknown_params), Depends(validate_as_header)],
     )
 
     @app.exception_handler(Exception)
@@ -442,19 +502,27 @@ def create_app() -> FastAPI:
             status_code=409, content={"detail": w.ERR_CHANGED, "sync_id": exc.current}
         )
 
+    @app.exception_handler(RequestValidationError)
+    def invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
+        # Fixed text: the default answer repeats the input the caller sent (LOW finding).
+        return JSONResponse(status_code=422, content={"detail": w.ERR_BAD_ACT})
+
+    app.add_middleware(BodyLimit)  # inside security_headers, so a 413 still gets the headers
+
     @app.middleware("http")
     async def security_headers(request: Request, call_next: Any) -> Response:
         if request.url.path.startswith("/api/"):
-            if _cross_site(request):
-                response: Response = JSONResponse(
-                    status_code=403, content={"detail": w.ERR_CROSS_SITE}
-                )
+            if _bad_host(request):
+                response: Response = JSONResponse(status_code=403, content={"detail": w.ERR_HOST})
+            elif _cross_site(request):
+                response = JSONResponse(status_code=403, content={"detail": w.ERR_CROSS_SITE})
             else:
                 response = await call_next(request)
             response.headers["Cache-Control"] = "no-store"
         else:
             response = await call_next(request)
-        return _security_headers(response)
+        current = response.headers.get("content-security-policy")
+        return _security_headers(response, csp_for(request.url.path, current))
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -469,6 +537,9 @@ def create_app() -> FastAPI:
             "email": user.email,
             "role": user.role,
             "dev": get_settings().is_dev,
+            # D207: no "View as" in any mode, so no picker flag. The page shows the signed-in
+            # person; tests use X-Saley-As with the mock provider (D50, D116).
+            "features": features.flags(),
             "people": team,
         }
 
@@ -477,41 +548,23 @@ def create_app() -> FastAPI:
         state, message = sync_state(conn)
         good = queries.last_job(conn, "sheet_sync")
         late_total = conn.execute(text("select count(*) from v_deliverable_late")).scalar_one()
+        counts = write_counts(conn)
+        note, bad = write_note(counts)
+        news_bar, news_old = newsfresh.top_bar(conn)
         return {
             "state": state,
             "message": message,
             "updated": hhmm(good),
             "sheet": hhmm(good),
-            "news": "—",
+            "news": news_bar,
+            "news_old": news_old,
             "sheet_mode": get_settings().sheet_mode,
             "late_total": late_total,
+            "pending_writes": counts["pending"] + counts["held"],
+            **counts,
+            "write_note": note,
+            "write_bad": bad,
             **meta(conn),
-        }
-
-    @app.get("/api/today", response_model=schemas.TodayOut)
-    def today(
-        user: User,
-        conn: Db,
-        user_short: Annotated[
-            str | None, Query(alias="user", max_length=20, pattern=r"^[a-z]+$")
-        ] = None,
-    ) -> dict[str, Any]:
-        now = now_ist()
-        name = None
-        if user_short:
-            name = conn.execute(
-                text("select name from v_team where short = :s"), {"s": user_short}
-            ).scalar()
-        m = meta(conn)
-        return {
-            "greeting": f"{greeting(now)}, {name}" if name else greeting(now),
-            "date_label": f"{now:%A} {now.day} {now:%B}",
-            "tiles": tiles(
-                queries.today_numbers(conn),
-                m["last_computed"] is not None,
-                queries.tab_states(conn)[1],
-            ),
-            **m,
         }
 
     @app.get("/api/goals", response_model=schemas.GoalsOut)
@@ -526,6 +579,7 @@ def create_app() -> FastAPI:
             g["why"] = goal_why(g)
             for b in g["blockers"]:
                 b["short"] = short_label(b["item"])
+        goal_model.decorate(conn, items)
         return {"items": items, "total": total, "linked_by": w.LINKED_BY, **meta(conn)}
 
     @app.get("/api/accounts", response_model=schemas.AccountsOut)
@@ -541,6 +595,7 @@ def create_app() -> FastAPI:
             items, total = queries.accounts(conn, filter, q, limit, offset)
         except BadFilter as exc:
             raise _filter_or_422(exc) from exc
+        accounts_model.decorate(conn, items)
         counts = (
             conn.execute(
                 text(
@@ -557,6 +612,7 @@ def create_app() -> FastAPI:
             "filter": filter,
             **dict(counts),
             "industries": queries.industry_coverage(conn),
+            "tags_legend": accounts_model.legend(),
             **meta(conn),
         }
 
@@ -565,6 +621,7 @@ def create_app() -> FastAPI:
         item = queries.account(conn, account_id)
         if item is None:
             raise HTTPException(status_code=404, detail=w.ERR_NO_COMPANY)
+        accounts_model.decorate_detail(conn, item)
         return {"item": item, **meta(conn)}
 
     @app.get("/api/people", response_model=schemas.PeopleOut)
@@ -580,6 +637,8 @@ def create_app() -> FastAPI:
             items, total = queries.people(conn, filter, q, limit, offset)
         except BadFilter as exc:
             raise _filter_or_422(exc) from exc
+        for row in items:
+            row["working_on"] = working_on(row.pop("working_on_raw"))
         counts = (
             conn.execute(
                 text(
@@ -610,6 +669,9 @@ def create_app() -> FastAPI:
         if item is None:
             raise HTTPException(status_code=404, detail=w.ERR_NO_PERSON)
         item.update(contact_links(item))
+        raw = item.pop("working_on_raw")
+        item["working_on"] = working_on(raw)
+        people_model.decorate(conn, item, raw)
         return {"item": item, **meta(conn)}
 
     @app.get("/api/blockers", response_model=schemas.BlockersOut)
@@ -644,15 +706,25 @@ def create_app() -> FastAPI:
         items, total = queries.scorecard(conn, limit, offset)
         for r in items:
             r["reply_note"] = w.REPLY_NOTE  # Reply % has no source until R2: never 0
+        # D118: "last week N" is the snapshot of the day 7 days before; no snapshot is null.
+        last_day = today_ist() - timedelta(days=metrics.LAST_WEEK_DAYS)
+        items = metrics.merge_last_week(items, queries.scorecard_last_week(conn, last_day))
         return {"items": items, "total": total, **meta(conn)}
 
     @app.get("/api/health/full", response_model=schemas.HealthOut)
     def health_full(user: Annotated[SignedIn, Depends(require_admin)], conn: Db) -> dict[str, Any]:
+        from saley.web import signals  # late import: signals needs this module's helpers
+
         return {
             **queries.health(conn),
+            "writes": writes_state(conn),
+            "mail": mail_state(conn),
+            "notes": notes_health.notes_state(conn),
             "llm_cap": get_settings().llm_daily_call_cap,
-            "news": [{"step": step, "n": None} for step in NEWS_STEPS],
+            "news": signals.news_health(conn),
             "news_note": w.NEWS_NOTE,
+            "search": signals.search_health(conn),
+            "apollo": signals.apollo_health(),
             "sheet_mode": get_settings().sheet_mode,
             **meta(conn),
         }
@@ -664,9 +736,23 @@ def create_app() -> FastAPI:
         return {"q": q, **queries.search(conn, q), **meta(conn)}
 
     @app.get("/", include_in_schema=False)
-    def index() -> FileResponse:
+    def index(request: Request) -> Response:
+        if session_user(request) is None:
+            return RedirectResponse("/signin", status_code=303)
         return FileResponse(STATIC / "index.html")
 
+    # Late import: the routers need this module.
+    from saley.web import act, admin, ask, next_app, pack, signals, team, today
+
+    auth.install(app)
+    next_app.install(app)  # before the /static mount: /static/app must match first (D145)
+    app.include_router(act.router)
+    app.include_router(admin.router)
+    app.include_router(ask.router)
+    app.include_router(team.router)
+    app.include_router(pack.router)
+    app.include_router(today.router)
+    app.include_router(signals.router)
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     if get_settings().is_dev:
         # Blocks DNS rebinding: a web page cannot reach the laptop API under its own name.

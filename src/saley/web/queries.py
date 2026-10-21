@@ -30,6 +30,11 @@ PEOPLE_FILTERS = {
     "contacted_this_week": "contacted_this_week",
     "contacted_last_week": "contacted_last_week",
     "p1": "is_p1",
+    # R5 T5: the Today funnel bars. "Reached" counts a person who is at this stage or past it.
+    "reached_contacted": "stage_rank >= 2",
+    "reached_connected": "stage_rank >= 3",
+    "reached_talking": "stage_rank >= 4",
+    "reached_met": "stage_rank >= 5",
 }
 ACCOUNT_FILTERS = {
     "all": "true",
@@ -146,6 +151,10 @@ def people(
         select p.id, p.sheet_row_key, p.name, p.company, p.account_id, p.title, p.stage, p.owner,
                p.priority, p.is_p1, p.city, p.has_email, p.email_status, p.next_step, p.about,
                p.industry, p.li_status, p.reconnect_due_on,
+               (select jsonb_build_object('text', f.text, 'url', f.url,
+                         'source_type', f.source_type, 'observed_at', f.observed_at)
+                  from v_fact_working_on f
+                 where f.entity_type = 'contact' and f.entity_id = p.id) as working_on_raw,
                coalesce((select jsonb_agg(jsonb_build_object('type', t.type, 'date', t.date))
                          from (select type, date from v_touch where contact_id = p.id
                                order by date desc nulls last, id desc limit 3) t), '[]')
@@ -167,6 +176,7 @@ def person(conn: Connection, contact_id: int) -> dict[str, Any] | None:
     if not found:
         return None
     item = found[0]
+    item["working_on_raw"] = working_on_raw(conn, contact_id)
     item["touches"] = rows(
         conn,
         "select type, date, outcome, source from v_touch where contact_id = :id "
@@ -190,6 +200,80 @@ def person(conn: Connection, contact_id: int) -> dict[str, Any] | None:
         or [None]
     )[0]
     return _evidence([item])[0]
+
+
+def working_on_raw(conn: Connection, contact_id: int) -> dict[str, Any] | None:
+    """The newest live working_on fact of a person (docs/03 §3.2), or None."""
+    found = rows(
+        conn,
+        "select text, url, source_type, observed_at from v_fact_working_on "
+        "where entity_type = 'contact' and entity_id = :id",
+        id=contact_id,
+    )
+    return found[0] if found else None
+
+
+# ------------------------------------------------------------------ my tasks inputs (R2)
+
+
+def task_inputs(conn: Connection) -> list[dict[str, Any]]:
+    """One row per live person with the columns the task rules read (v_task_inputs).
+
+    `email_added` (D154): an `email_write` decision for the person is live (not undone, its
+    sheet push not failed) and is less than a day old. It hides the Add email task from the
+    write until the next sheet read shows the email. The day bound stops an old write from
+    hiding the task for good if the cell is cleared later.
+    """
+    return rows(
+        conn,
+        "select t.*, exists (select 1 from v_decision d where d.contact_id = t.contact_id "
+        "and d.kind = 'column_write' and d.role = 'email' and d.undone_at is null "
+        "and coalesce(d.sync_state, '') <> 'failed' "
+        "and d.at > now() - interval '1 day') as email_added from v_task_inputs t",
+    )
+
+
+def proposed_decisions(conn: Connection) -> list[dict[str, Any]]:
+    """Strategy decisions that wait for a confirm, oldest first."""
+    return rows(
+        conn,
+        "select id, choice, user_name, at from v_decision "
+        "where kind = 'strategy_decision' and state = 'proposed' order by at, id",
+    )
+
+
+def open_card_count(conn: Connection) -> int:
+    return conn.execute(
+        text("select count(*) from v_inbox where item_kind = 'proposal'")
+    ).scalar_one()
+
+
+WINDOW_WRITES_CAP = 50
+
+
+def writes_in_undo_window(conn: Connection, signer: str | None = None) -> list[dict[str, Any]]:
+    """Writes that can still be undone, newest first: by one signer, or by anyone (None).
+
+    Per signer, so that newer writes of other people never push a person's own tick out.
+    """
+    return rows(
+        conn,
+        "select id, user_short, user_name, role, contact_id, person, undo_until from v_decision "
+        "where kind in ('column_write', 'task_done') and undo_state = 'open' "
+        "and (cast(:signer as text) is null or user_short = :signer) "
+        "order by at desc, id desc limit :cap",
+        signer=signer,
+        cap=WINDOW_WRITES_CAP,
+    )
+
+
+def commitments_due(conn: Connection, day: Any) -> list[dict[str, Any]]:
+    return rows(
+        conn,
+        "select id, owner_short, text, due, source_type, state from v_commitment "
+        "where state = 'open' and due = :day order by id",
+        day=day,
+    )
 
 
 # ------------------------------------------------------------------ accounts
@@ -366,6 +450,24 @@ def scorecard(conn: Connection, limit: int, offset: int) -> tuple[list[dict[str,
         offset=offset,
     )
     return items, int(total)
+
+
+def scorecard_last_week(conn: Connection, day: Any) -> dict[str, dict[str, Any]]:
+    """The snapshot rows of one day by industry (D118). A day with none gives an empty dict."""
+    found = rows(conn, "select * from v_scorecard_history where day = :d", d=day)
+    return {r["industry"]: r for r in found}
+
+
+def weekly_pack(conn: Connection, week: Any | None) -> dict[str, Any] | None:
+    """One pack by its Monday, or the newest when `week` is None. Views only (D114)."""
+    where = "where week_start = :w" if week is not None else ""
+    found = rows(
+        conn,
+        f"select week_start, built_at, body from v_weekly_pack {where} "
+        "order by week_start desc limit 1",
+        **({"w": week} if week is not None else {}),
+    )
+    return found[0] if found else None
 
 
 def health(conn: Connection) -> dict[str, Any]:

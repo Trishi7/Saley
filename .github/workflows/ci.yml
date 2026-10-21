@@ -8,27 +8,67 @@ permissions:
   contents: read
 
 jobs:
+  # The dashboard v2 (R5, D144, D145): Node at build time only. The test job serves this build.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      # Runtime packages: a high advisory fails the job. Dev tools: report only.
+      - name: npm audit (runtime)
+        run: npm audit --omit=dev --audit-level=high
+      - name: npm audit (all, report only)
+        run: npm audit --audit-level=high || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: web-dist
+          path: src/saley/web/dist
+          if-no-files-found: error
+          include-hidden-files: false
+
   test:
+    needs: web
     runs-on: ubuntu-latest
     services:
+      # The service superuser is `postgres`, like a laptop server. deploy/sql/roles.sql then makes
+      # the three Saley roles and the databases, so CI runs with the same roles as the laptop.
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: saley
-          POSTGRES_PASSWORD: saley
-          POSTGRES_DB: saley
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U saley"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 3s --health-retries 20
     env:
+      # `saley` owns saley_test (roles.sql). The tests drop and rebuild its schema.
       TEST_DATABASE_URL: postgresql+psycopg://saley:saley@localhost:5432/saley_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: web-dist
+          path: src/saley/web/dist
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: "0.13.1"
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - name: Create the Saley roles and databases (roles.sql)
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f deploy/sql/roles.sql
       - run: uv run pytest -q --cov=saley --cov-fail-under=80

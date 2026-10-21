@@ -1,17 +1,38 @@
+# What the image never gets. The image carries only src, the built web/dist, migrations,
+# alembic.ini and the two docs files the code reads at run time (see the Dockerfile COPY lines).
+# Patterns match from the context root; `*` never crosses a "/", so key rules use `**/`.
+
+# Key material and secrets, at any depth (CLAUDE.md hard rule).
 .env
+.env.*
+**/.env
+**/.env.*
 *.json
+**/*-write.json
+**/*.key
+**/*.pem
+**/*.p12
 !package.json
-*.key
-*-write.json
+
+# Not for the server image (the human, 21 Oct, tidy stop before R5 T16).
 .git
+.github
 .venv
 .claude
+.scratch
 data
+docs
 docs/test-reports
+!docs/DECISIONS.md
+!docs/goal-deliverable-map.yaml
+scripts
+tests
+web/tests
 **/__pycache__
 .pytest_cache
 .ruff_cache
 .coverage
-.env.*
-*.pem
-*.p12
+
+# Dashboard v2 (D145): the web stage installs and builds; never copy a laptop build in.
+web/node_modules
+src/saley/web/dist

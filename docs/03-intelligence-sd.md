@@ -54,7 +54,7 @@ flowchart LR
 | News stories | Already stored by the news module in `news_stories`. | Signals, after entity match. Facts like "launched X on date". | Medium. Outlet count raises it. |
 | Discord: @Saley tag | Bot posts the message to a queue. Intelligence answers. | A question → an answer. An instruction → a reminder or a proposal. An answer to Saley's ask → a fact with `source=teammate`. | High for facts. Instructions only from allowlisted users. |
 | Discord: channel reads | Bot reads channels it is in. No action unless tagged. | Context only. Stored as notes linked to an entity when a name matches. | Low. Data, not instructions. |
-| Meeting notes (Drive) | Folder watch, daily 07:00 IST. | Facts: next steps, asks, package interest. Linked to contact and meeting. | High. |
+| Meeting notes (Drive) | Drive API v3, read-only, the folder `MEETING_NOTES_DRIVE_FOLDER_ID` and its subfolders, every `NOTES_SYNC_MINUTES` (15); only changed files (file id + modifiedTime) are parsed again. Google Docs, .md, .txt, .pdf, .docx. Also mail attachments (Q-R2-3) and the optional local folder `MEETING_NOTES_DIR`: one parser for all (D81). | Facts: next steps, asks, package interest. Linked to contact and meeting. | High. |
 | OpenAlex, arXiv, HF, GitHub | Weekly per entity, or on demand. | "Working on" facts: latest paper, model release, repo activity. | Medium. Name collisions handled by affiliation match. |
 | Web search | On demand, for a proposal or a question. | Profile links, company facts. Never linkedin.com content. | Low. Always shown with the URL. |
 | Later, if you approve | Mailbox read-only, Calendar, Apollo with cap, X public posts. | Replies and bounces, meetings, emails, recent posts. | — |
@@ -208,9 +208,9 @@ flowchart LR
 | signal\_match | After each news edition (06:30, 12:00, 17:00, 22:00) and watch hits | new news\_stories | signals | SQL + ≤ 40 LLM hints/day |
 | working\_on\_refresh | Daily 05:00, 1/7 of active contacts | OpenAlex, arXiv, signals | facts | ≤ 150 API calls, ≤ 150 LLM calls |
 | note\_extract | Daily 07:00 | Drive folder | facts, asks | ≤ 10 LLM calls |
-| daily\_brief | Daily 08:30 | proposals, reminders, signals | Discord post: top 5 + count | 1 LLM call |
+| daily\_brief | `DAILY_BRIEF_TIME` 14:00 IST, weekdays (D128) | proposals, reminders, signals | Discord DM per person: 3 lines + count | 1 LLM call |
 | metrics\_snapshot | Daily 23:50 | all | metric\_snapshot | SQL only |
-| weekly\_pack | Mon 09:00 | 7 snapshots, proposals | Discord summary + dashboard page | 2 LLM calls |
+| weekly\_pack | Mon 14:00 IST (D7, D21, D134) | 7 snapshots, proposals | Discord summary + dashboard page | 2 LLM calls |
 | expire | Daily 00:30 | facts, proposals | marks expired | SQL only |
 | on\_tag | Event | question | answer, fact, reminder or proposal | 1–2 LLM calls |
 

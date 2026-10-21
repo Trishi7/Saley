@@ -17,9 +17,42 @@
 | 13-apollo-pipeline.md | Apollo direct pull (Trishi, from Wed 22 Oct) | Part E |
 | 14-runbook.md | Setup, backup, restore, secrets, deploy | Claude Code fills |
 | 15-test-plan.md | Acceptance tests per ticket | saley-tester runs them |
+| 16-verification-standard.md | Build pipeline, the 12-step gate, test matrices, /tidy, chain rules; appendix: the chain ticket R2–R4 (verbatim) | every release: /verify, then /tidy |
 | DECISIONS.md | Every human decision with id, date, by, affected docs | Append on every answer |
 | STATUS.md | Done, open, env changes per ticket | Update at the end of every ticket. |
 | QUESTIONS.md | Questions for the human, newest first | Write here, then stop and wait. |
+| goal-deliverable-map.yaml | Goal → deliverable links for goals whose Dependencies text is not enough (D34) | Read by the blockers code; ships in the image |
+| ste-banned-words.txt | Words the STE lint refuses | Read by `saley.qa.ste_lint` (gate step 3) |
+
+## Plans (one file per release)
+
+| File | What |
+| --- | --- |
+| plans/R1.md | R1 plan |
+| plans/R1.1.md | R1.1 plan (hardening, the gate) |
+| plans/R2.md | R2 plan |
+| plans/R3.md | R3 plan |
+| plans/R4.md | R4 plan |
+| plans/R5.md | R5 plan (Dashboard v2); Appendix A: the human's brief, verbatim |
+
+## Test reports (the PASS report per release, plus gate inputs)
+
+| File | What |
+| --- | --- |
+| test-reports/R1-final.md, R1.1-final.md, R2-final.md, R3-final.md, R4-final.md | The GATE: PASS report of each release |
+| test-reports/R4-files.txt | Source manifest of the last release: gate step 2 reads it as the coverage baseline |
+| test-reports/R5-impeccable.json | R5 Impeccable audit scores (work in progress until the R5 gate) |
+| test-reports/parity-2026-10-18.md, R1.1-api-abuse.md, R1.1-files.txt, R1.1-gate.json, R1.1-gate.tree, R1.1-sheet-verify.md, R1-files.txt, tidy-2026-10-19.md | Older run records still tracked in git (kept until the human removes them) |
+
+Older run records, dev logs and screenshots live in `.scratch/test-reports/` (ignored).
+
+## Outside docs/
+
+| File | What |
+| --- | --- |
+| ../README.md | Set-up and run steps |
+| ../CLAUDE.md | Rules for every Claude Code session |
+| ../web/PRODUCT.md | Product truth for the dashboard design work (Impeccable, D196) |
 
 Build order: P0 skeleton → I-1 → I-2 → I-3 → I-4 → I-5. News stage 1 (N-1) runs in parallel after P0. Apollo pipeline is separate (Trishi).
 

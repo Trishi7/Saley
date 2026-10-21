@@ -1,0 +1,146 @@
+# News source registry for R3 (D71): Google News lanes, arXiv and OpenAlex only.
+# `saley news seed` loads this file into news_sources. Re-running it updates the settings of a
+# source and never touches its state (etag, back-off, fail streak). Direct RSS and page watches
+# come in a later release (docs/05 §3).
+#
+# Google lanes: `query` and `edition` build the URL. The `names` lane is not listed here: it is
+# rebuilt from the sheet (15 names per query) by sources.rebuild_name_lanes().
+defaults:
+  tier: 3
+  trusted: false
+  ai_only: false
+  active: true
+  class: LANE
+  poll_active_min: 120
+  poll_idle_min: 240
+
+sources:
+  - name: "Google News · broad AI · IN"
+    kind: google
+    extractor: google
+    lane: broad
+    edition: IN
+    query: '"artificial intelligence" OR AI OR LLM when:1d'
+    ai_only: true
+    area: global
+    categories: [F, I, J]
+    notes: "Broad lane, India edition."
+  - name: "Google News · broad AI · GB"
+    kind: google
+    extractor: google
+    lane: broad
+    edition: GB
+    query: '"artificial intelligence" OR AI OR LLM when:1d'
+    ai_only: true
+    area: global
+    categories: [F, I, J]
+  - name: "Google News · broad AI · US"
+    kind: google
+    extractor: google
+    lane: broad
+    edition: US
+    query: '"artificial intelligence" OR AI OR LLM when:1d'
+    ai_only: true
+    area: global
+    categories: [F, I, J]
+  - name: "Google News · topics · data and evaluation · IN"
+    kind: google
+    extractor: google
+    lane: topics
+    edition: IN
+    query: '"data annotation" OR "model evaluation" OR "human feedback" OR "red teaming" OR benchmark when:1d'
+    ai_only: true
+    categories: [B, G, H]
+  - name: "Google News · topics · India AI · IN"
+    kind: google
+    extractor: google
+    lane: topics
+    edition: IN
+    query: '"IndiaAI" OR Bhashini OR "Indic languages" OR "sovereign AI" OR "AI mission" when:1d'
+    ai_only: true
+    categories: [C, D, I]
+  - name: "Google News · voice · IN"
+    kind: google
+    extractor: google
+    lane: voice
+    edition: IN
+    query: '"voice agent" OR "speech model" OR TTS OR ASR OR "full duplex" when:1d'
+    ai_only: true
+    categories: [H]
+  - name: "Google News · voice · US"
+    kind: google
+    extractor: google
+    lane: voice
+    edition: US
+    query: '"voice agent" OR "speech model" OR TTS OR ASR OR "full duplex" when:1d'
+    ai_only: true
+    categories: [H]
+  - name: "Google News · hires · IN"
+    kind: google
+    extractor: google
+    lane: hires
+    edition: IN
+    query: '(joins OR appointed OR named OR promoted) AND ("head of AI" OR evals OR "head of data" OR "chief scientist") when:2d'
+    categories: [A, B]
+  - name: "Google News · hires · GB"
+    kind: google
+    extractor: google
+    lane: hires
+    edition: GB
+    query: '(joins OR appointed OR named OR promoted) AND ("head of AI" OR evals OR "head of data" OR "chief scientist") when:2d'
+    categories: [A, B]
+  - name: "Google News · hires · US"
+    kind: google
+    extractor: google
+    lane: hires
+    edition: US
+    query: '(joins OR appointed OR named OR promoted) AND ("head of AI" OR evals OR "head of data" OR "chief scientist") when:2d'
+    categories: [A, B]
+  - name: "Google News · competitors · IN"
+    kind: google
+    extractor: google
+    lane: competitors
+    edition: IN
+    query: '"Scale AI" OR "Surge AI" OR Mercor OR Toloka OR Appen OR Labelbox OR Prolific OR iMerit OR Karya when:2d'
+    categories: [E]
+  - name: "Google News · competitors · US"
+    kind: google
+    extractor: google
+    lane: competitors
+    edition: US
+    query: '"Scale AI" OR "Surge AI" OR Mercor OR Toloka OR Appen OR Labelbox OR Prolific OR iMerit OR Karya when:2d'
+    categories: [E]
+
+  - name: "arXiv · cs.CL cs.AI cs.LG cs.CY eess.AS cs.SD"
+    kind: api
+    extractor: arxiv
+    lane: papers
+    url: "https://export.arxiv.org/api/query?search_query=cat:cs.CL+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CY+OR+cat:eess.AS+OR+cat:cs.SD&sortBy=submittedDate&sortOrder=descending"
+    ai_only: true
+    trusted: true
+    tier: 2
+    class: DAILY
+    categories: [G, H]
+    notes: "Keyword filter before store (clean.PAPER_KEYWORDS). Batch lands 09:30 IST; run at 10:00."
+  - name: "OpenAlex · speech and evaluation works"
+    kind: api
+    extractor: openalex
+    lane: works
+    url: "https://api.openalex.org/works?search=speech+evaluation&sort=publication_date:desc"
+    ai_only: true
+    trusted: true
+    tier: 2
+    class: ENRICH
+    categories: [A, G]
+    notes: "Generic query. Contact email from OPENALEX_MAILTO when set."
+  - name: "OpenAlex · Academia PoCs"
+    kind: api
+    extractor: openalex
+    lane: pocs
+    url: "https://api.openalex.org/works"
+    ai_only: true
+    trusted: true
+    tier: 2
+    class: ENRICH
+    categories: [A, G]
+    notes: "One request per Academia PoC from the sheet (at most 20 per run). A person counts as found only on name and affiliation."

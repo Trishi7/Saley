@@ -16,10 +16,11 @@ v2 is a fresh build. The design lives in `docs/`. Read the docs before you write
   `.env.example` is the contract and lists EVERY variable the code reads, UNCOMMENTED as `KEY=value`
   with its default (`<REQUIRED: …>` for human-only values). Retired variables go in one commented
   RETIRED block. `tests/test_env_example.py` enforces it.
+- No third-party binary runs with API keys in its environment (D200).
 - Saley is the only writer of the GTM sheet (D23). Sid and Vaishnavi work from the dashboard.
 - Approval model (D24): an instruction from an approver IS the approval. A dashboard click or a chat
   instruction writes at once with a signature (user, time, surface) and an undo window
-  (`UNDO_MINUTES`, default 10). Saley's own ideas show once as a one-click card. Never ask twice.
+  (`UNDO_MINUTES`, default 5, D182). Saley's own ideas show once as a one-click card. Never ask twice.
   Never queue a write the human already asked for. Only the worker holds the write credential.
 - On an existing Outreach PoCs row, the IDENTITY, STEP and COMMERCIAL column blocks are read-only,
   locked BY ROLE, never by letter. Allowed writes: First Contact, First Contact Type, First Contact
@@ -40,8 +41,9 @@ v2 is a fresh build. The design lives in `docs/`. Read the docs before you write
 - Per-user seen: every bot answer states its time window, shows items that person has not seen,
   and says how many it left out. Seen is per person (`user_seen`), never per channel.
 - Politeness budget for reminders: one reminder, one on the due day, then the weekly pack. Never
-  the word "overdue". Bot caps: 3 posts a day, 2 h gap, weekend silence except meetings and
-  reconnects. Allowlist decides who may instruct and approve.
+  the word "overdue". Bot caps (D132): 4 posts per person per day (DMs and @mentions together;
+  a channel post with no mention counts for nobody), 2 h gap per person, weekend silence except
+  meetings and reconnects. Daily brief: a DM at `DAILY_BRIEF_TIME` 14:00 IST (D128). Allowlist decides who may instruct and approve.
 - Test mode and live behave identically. The only difference is the `[TEST]` tag and the channel.
 
 ## Stack and layout (do not change without a decision in docs/02 Part I)
@@ -102,15 +104,31 @@ v2 is a fresh build. The design lives in `docs/`. Read the docs before you write
 
 ## Work rules
 - Work on main. Do not create a branch. Never commit. The human commits.
+- Gate and memory (D112): never wait for the human to rerun the gate. When RAM is low, stop
+  the stale saley, chromium/msedge (Playwright profile only) and pytest processes you started,
+  run browser QA one width at a time (`scripts/verify.py --low-memory`; it also switches by
+  itself below `LOW_RAM_MB` free), and start `/verify` from step 1 yourself. After three memory
+  failures in a row: write Q-<release>-mem in docs/QUESTIONS.md with the free-RAM number, ping
+  "blocked", and go on with the next stage that needs no browser.
+- Laptop memory (D142): run at most one background agent or test run at a time. Never run the
+  full suite while a build agent is still working. Run pytest with `-x -p no:cacheprovider`.
+  Browser QA runs one width at a time, always, on this laptop (`--low-memory`). On a memory
+  stop, free your own processes and rerun without asking (D112).
+- Never stop a process you did not start (D113). If one blocks you, write docs/QUESTIONS.md and
+  ping "blocked". The gate starts `python -m saley.cli dev`; a `saley.exe dev` from a terminal is
+  the human's.
+- After GATE: PASS: /tidy, docs, the release ping, set STATUS "Current release" to the next
+  release, and start it at stage 0 without asking (D112).
 - Every ticket arrives in the prompt with its requirement ids. Do not look for tickets elsewhere.
   If something is missing, ask the human. Never assume.
 - Before you ask the human, write the question to `docs/QUESTIONS.md` and stop. The Notification
   hook pings the human on Discord.
-- After any edit: `uv run ruff check .`, `python -m py_compile` on changed files, `uv run pytest -q`.
+- After any edit: `uv run ruff check .`, `python -m py_compile` on changed files, `uv run pytest -q -x -p no:cacheprovider`.
 - Run the matching reviewer agents, then `saley-tester`, before you report done. Fix what they find.
 - Update `README.md` when setup or run steps change. Update `docs/STATUS.md` at the end of every
   ticket: done, open, NEW / CHANGED-default / RETIRED env variables.
 - Docstrings explain WHY. Tests live in `tests/`, one file per package, fixtures in `tests/conftest.py`.
 - Write docs and messages in plain, short sentences (ASD-STE100 style).
 - Every release ends with `/verify`. GATE: PASS is required before `notify.py --release`. A failed step is fixed and `/verify` runs again from step 1.
+- No feature without a matrix row. No release without GATE: PASS on its matrix plus all earlier ones. Every release ends with /verify then /tidy.
 - Temporary files, scripts, dumps and screenshots go in .scratch/ or docs/test-reports/<release>-screens/. Never in the repo root, src, or tests.

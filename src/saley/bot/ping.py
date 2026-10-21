@@ -31,6 +31,14 @@ class Reply:
     as_user: int | None
 
 
+@dataclass(frozen=True)
+class Question:
+    """A `@Saley <text>` message that is not `ping` (R4 ticket 6)."""
+
+    text: str
+    author_id: int
+
+
 def _command(content: str, bot_user_id: int) -> str | None:
     """Text after the @Saley mention, or None when Saley is not addressed."""
     body = _AS.sub(" ", content.replace(TEST_TAG, " ")).strip()
@@ -61,3 +69,20 @@ def decide(msg: Incoming, *, test_channel_id: int, test_mode: bool) -> Reply | N
     as_match = _AS.search(msg.content)
     prefix = f"{TEST_TAG} " if test_mode else ""
     return Reply(f"{prefix}pong", int(as_match.group(1)) if as_match else None)
+
+
+def question(msg: Incoming, *, test_channel_id: int) -> Question | None:
+    """The question in an `@Saley <text>` message, or None. Same channel and author rules as ping.
+
+    Why: `[as:ID]` names the sender only when the message comes from the bot's own token (the
+    CLI, which cannot post as a person). In a message from a person it is just text, so nobody
+    can ask as a colleague by typing it.
+    """
+    if msg.channel_id != test_channel_id or not _accept_author(msg):
+        return None
+    command = _command(msg.content, msg.bot_user_id)
+    if not command or command.casefold() == "ping":
+        return None
+    as_match = _AS.search(msg.content)
+    from_cli = msg.author_id == msg.bot_user_id and as_match is not None
+    return Question(command, int(as_match.group(1)) if from_cli and as_match else msg.author_id)

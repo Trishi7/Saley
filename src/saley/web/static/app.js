@@ -1,4 +1,6 @@
-// Saley dashboard, release R1.1 (read-only). Plain JS, no build step (docs/08 "Stack").
+// Saley dashboard, release R2. Plain JS, no build step (docs/08 "Stack").
+// This file reads. act.js holds the POST calls (Done, Undo, Confirm, Dismiss, Mark done) and
+// team.js draws the task list and the Inbox, Commitments and Decisions views.
 // Every value from the API goes into the page with textContent, never as HTML: sheet
 // cells are data typed by people, not markup. Every visible word comes from words.js.
 (function () {
@@ -6,12 +8,15 @@
 
   var W = window.WORDS;
   var fmt = window.fmt;
+  var UI = window.SaleyUI = {};
   var PAGE = 200;
   var LONG = 160;          // text longer than this shows as bullets (R1.1 A.5)
   var BULLETS = 6;         // bullets shown before "Show all"
   var BLOCKERS_SHOWN = 4;  // goal card blockers before "+N more" (R1.1 A.5a)
   var STATUS_POLL_MS = 60000;
-  var state = { syncId: null, user: null, people: [], peopleFilter: "backlog", accFilter: "all", pplOffset: 0, accOffset: 0, role: "viewer" };
+  var STATUS_RETRY_MS = 30000;  // after a network error: a server restart heals the bar by itself
+  var PENDING_POLL_MS = 3000;  // while a write waits for the worker, look again soon
+  var state = { syncId: null, people: [], peopleFilter: "backlog", accFilter: "all", pplOffset: 0, accOffset: 0, role: "viewer" };
   var STAGE_PILL = { Won: "ok", Qualified: "ok", Meeting: "ok", Engaged: "acc", Connected: "acc", Contacted: "gray", Listed: "gray", Parked: "warn", Lost: "bad" };
   var RAG_PILL = { "on track": "ok", "at risk": "warn", "blocked": "bad" };
   var TOUCH_WORDS = { first_contact: "First contact", li_req: "LinkedIn request", li_accept: "LinkedIn accepted", email1: "Email 1", email2: "Email 2", email3: "Email 3", li_dm: "LinkedIn DM", meeting: "Meeting", call: "Call", reply: "Reply", bounce: "Bounce" };
@@ -20,6 +25,8 @@
   var GROUPS = [["people", W.gPeople], ["companies", W.gCompanies], ["goals", W.gGoals], ["deliverables", W.gDeliverables], ["decisions", W.gDecisions]];
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  // The data each view loads, for "Could not load {what}." (never a bare "Failed to fetch").
+  var WHAT = { today: W.whatToday, goals: W.whatGoals, accounts: W.whatAccounts, people: W.whatPeople, suggest: W.whatSuggest, signals: W.whatSignals, blockers: W.whatBlockers, money: W.whatMoney, events: W.whatEvents, asks: W.whatAsks, commit: W.whatCommit, decisions: W.whatDecisions, pack: W.whatPack, scorecard: W.whatScorecard, sources: W.whatSources, search: W.whatSearch };
 
   // ---------- small helpers ----------
   function el(tag, attrs) {
@@ -49,7 +56,6 @@
     return DAYS[d.getUTCDay()] + " " + d.getUTCDate() + " " + MONTHS[d.getUTCMonth()];
   }
   function timeLabel(iso) { return iso ? dayLabel(iso) + " " + String(iso).slice(11, 16) : "—"; }
-  function store(key, value) { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (e) { return null; } return null; }
   function debounce(fn, ms) { var t; return function () { var a = arguments; clearTimeout(t); t = setTimeout(function () { fn.apply(null, a); }, ms); }; }
   function link(href, text) { return el("a", { href: href, target: "_blank", rel: "noopener noreferrer", text: text }); }
   function noneOnFile() { return el("span", { cls: "muted", text: W.noneOnFile }); }
@@ -97,20 +103,37 @@
   // D40: every call after the first sends the snapshot the page read first. If the sheet
   // changed since, the API answers 409 and the page asks for a reload instead of mixing data.
   // The status bar always reads the newest snapshot, so it never sends one.
+  // D207: no "View as". Every call is the signed-in person's; the page never sends X-Saley-As.
+  // A fetch that the server does not answer throws a TypeError ("Failed to fetch"). It becomes
+  // W.noServer with `network` set, so the page names the data and never shows the raw text.
+  function noServer() { var e = new Error(W.noServer); e.network = true; return e; }
   function api(path) {
     var pinned = state.syncId != null && path.indexOf("/api/status") !== 0;
     var url = pinned ? path + (path.indexOf("?") < 0 ? "?" : "&") + "sync_id=" + state.syncId : path;
-    return fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" }).then(function (r) {
+    var headers = { Accept: "application/json" };
+    return fetch(url, { headers: headers, credentials: "same-origin" }).then(function (r) {
       if (r.status === 409) showChanged();
+      if (r.status === 401) location.href = "/signin";  // the session ended (R4, D114)
       if (!r.ok) return r.json().catch(function () { return {}; }).then(function (b) { throw new Error(detailText(b.detail) || ("HTTP " + r.status)); });
       return r.json().then(function (body) {
         if (state.syncId == null && body.sync_id != null && path.indexOf("/api/status") !== 0) state.syncId = body.sync_id;
         return body;
       });
-    });
+    }, function () { throw noServer(); });
   }
   function showChanged() { $("changed").hidden = false; }
-  function fail(node, err) { clear(node).appendChild(el("div", { cls: "err", text: fmt(W.couldNotLoad, { msg: err.message }) })); }
+  // "Could not load {what}. {reason}" and a Retry button that runs the load again. `what` and
+  // `retry` default to the view the node is in and that view's loader (show()).
+  function loadError(what, err) { return fmt(W.loadFailed, { what: what }) + " " + (err && err.message ? err.message : W.noServer); }
+  function retryButton(onRetry) {
+    return el("button", { type: "button", cls: "btn", "data-retry": "", text: W.retryBtn, on: { click: onRetry } });
+  }
+  function fail(node, err, what, retry) {
+    var view = node.closest ? node.closest(".view") : null;
+    var name = view ? view.id.replace(/^v-/, "") : "";
+    var line = loadError(what || WHAT[name] || W.whatPage, err);
+    clear(node).appendChild(el("div", { cls: "err" }, el("span", { text: line }), " ", retryButton(retry || show)));
+  }
   function emptyRow(tbody, cols, data) {
     var msg = data.last_computed ? fmt(W.noItems, { t: data.last_computed_label }) : W.noDataYet;
     tbody.appendChild(el("tr", null, el("td", { cls: "empty", colspan: String(cols), text: msg })));
@@ -139,7 +162,7 @@
     document.querySelectorAll(".vsearch").forEach(function (n) { n.placeholder = W.searchPage; });
     $("changed-text").textContent = W.changed;
     $("changed-reload").textContent = W.reload;
-    $("viewing-as").textContent = W.viewingAs;
+    $("status-retry").textContent = W.retryBtn;
   }
 
   // ---------- routing ----------
@@ -179,26 +202,35 @@
       state.people = me.people;
       state.role = me.role;
       $("me").textContent = fmt(W.signedIn, { email: me.email });
+      var out = $("signout");
+      out.textContent = W.signOut;
+      out.onclick = function () {
+        fetch("/auth/signout", { method: "POST", credentials: "same-origin" }).then(function () { location.href = "/signin"; });
+      };
       $("nav-sources").hidden = me.role !== "admin";
-      var saved = store("saley.user");
-      state.user = me.people.some(function (p) { return p.short === saved; }) ? saved : (me.people[0] && me.people[0].short);
-      renderWho();
-    });
-  }
-  function renderWho() {
-    tabs($("who"), state.people.map(function (p) { return [p.short, p.name]; }), state.user, function (s) {
-      state.user = s; store("saley.user", s); renderWho(); if (parseHash().view === "today") loadToday();
     });
   }
   function loadStatus() {
+    clearTimeout(state.statusRetry);
     api("/api/status").then(function (s) {
+      $("status-retry").hidden = true;
       var node = $("updated");
       node.textContent = s.message;
       node.className = "status " + (s.state === "ok" ? "ok" : "bad");
       $("cnt-blockers").textContent = s.late_total || "";
+      // The line comes from the server (words.py): waiting, held (writes off) or failed. A
+      // failed write is never hidden: the line stays until the write is fixed or undone.
+      $("pending").hidden = !s.write_note;
+      $("pending").textContent = s.write_note || "";
+      $("pending").className = "status " + (s.write_bad ? "bad" : "pending");
+      clearTimeout(state.pendingTimer);
+      if (s.pending_writes) state.pendingTimer = setTimeout(loadStatus, PENDING_POLL_MS);
+      if (UI.onStatus) UI.onStatus(s);
     }).catch(function (e) {
-      $("updated").textContent = fmt(W.couldNotLoad, { msg: e.message });
+      $("updated").textContent = loadError(W.whatStatus, e);
       $("updated").className = "status bad";
+      $("status-retry").hidden = false;
+      if (e.network) state.statusRetry = setTimeout(loadStatus, STATUS_RETRY_MS);
     });
   }
 
@@ -210,13 +242,16 @@
   }
   function loadToday() {
     var box = $("tiles");
-    api("/api/today?user=" + encodeURIComponent(state.user || "")).then(function (d) {
+    api("/api/today").then(function (d) {  // D207: the signed-in person's own list
       $("hello").textContent = d.greeting;
       $("today-sub1").textContent = fmt(W.todaySub1, { date: d.date_label });
       $("today-sub2").textContent = W.todaySub2;
       stampAll($("v-today"), d);
       clear(box);
       d.tiles.forEach(function (t) { box.appendChild(tileNode(t)); });
+      if (UI.renderTasks) UI.renderTasks(d.my_tasks);
+      if (UI.renderLook) UI.renderLook(d.needs_look);
+      if (UI.renderSuggests) UI.renderSuggests(d.saley_suggests);
     }).catch(function (e) { fail(box, e); });
   }
 
@@ -387,17 +422,28 @@
     }).catch(function (e) { fail(tbody, e); });
   }
 
+  // R4 (D118): the Scorecard "last week" cell. A null week or a null part shows a dash, never 0.
+  function lastWeekCell(r) {
+    var lw = r.last_week;
+    if (!lw) {
+      var cell = el("td", { cls: "muted", text: "—" });
+      if (r.last_week_note) cell.appendChild(el("span", { cls: "stamp", text: " " + r.last_week_note }));
+      return cell;
+    }
+    return el("td", { text: fmt(W.scLastWeekLine, { c: num(lw.contacted), m: num(lw.meetings), d: num(lw.deals) }) });
+  }
+  function scoreRow(r) {
+    var reply = r.reply_pct == null ? el("td", { cls: "num muted", title: r.reply_note, text: "—" }) : el("td", { cls: "num", text: r.reply_pct });
+    return el("tr", null, el("td", { text: r.industry }), el("td", { cls: "num", text: r.people }), el("td", { cls: "num", text: r.contacted }),
+      el("td", { cls: "num", text: num(r.connect_pct) }), reply, el("td", { cls: "num", text: r.meetings }), el("td", { cls: "num", text: r.deals }), lastWeekCell(r));
+  }
   function loadScorecard() {
     var tbody = $("sc-table").querySelector("tbody");
     api("/api/scorecard").then(function (d) {
       stampAll($("v-scorecard"), d);
       clear(tbody);
-      if (!d.items.length) emptyRow(tbody, 7, d);
-      d.items.forEach(function (r) {
-        var reply = r.reply_pct == null ? el("td", { cls: "num muted", title: r.reply_note, text: "—" }) : el("td", { cls: "num", text: r.reply_pct });
-        tbody.appendChild(el("tr", null, el("td", { text: r.industry }), el("td", { cls: "num", text: r.people }), el("td", { cls: "num", text: r.contacted }),
-          el("td", { cls: "num", text: num(r.connect_pct) }), reply, el("td", { cls: "num", text: r.meetings }), el("td", { cls: "num", text: r.deals })));
-      });
+      if (!d.items.length) emptyRow(tbody, 8, d);
+      d.items.forEach(function (r) { tbody.appendChild(scoreRow(r)); });
     }).catch(function (e) { fail(tbody, e); });
   }
 
@@ -433,22 +479,17 @@
     var dq = clear($("dq-table").querySelector("tbody"));
     dq.appendChild(el("tr", null, el("td", { text: W.noIndustry }), el("td", { cls: "num", text: d.missing_industry })));
     d.quality.forEach(function (q) { dq.appendChild(el("tr", null, el("td", { text: q.problem.replace(/_/g, " ") }), el("td", { cls: "num", text: q.n }))); });
-    var funnel = clear($("news-funnel"));
-    d.news.forEach(function (n) {
-      var bar = el("div", { cls: "bar", title: n.n == null ? W.notStarted : "" }, el("i"));
-      bar.firstChild.style.width = "0%";  // no counts before R3: an empty bar, never a full one
-      funnel.appendChild(el("div", { cls: "row" }, el("span", { text: n.step }), bar, el("span", { cls: "n muted", text: num(n.n) })));
-    });
     $("news-note").textContent = d.news_note;
     var eg = clear($("egress-table").querySelector("tbody"));
     if (!d.egress.length) emptyRow(eg, 3, d);
     d.egress.forEach(function (e) { eg.appendChild(el("tr", null, el("td", { text: e.host }), el("td", { cls: "num", text: e.calls }), el("td", { cls: "num", text: e.errors }))); });
     $("llm-line").textContent = fmt(W.sheetLine, { m: d.sheet_mode, n: d.llm.calls, c: d.llm_cap });
   }
-  function loadSources() {
+  function loadSources(params) {
     api("/api/health/full").then(function (d) {
       stampAll($("v-sources"), d);
       renderTabs(d); renderJobs(d); renderChecks(d);
+      if (UI.renderNews) UI.renderNews(d, params || {});
     }).catch(function (e) { fail($("jobs-table").querySelector("tbody"), e); });
   }
 
@@ -542,7 +583,7 @@
         d.appendChild(personFields(p));
         d.appendChild(el("h2", { text: W.dTouches })); d.appendChild(historyTable(p.touches, false));
         d.appendChild(el("h2", { text: W.dHistory })); d.appendChild(historyTable(p.stage_history, false));
-      }).catch(function (e) { fail(d, e); });
+      }).catch(function (e) { fail(d, e, W.whatItem, function () { openPerson(id); }); });
     });
   }
   function openAccount(id) {
@@ -560,7 +601,7 @@
         d.appendChild(el("div", { cls: "tw" }, t));
         d.appendChild(el("h2", { text: W.dTouches })); d.appendChild(historyTable(a.touches, true));
         d.appendChild(el("h2", { text: W.dHistory })); d.appendChild(historyTable(a.stage_history, true));
-      }).catch(function (e) { fail(d, e); });
+      }).catch(function (e) { fail(d, e, W.whatItem, function () { openAccount(id); }); });
     });
   }
 
@@ -572,6 +613,12 @@
   }
 
   var LOADERS = { today: loadToday, goals: loadGoals, accounts: loadAccounts, people: loadPeople, blockers: loadBlockers, money: loadMoney, scorecard: loadScorecard, sources: loadSources, search: loadSearch };
+  // What act.js and team.js need from this file. They add their loaders before the page starts.
+  UI.el = el; UI.clear = clear; UI.$ = $; UI.api = api; UI.fail = fail; UI.state = state; UI.pill = pill;
+  UI.tabs = tabs; UI.dayLabel = dayLabel; UI.timeLabel = timeLabel; UI.loaders = LOADERS;
+  UI.loadStatus = loadStatus; UI.loadToday = loadToday;
+  UI.pager = pager; UI.PAGE = PAGE; UI.num = num; UI.link = link; UI.go = go; UI.emptyRow = emptyRow;
+  UI.setStamp = setStamp; UI.scoreRow = scoreRow; UI.openPerson = openPerson; UI.openAccount = openAccount; UI.stagePill = stagePill;
 
   document.addEventListener("DOMContentLoaded", function () {
     fillWords();
@@ -585,7 +632,8 @@
     $("drawer-back").addEventListener("click", closeDrawer);
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
     window.addEventListener("hashchange", show);
-    loadMe().catch(function (e) { $("who").textContent = e.message; }).then(function () { show(); loadStatus(); });
+    $("status-retry").addEventListener("click", loadStatus);
+    loadMe().catch(function (e) { $("me").textContent = loadError(W.whatMe, e); }).then(function () { show(); loadStatus(); });
     setInterval(loadStatus, STATUS_POLL_MS);
   });
 })();

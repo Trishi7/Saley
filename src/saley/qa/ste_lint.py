@@ -3,8 +3,9 @@
 Why: one check over the string catalogues, so plain short text stays plain and short as the
 dashboard grows. Rules: each string is at most 60 characters (a `{name}` placeholder counts
 as 4), and no word or phrase from docs/ste-banned-words.txt appears.
-Sources: saley/web/words.py, static/words.js, the text and labels in static/index.html, and
-the UPPER_CASE string constants of saley/bot.
+Sources: saley/web/words.py, static/words.js, the text and labels in static/index.html, the
+dashboard v2 catalogue web/src/words.ts and web/index.html (R5, plan §3.3), and the UPPER_CASE
+string constants of saley/bot. static/words.js stays until the cut-over (T16).
 
 Run: `uv run python -m saley.qa.ste_lint` (exit 1 on any finding).
 """
@@ -25,6 +26,7 @@ PLACEHOLDER = re.compile(r"\{\w*\}")
 JS_STRING = re.compile(r'^\s*(\w+):\s*"((?:[^"\\]|\\.)*)"', re.MULTILINE)
 HTML_ATTRS = ("placeholder", "title", "aria-label", "alt")
 WEB = ROOT / "src" / "saley" / "web"
+WEB_V2 = ROOT / "web"  # the Vite app (D144); its words.ts uses the same `key: "text",` form
 
 
 @dataclass(frozen=True)
@@ -100,16 +102,18 @@ class _TextNodes(HTMLParser):
             self.items.append(text)
 
 
-def html_strings(path: Path) -> list[tuple[str, str]]:
+def html_strings(path: Path, label: str | None = None) -> list[tuple[str, str]]:
     parser = _TextNodes()
     parser.feed(path.read_text(encoding="utf-8"))
-    return [(path.name, t) for t in parser.items]
+    return [(label or path.name, t) for t in parser.items]
 
 
 def collect() -> list[tuple[str, str]]:
     strings = python_strings(WEB / "words.py")
     strings += js_strings(WEB / "static" / "words.js")
     strings += html_strings(WEB / "static" / "index.html")
+    strings += js_strings(WEB_V2 / "src" / "words.ts")
+    strings += html_strings(WEB_V2 / "index.html", "web/index.html")
     for path in sorted((ROOT / "src" / "saley" / "bot").glob("*.py")):
         strings += python_strings(path)
     return [(s, t) for s, t in strings if not t.startswith(("http://", "https://"))]

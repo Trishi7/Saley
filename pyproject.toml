@@ -18,6 +18,7 @@ dependencies = [
     "psycopg[binary]==3.3.6",
     "pydantic==2.14.1",
     "pydantic-settings==2.16.0",
+    "pypdf==6.21.1",
     "pyyaml==6.0.3",
     "sqlalchemy==2.1.5",
     "structlog==26.1.0",
@@ -36,6 +37,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/saley"]
+# The dashboard v2 build is gitignored (D145), and hatch skips ignored files: list it here so a
+# wheel built after `npm --prefix web run build` carries it.
+artifacts = ["src/saley/web/dist/**"]
 
 [dependency-groups]
 dev = [
@@ -62,7 +66,19 @@ ignore = ["S101", "RUF001", "RUF002", "RUF003"]
 "tests/**" = ["S105", "S106", "S108", "S311", "S608"]
 # WHERE fragments come only from fixed dicts in this file; every value is a bound parameter.
 "src/saley/web/queries.py" = ["S608"]
-"migrations/**" = ["E501"]
+# Same rule: the WHERE text is fixed in the file (bound cast(:x) is null checks and constants).
+"src/saley/web/team.py" = ["S608"]
+"src/saley/intel/decisions.py" = ["S608"]
+"src/saley/intel/proposals.py" = ["S608"]
+# Same rule: view names come from a fixed dict, WHERE fragments are fixed text, values are bound.
+"src/saley/web/signals.py" = ["S608"]
+"src/saley/web/seen_tabs.py" = ["S608"]
+# Fixed SQL text built from constants; the only value is a bound date.
+"src/saley/qa/sheet_verify.py" = ["S608"]
+# Same rule: the QA markers are constants in this file; no request value reaches the SQL.
+"src/saley/qa/seed.py" = ["S608"]
+# Fixed SQL text only: no value from a user or a request reaches a migration.
+"migrations/**" = ["E501", "S608"]
 # Report-building checks with long Markdown lines.
 "scripts/**" = ["E501"]
 

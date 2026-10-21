@@ -223,3 +223,72 @@ def test_post_is_not_retried_by_default(monkeypatch: pytest.MonkeyPatch) -> None
     with egress.make_client(policy, inner=httpx.MockTransport(handler)) as client:
         egress.request(client, "POST", "https://example.com/x")
     assert calls["n"] == 1
+
+
+# ---------------------------------------- R3 guardrails: matrix rows R3-G02 and R3-G03
+
+LINKEDIN_SHAPES = [
+    "https://www.linkedin.com/in/x",
+    "https://LinkedIn.com./in/x",  # upper case and a trailing dot
+    "https://uk.linkedin.com/in/x",  # a country subdomain
+    "https://example.com@www.linkedin.com/in/x",  # user-info trick
+    "https://media.licdn.com/dms/image/x.png",  # LinkedIn CDN
+    "https://lnkd.in/abc",  # LinkedIn short links
+]
+
+
+def test_linkedin_blocked_three_shapes() -> None:
+    """R3-G02: no linkedin.com request leaves the process, even if the allowlist names it."""
+    calls: list[str] = []
+    allowlisted = EgressPolicy(
+        ["example.com", "linkedin.com", "licdn.com", "lnkd.in"],
+        [],
+        30,
+        max_wait_seconds=1,
+    )
+    with make_client(allowlisted, inner=ok_transport(calls)) as client:
+        for url in LINKEDIN_SHAPES:
+            with pytest.raises(EgressBlocked):
+                client.get(url)
+
+        def redirect(req: httpx.Request) -> httpx.Response:
+            calls.append(str(req.url))
+            return httpx.Response(301, headers={"Location": "https://uk.linkedin.com/in/x"})
+
+        hop = make_client(allowlisted, inner=httpx.MockTransport(redirect))
+        with hop, pytest.raises(EgressBlocked):
+            hop.get("https://example.com/go")
+    assert calls == ["https://example.com/go"]  # only the first hop was sent
+
+
+def test_host_outside_allowlist_blocked() -> None:
+    """R3-G03: a host that is not on EGRESS_ALLOWLIST never gets a request."""
+    calls: list[str] = []
+    with make_client(policy(), inner=ok_transport(calls)) as client:
+        for url in [
+            "https://evil.example.org/x",
+            "https://example.com.evil.org/x",  # allowed name as a prefix only
+            "https://notexample.com/x",  # allowed name as a suffix only
+            "http://127.0.0.1:8080/admin",
+            "https://[::1]/x",
+        ]:
+            with pytest.raises(EgressBlocked, match="not on the allowlist"):
+                client.get(url)
+
+        def redirect(req: httpx.Request) -> httpx.Response:
+            calls.append(str(req.url))
+            return httpx.Response(302, headers={"Location": "https://evil.example.org/x"})
+
+        hop = make_client(policy(), inner=httpx.MockTransport(redirect))
+        with hop, pytest.raises(EgressBlocked):
+            hop.get("https://example.com/go")
+    assert calls == ["https://example.com/go"]
+
+
+def test_default_allowlist_has_the_news_hosts_and_no_linkedin() -> None:
+    from saley.core.settings import Settings
+
+    allow = Settings(_env_file=None).allowlist
+    for host in ("news.google.com", "export.arxiv.org", "api.openalex.org", "html.duckduckgo.com"):
+        assert host in allow
+    assert not any("linkedin" in host for host in allow)

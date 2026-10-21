@@ -17,8 +17,10 @@ from sqlalchemy import Engine, text
 LOCK_EXPIRY = timedelta(minutes=15)
 
 
-def new_holder() -> str:
-    return f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+def new_holder(slot: str) -> str:
+    """`<slot>@host:pid:id`. Lock names stay global, so two slots never run one job twice;
+    the slot in the holder lets a starting worker free only its own dead locks (D113)."""
+    return f"{slot}@{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
 
 
 def acquire(engine: Engine, name: str, holder: str, expiry: timedelta = LOCK_EXPIRY) -> bool:

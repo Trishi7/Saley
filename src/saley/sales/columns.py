@@ -90,6 +90,28 @@ ROLE_BY_NAME = {role.name: role for role in POC_ROLES}
 # Locked roles. A writer must locate every one of them before ANY write, or it could write into one.
 RESTRICTED_ROLES = frozenset(role.name for role in POC_ROLES if not role.writable_existing)
 WRITABLE_EXISTING = frozenset(role.name for role in POC_ROLES if role.writable_existing)
+# docs/10, column "New row": the roles Saley writes when it adds a person. Everything else
+# (steps, commercial, column Q, reconnect) stays empty on a new row. Sr No is set at push time.
+NEW_ROW_ROLES = frozenset(
+    {
+        "sr_no",
+        "company",
+        "name",
+        "about_poc",
+        "industry",
+        "designation",
+        "email",
+        "based",
+        "paper_links",
+        "li_url",
+        "first_contact",
+        "first_contact_type",
+        "first_contact_date",
+        "sid_li_added",
+        "li_connected_date",
+        "x_handle",
+    }
+)
 
 
 def norm_header(text: object) -> str:
@@ -178,15 +200,27 @@ class WritesRefused(RuntimeError):
     """A write was asked for, but the column map is not safe or the role is locked."""
 
 
-def assert_writable(resolution: Resolution, role: str, *, existing_row: bool = True) -> int:
-    """Return the column index for a write, or refuse. Locks are by role (CLAUDE.md)."""
+def assert_writable(
+    resolution: Resolution,
+    role: str,
+    *,
+    existing_row: bool = True,
+    email_write: bool = False,
+) -> int:
+    """Return the column index for a write, or refuse. Locks are by role (CLAUDE.md).
+
+    `email_write` is true only for the `email_write` action while EMAIL_WRITE_ALLOWED is on.
+    It opens the Email cell and nothing else: column Q and every other lock stay shut.
+    """
     if not resolution.writes_allowed:
         raise WritesRefused(
             "restricted roles do not map to a column: "
             + ", ".join(sorted(RESTRICTED_ROLES & set(resolution.unmapped_roles)))
         )
-    if existing_row and role not in WRITABLE_EXISTING:
+    if existing_row and role not in WRITABLE_EXISTING and not (role == "email" and email_write):
         raise WritesRefused(f"role {role!r} is read-only on an existing row")
+    if not existing_row and role not in NEW_ROW_ROLES:
+        raise WritesRefused(f"role {role!r} is not written on a new row")
     if role not in resolution.columns:
         raise WritesRefused(f"role {role!r} has no column")
     return resolution.columns[role]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -850,3 +851,386 @@ def test_findings_of_a_stale_tab_stay_open(db: Session, raw_sheet: dict) -> None
         )
     ).scalar_one()
     assert before > 0 and after == before
+
+
+# ------------------------------------------------------------------ R5 T3: Done value (D153)
+
+
+def test_done_value_picks_the_columns_own_word() -> None:
+    from datetime import date
+
+    from saley.sales.vocab import pick_value
+
+    day = date(2026, 10, 21)
+    # First of Completed, Done, Met, Held that the column holds, in the column's case.
+    assert pick_value("meeting_status", {"Booked": 4, "held": 2, "DONE": 1}, day) == "DONE"
+    assert pick_value("meeting_status", {"held": 2, "Held": 5}, day) == "Held"
+    assert pick_value("meeting_status", {"Booked": 4, "Cancelled": 1}, day) is None
+    assert pick_value("meeting_status", {}, day) is None
+    assert pick_value("first_contact", {"VR": 3, "true": 2}, day) == "true"
+    assert pick_value("first_contact", {"VR": 3, "Sid": 2}, day) is None
+    assert pick_value("first_contact_type", {"LI": 1, "LinkedIn": 4, "Email": 9}, day) == "LinkedIn"
+    assert pick_value("first_contact_type", {"Email": 9}, day) is None
+    assert pick_value("li_connected_date", {"46300": 3}, day) == "2026-10-21"
+    assert pick_value("li_connected_date", {"2026-10-01": 1}, day) == "2026-10-21"
+    assert pick_value("li_connected_date", {"02.09.2026": 1}, day) == "2026-10-21"
+    assert pick_value("li_connected_date", {"soon": 1}, day) is None
+    assert pick_value("name", {"Pat": 1}, day) is None
+
+
+# ------------------------------------------------------------------ R5 T9: live sheet cases (fakes)
+
+REAL_TAB = "Outreach PoCs"
+REAL_ROWS = [["Sr No", "Name"], ["1", "Real Person"]]
+SCRATCH_MARKER = "Saley scratch tab. Safe to delete."
+
+
+class _Quota(Exception):
+    """A Google 429 as gspread shows it: `response.status_code`."""
+
+    def __init__(self) -> None:
+        super().__init__("quota")
+        self.response = type("R", (), {"status_code": 429})()
+
+
+def _fake_with_real_tab() -> Any:
+    from saley.sales.writer import FakeSheet
+
+    return FakeSheet({REAL_TAB: [list(r) for r in REAL_ROWS]})
+
+
+def _run_case(sheet: Any, case: str, **kw: Any) -> Any:
+    from saley.sales.roundtrip_cases import run_case
+
+    return run_case(sheet, "SALEY_TEST", case, pace=0, sleep=lambda s: None, **kw)
+
+
+def _leftovers(db: Session) -> list[int]:
+    db.rollback()
+    return [
+        db.execute(text(q)).scalar_one()
+        for q in (
+            "select count(*) from contact where sheet_row_key like 'saley-test|%'",
+            "select count(*) from decision where row_key like 'saley-test|%'",
+            "select count(*) from sync_outbox where row_key like 'saley-test|%'",
+            "select count(*) from commitment where text like 'SALEY_TEST%'",
+        )
+    ]
+
+
+def _assert_clean_run(db: Session, sheet: Any, report: Any) -> None:
+    assert report.ok, report.render()
+    assert report.render()[-1] == "PASS"
+    assert list(sheet.tabs) == [REAL_TAB]  # the scratch tab is deleted
+    assert sheet.tabs[REAL_TAB] == REAL_ROWS  # the real tab is untouched
+    assert all(c[1] == "SALEY_TEST" for c in sheet.calls if len(c) > 1)  # no call elsewhere
+    assert _leftovers(db) == [0, 0, 0, 0]
+
+
+def test_guard_refuses_every_other_tab_before_the_call() -> None:
+    from saley.sales.roundtrip_cases import GuardedSheet, TabRefused
+
+    inner = _fake_with_real_tab()
+    guard = GuardedSheet(inner, "SALEY_TEST", pace=0, sleep=lambda s: None)
+    calls: list[Any] = [
+        lambda: guard.read_header(REAL_TAB),
+        lambda: guard.read_cell(REAL_TAB, 2, 1),
+        lambda: guard.write_cell(REAL_TAB, 2, 1, "x"),
+        lambda: guard.write_note(REAL_TAB, 2, 1, "x"),
+        lambda: guard.write_row(REAL_TAB, 2, ["x"]),
+        lambda: guard.append_row(REAL_TAB, 0, ["x"]),
+        lambda: guard.delete_row(REAL_TAB, 2),
+        lambda: guard.delete_tab(REAL_TAB),
+        lambda: guard.add_tab(REAL_TAB),
+        lambda: guard.find_row(REAL_TAB, 1, "Real Person"),
+    ]
+    for call in calls:
+        with pytest.raises(TabRefused):
+            call()
+    assert inner.calls == [] and inner.tabs[REAL_TAB] == REAL_ROWS
+
+
+def test_guard_refuses_the_name_of_a_real_tab_as_the_scratch_tab() -> None:
+    from saley.sales.roundtrip_cases import GuardedSheet, TabRefused
+
+    for name in ("Outreach PoCs", " outreach  pocs ", "Master Pipeline"):
+        with pytest.raises(TabRefused):
+            GuardedSheet(_fake_with_real_tab(), name)
+
+
+def test_guard_waits_and_retries_on_429_and_never_loops_fast() -> None:
+    from saley.sales.roundtrip_cases import RETRIES_429, GuardedSheet
+
+    class Flaky:
+        def __init__(self, fails: int) -> None:
+            self.fails, self.tries = fails, 0
+
+        def read_cell(self, tab: str, row: int, col: int) -> str:
+            self.tries += 1
+            if self.tries <= self.fails:
+                raise _Quota()
+            return "ok"
+
+    slept: list[float] = []
+    patient = Flaky(2)
+    guard = GuardedSheet(patient, "SALEY_TEST", pace=0, sleep=slept.append, wait_429=65)  # type: ignore[arg-type]
+    assert guard.read_cell("SALEY_TEST", 1, 0) == "ok"
+    assert slept == [65, 65]  # one patient wait per 429
+    stubborn = Flaky(99)
+    hard = GuardedSheet(stubborn, "SALEY_TEST", pace=0, sleep=slept.append, wait_429=65)  # type: ignore[arg-type]
+    with pytest.raises(_Quota):
+        hard.read_cell("SALEY_TEST", 1, 0)
+    assert stubborn.tries == RETRIES_429 + 1
+
+
+def test_guard_paces_calls() -> None:
+    from saley.sales.roundtrip_cases import GuardedSheet
+
+    slept: list[float] = []
+    inner = _fake_with_real_tab()
+    inner.add_tab("SALEY_TEST")
+    guard = GuardedSheet(inner, "SALEY_TEST", pace=5, sleep=slept.append)
+    guard.read_cell("SALEY_TEST", 1, 0)
+    guard.read_cell("SALEY_TEST", 1, 0)
+    assert len(slept) >= 1 and all(0 < s <= 5 for s in slept)
+
+
+def test_a_real_tab_name_never_reaches_the_sheet() -> None:
+    from saley.sales.roundtrip_cases import TabRefused, run_case
+
+    sheet = _fake_with_real_tab()
+    with pytest.raises(TabRefused):
+        run_case(sheet, REAL_TAB, "done-undo", pace=0)
+    assert sheet.calls == [] and sheet.tabs == {REAL_TAB: REAL_ROWS}
+
+
+def test_case_done_undo_writes_a_used_value_signs_and_undoes(synced: Session) -> None:
+    from tests.conftest import require_ro_role
+
+    require_ro_role()
+    sheet = _fake_with_real_tab()
+    report = _run_case(sheet, "done-undo")
+    _assert_clean_run(synced, sheet, report)
+    metrics = [line[0] for line in report.lines]
+    assert "meeting: meeting_status value is already used in the column" in metrics
+    assert "meeting: cell after Undo" in metrics
+    assert "li_first: all members undone by one click" in metrics
+    assert "test rows removed from the database" in metrics
+    assert report.lines[-1][:3] == ("scratch tab deleted", "yes", "yes")
+
+
+def test_case_add_email_refuses_bad_values_then_writes_once(synced: Session) -> None:
+    from tests.conftest import require_ro_role
+
+    require_ro_role()
+    before = get_settings().email_write_allowed
+    sheet = _fake_with_real_tab()
+    report = _run_case(sheet, "add-email")
+    _assert_clean_run(synced, sheet, report)
+    metrics = [line[0] for line in report.lines]
+    assert "invalid values: no decision, no outbox row" in metrics
+    assert "valid email: task gone after the push" in metrics
+    assert get_settings().email_write_allowed is before  # D165: put back
+
+
+def test_case_commitment_nonowner_writes_nothing(synced: Session) -> None:
+    from tests.conftest import require_ro_role
+
+    require_ro_role()
+    sheet = _fake_with_real_tab()
+    report = _run_case(sheet, "commitment-nonowner")
+    _assert_clean_run(synced, sheet, report)
+    lines = {line[0]: line for line in report.lines}
+    assert lines["non-owner Done: status"][1:3] == ("403", "403")
+    assert "non-owner Done: sheet unchanged" in lines
+
+
+def test_case_parity_is_seeded_and_ends_clean(synced: Session) -> None:
+    from tests.conftest import require_ro_role
+
+    require_ro_role()
+    first = _fake_with_real_tab()
+    one = _run_case(first, "parity", n=8, seed=7)
+    _assert_clean_run(synced, first, one)
+    second = _fake_with_real_tab()
+    two = _run_case(second, "parity", n=8, seed=7)
+    assert [x[0] for x in one.lines] == [x[0] for x in two.lines]  # same seed, same steps
+    assert ("steps run", "8", "8", True) in one.lines
+    assert one.lines[-1][0] == "scratch tab deleted"
+
+
+def test_a_failing_case_still_deletes_the_tab_and_the_database_rows(synced: Session) -> None:
+    from saley.sales.writer import FakeSheet
+    from tests.conftest import require_ro_role
+
+    require_ro_role()
+
+    class Broken(FakeSheet):
+        def write_cell(self, tab: str, row: int, col: int, value: str) -> None:
+            if tab == "SALEY_TEST" and row > 2 and value not in ("", SCRATCH_MARKER):
+                raise RuntimeError("quota exceeded, Bearer ya29.SECRET")
+            super().write_cell(tab, row, col, value)
+
+    sheet = Broken({REAL_TAB: [list(r) for r in REAL_ROWS]})
+    report = _run_case(sheet, "done-undo")
+    assert not report.ok
+    failed = next(line for line in report.lines if line[0] == "every step runs")
+    assert "ya29.SECRET" not in failed[2]
+    assert list(sheet.tabs) == [REAL_TAB] and sheet.tabs[REAL_TAB] == REAL_ROWS
+    assert _leftovers(synced) == [0, 0, 0, 0]
+    assert report.lines[-1][:3] == ("scratch tab deleted", "yes", "yes")
+
+
+def test_a_case_that_differs_fails_with_a_short_reason(synced: Session) -> None:
+    from saley.sales.writer import FakeSheet
+    from tests.conftest import require_ro_role
+
+    require_ro_role()
+
+    class Drops(FakeSheet):
+        """The sheet keeps the old cell: the read-back does not match the Done value."""
+
+        def write_cell(self, tab: str, row: int, col: int, value: str) -> None:
+            status_col = [r.name for r in columns.POC_ROLES].index("meeting_status")
+            if row >= 3 and col == status_col and value not in ("", "Scheduled"):
+                return  # the Done value is dropped
+            super().write_cell(tab, row, col, value)
+
+    sheet = Drops({REAL_TAB: [list(r) for r in REAL_ROWS]})
+    report = _run_case(sheet, "done-undo")
+    assert not report.ok and report.render()[-1] == "FAIL"
+    diff = [line for line in report.lines if not line[3]]
+    assert diff and "push done" in diff[0][0]  # the first DIFF is the short reason
+    assert _leftovers(synced) == [0, 0, 0, 0] and list(sheet.tabs) == [REAL_TAB]
+
+
+def test_execute_runs_a_case_and_the_command_checks_its_flags(
+    synced: Session, set_env: Callable[..., None]
+) -> None:
+    from typer.testing import CliRunner
+
+    from saley.cli import app
+    from saley.sales import roundtrip
+    from saley.sales.writer import FakeSheet
+    from tests.conftest import require_ro_role
+
+    require_ro_role()
+    runner = CliRunner()
+    bad = runner.invoke(app, ["sheet", "roundtrip", "--test-tab", "--case", "bogus"])
+    assert bad.exit_code != 0 and "--case is one of" in bad.output
+    both = runner.invoke(app, ["sheet", "roundtrip", "--test-tab", "--case", "parity", "--row-add"])
+    assert both.exit_code != 0
+    none = runner.invoke(app, ["sheet", "roundtrip", "--case", "parity"])
+    assert none.exit_code != 0 and "--test-tab" in none.output
+    set_env(SHEET_WRITE_ENABLED="false")
+    off = runner.invoke(app, ["sheet", "roundtrip", "--test-tab", "--case", "done-undo"])
+    assert off.exit_code == 3 and "NOT CONFIGURED: Q-R2-1" in off.output
+    set_env(SHEET_WRITE_ENABLED="true")
+    lines: list[str] = []
+    code = roundtrip.execute(lines.append, FakeSheet, case="commitment-nonowner")
+    assert code == 0 and lines[-1] == "PASS", lines
+
+
+def test_finish_deletes_the_tab_even_when_database_cleanup_is_interrupted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from saley.sales import roundtrip_cases
+    from saley.sales.roundtrip import Report
+    from saley.sales.writer import FakeSheet
+
+    def interrupted() -> int:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(roundtrip_cases, "clean_database", interrupted)
+    sheet = FakeSheet({REAL_TAB: [list(r) for r in REAL_ROWS], "SALEY_TEST": [["x"]]})
+    with pytest.raises(KeyboardInterrupt):
+        roundtrip_cases._finish(sheet, "SALEY_TEST", Report(), True)
+    assert list(sheet.tabs) == [REAL_TAB]
+
+
+def test_clean_database_keeps_a_real_commitment_named_like_ours(synced: Session) -> None:
+    from saley.sales.roundtrip_cases import COMMITMENT_TEXT, clean_database
+
+    owner = synced.execute(text("select id from users order by id limit 1")).scalar_one()
+    for label in ("SALEY_TEST plan", COMMITMENT_TEXT):
+        synced.execute(
+            text(
+                "insert into commitment (owner, text, due, state) "
+                "values (:o, :t, current_date, 'open')"
+            ),
+            {"o": owner, "t": label},
+        )
+    synced.commit()
+    try:
+        clean_database()
+        synced.rollback()
+        left = synced.execute(text("select text from commitment where text like 'SALEY_TEST%'"))
+        assert [r[0] for r in left.all()] == ["SALEY_TEST plan"]
+    finally:
+        synced.execute(text("delete from commitment where text like 'SALEY_TEST%'"))
+        synced.commit()
+
+
+# ------------------------------------------------------------------ QA seed rows (R5 T15, D217)
+
+
+@pytest.fixture
+def qa_cleanup(db: Session) -> Iterator[None]:
+    """Always remove the seed user and the `qa:` rows, also after a failed assert: a `qa`
+    user left in the session database shows up as a team member in later tests."""
+    yield
+    db.rollback()
+    db.execute(text("delete from users where short = 'qa'"))
+    db.execute(text("delete from event where sheet_row_key like 'qa:%'"))
+    db.execute(text("delete from package where sheet_row_key like 'qa:%'"))
+    db.commit()
+
+
+def _qa_rows(db: Session, user_age: timedelta | None) -> None:
+    """A `qa:` event and a `qa:` package; with `user_age`, the seed's user `qa` of that age.
+    The users table outlives one test, so an older `qa` user is removed first."""
+    db.execute(text("delete from users where short = 'qa'"))
+    if user_age is not None:
+        db.execute(
+            text(
+                "insert into users (short, name, role, created_at) "
+                "values ('qa', 'QA', 'approver', :at)"
+            ),
+            {"at": now_ist() - user_age},
+        )
+    db.execute(text("insert into event (sheet_row_key, name) values ('qa:event:t', 'QA Seed T')"))
+    db.execute(text("insert into package (sheet_row_key, name) values ('qa:package:t', 'QA Pkg')"))
+    db.commit()
+
+
+def _removed_at(db: Session, table: str, key: str) -> object:
+    return db.execute(
+        text(f"select removed_at from {table} where sheet_row_key = :k"), {"k": key}
+    ).scalar_one()
+
+
+def test_sync_keeps_qa_events_only_while_a_seed_is_active(
+    db: Session, raw_sheet: dict[str, list[list[Any]]], qa_cleanup: None
+) -> None:
+    """D217: an active seed (user `qa`, under 6 h old) keeps its `qa:event:*` rows; no other
+    tab keeps a `qa:` row."""
+    _qa_rows(db, timedelta(minutes=5))
+    run_sync(db, build_tabs(raw_sheet), now_ist())
+    db.commit()
+    assert _removed_at(db, "event", "qa:event:t") is None
+    assert _removed_at(db, "package", "qa:package:t") is not None
+
+
+@pytest.mark.parametrize("user_age", [None, timedelta(hours=7)])
+def test_sync_removes_stale_qa_events(
+    db: Session,
+    raw_sheet: dict[str, list[list[Any]]],
+    user_age: timedelta | None,
+    qa_cleanup: None,
+) -> None:
+    """D217: no seed, or a seed left by a crashed run (over 6 h old): the sync removes the QA
+    events (self-heal), and they do not count in the removal share check."""
+    _qa_rows(db, user_age)
+    run_sync(db, build_tabs(raw_sheet), now_ist())
+    db.commit()
+    assert _removed_at(db, "event", "qa:event:t") is not None

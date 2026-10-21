@@ -61,7 +61,7 @@ All conduct rules stay. The bot is a ping to Sid and Vaishnavi for what the dash
 | Contacts per outreach post | 5 | Keep for bot |
 | Gap between scheduled posts | 2 h | Keep for bot |
 | Weekend | No scheduled posts unless a deliverable is due Monday | Keep. Meeting and reconnect reminders: decide (Part I) |
-| Overdue 3+ days | Also DM the owner | Upgrade: one DM only, then weekly pack |
+| Late 3+ days | Also DM the owner | Upgrade: one DM only, then weekly pack |
 | Default time | 14:00 IST | Keep for sheet-driven reminders |
 
 ## 4. Part C · New core requirements S01–S41

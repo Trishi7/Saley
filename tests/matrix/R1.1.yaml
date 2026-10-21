@@ -1,0 +1,136 @@
+# Test matrix R1.1 (docs/16-verification-standard.md §3). Never edit a row to make it pass.
+release: R1.1
+rows:
+  - id: R1.1-U01
+    feature: F-R1.1-01
+    layer: unit
+    what: saley dev starts web and scheduler on WEB_PORT and refuses beside a live worker
+    tool: pytest
+    command: pytest tests/test_cli.py::test_dev_starts_web_and_scheduler tests/test_cli.py::test_dev_refuses_when_another_worker_is_alive
+    pass: both tests pass
+  - id: R1.1-A01
+    feature: F-R1.1-01
+    layer: api
+    what: Updated bar states ok / worker down / sync failing / stale tab
+    tool: pytest
+    command: pytest tests/test_web.py::test_status_bar_states tests/test_web.py::test_stale_tab_turns_the_bar_red_for_everyone
+    pass: both tests pass
+  - id: R1.1-A02
+    feature: F-R1.1-02
+    layer: api
+    what: tile number equals its list; unknown is "—", never 0
+    tool: pytest
+    command: pytest tests/test_web.py::test_tile_number_equals_its_list tests/test_web.py::test_no_sync_yet_shows_no_data_not_zero tests/test_web.py::test_tiles_are_unknown_when_their_tab_was_never_read
+    pass: all tests pass
+  - id: R1.1-A03
+    feature: F-R1.1-03
+    layer: api
+    what: money total = sum of list; band counts its midpoint
+    tool: pytest
+    command: pytest tests/test_web.py::test_money_blocked_total_equals_the_list tests/test_web.py::test_value_label_band_midpoint_and_exact tests/test_sales.py::test_deal_value_counts_the_band_midpoint
+    pass: all tests pass
+  - id: R1.1-A04
+    feature: F-R1.1-04
+    layer: api
+    what: person drawer shows real email and https links only
+    tool: pytest
+    command: pytest tests/test_web.py::test_person_drawer_fields tests/test_web.py::test_only_https_links tests/test_web.py::test_bad_email_is_not_a_link
+    pass: all tests pass
+  - id: R1.1-A05
+    feature: F-R1.1-05
+    layer: api
+    what: goal card blockers sorted by days late with a why line
+    tool: pytest
+    command: pytest tests/test_web.py::test_goal_card_fields
+    pass: test passes
+  - id: R1.1-A06
+    feature: F-R1.1-06
+    layer: api
+    what: global search groups results by type
+    tool: pytest
+    command: pytest tests/test_web.py::test_search_groups
+    pass: test passes
+  - id: R1.1-B01
+    feature: F-R1.1-06
+    layer: browser
+    what: every view, tile clicks, 5 search terms, 3 drawers, 3 widths, zero console errors
+    tool: gate
+    command: step 8
+    pass: gate step 8 PASS (verdict SHIP)
+  - id: R1.1-B02
+    feature: F-R1.1-09
+    layer: browser
+    what: the page sends no request other than GET
+    tool: gate
+    command: step 9
+    pass: gate step 9 PASS
+  - id: R1.1-G01
+    feature: F-R1.1-07
+    layer: guardrails
+    what: STE lint clean on the repo; long text and banned words are flagged
+    tool: pytest
+    command: pytest tests/test_qa.py::test_ste_lint_is_clean_on_the_repo tests/test_qa.py::test_ste_lint_flags_long_text_and_banned_words
+    pass: both tests pass
+  - id: R1.1-S01
+    feature: F-R1.1-08
+    layer: sheet
+    what: insert column, rename header, delete row, move row, value changed mid-sync
+    tool: pytest
+    command: pytest tests/test_sales.py::test_robust_inserted_column_changes_nothing tests/test_sales.py::test_robust_renamed_required_header_keeps_last_good_data tests/test_sales.py::test_robust_deleted_row_removes_one tests/test_sales.py::test_robust_moved_row_keeps_its_key tests/test_sales.py::test_robust_value_changed_mid_sync_uses_the_snapshot_read
+    pass: all tests pass
+  - id: R1.1-S02
+    feature: F-R1.1-08
+    layer: sheet
+    what: sheet copy = DB = dashboard (saley sheet verify)
+    tool: gate
+    command: step 6
+    pass: gate step 6 PASS, 0 DIFF
+  - id: R1.1-A07
+    feature: F-R1.1-08
+    layer: api
+    what: one sync_id per request; a stale sync_id gets 409
+    tool: pytest
+    command: pytest tests/test_web.py::test_every_response_has_the_same_sync_id tests/test_web.py::test_old_sync_id_gets_409 tests/test_api_abuse.py::test_expired_sync_id_is_409
+    pass: all tests pass
+  - id: R1.1-A08
+    feature: F-R1.1-09
+    layer: api
+    what: API contract and abuse suite (fields, limits, bad input, no secrets)
+    tool: gate
+    command: step 5
+    pass: gate step 5 PASS
+  - id: R1.1-G02
+    feature: F-R1.1-09
+    layer: guardrails
+    what: no secrets in any response or error; cross-site refused
+    tool: pytest
+    command: pytest tests/test_api_abuse.py::test_no_secrets_in_any_response tests/test_api_abuse.py::test_server_error_has_no_stack_trace tests/test_web.py::test_cross_site_request_is_refused
+    pass: all tests pass
+  - id: R1.1-G03
+    feature: F-R1.1-10
+    layer: guardrails
+    what: web role reads only views; every endpoint works as that role
+    tool: pytest
+    command: pytest tests/test_web.py::test_web_role_reads_only_views tests/test_web.py::test_every_endpoint_works_as_the_real_web_role
+    pass: both tests pass
+  - id: R1.1-G04
+    feature: F-R1.1-11
+    layer: guardrails
+    what: gate bookkeeping, tidy rules, matrix loader
+    tool: pytest
+    command: pytest tests/test_verify.py tests/test_tidy.py tests/test_matrix.py
+    pass: every test in the three files passes
+  - id: R1.1-G05
+    feature: F-R1.1-11
+    layer: guardrails
+    what: linkedin.com is blocked even when allowlisted
+    tool: pytest
+    command: pytest tests/test_egress.py::test_linkedin_is_blocked_even_when_allowlisted tests/test_egress.py::test_redirect_to_linkedin_is_blocked_hop_by_hop
+    pass: both tests pass
+  - id: R1.1-C01
+    feature: F-R1.1-11
+    layer: guardrails
+    what: CI run green on a fresh database (roles.sql, migrations, pytest)
+    tool: pytest
+    command: pytest tests/test_ci.py::test_ci_workflow_matches_a_fresh_database
+    pass: test passes

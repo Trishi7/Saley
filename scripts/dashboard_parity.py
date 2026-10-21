@@ -9,10 +9,12 @@ Run:  uv run saley web   (WEB_PORT=8765), then
       uv run python scripts/dashboard_parity.py docs/test-reports/parity-<date>.md
 """
 
+import http.cookiejar
 import json
 import random
 import re
 import sys
+import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
@@ -48,9 +50,32 @@ res = sh.values_batch_get(
 tabs = {t: vr.get("values", []) for t, vr in zip(want, res["valueRanges"], strict=True)}
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None  # sign-in answers 303; the cookie is what we need
+
+
+OPENER = urllib.request.build_opener(
+    urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()), _NoRedirect
+)
+
+
+def sign_in():
+    """R4: every /api route needs a session. Start the web with AUTH_PROVIDER=mock (dev)."""
+    request = urllib.request.Request(API + "/auth/mock", data=b"", method="POST")  # noqa: S310
+    try:
+        OPENER.open(request, timeout=30)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 303:
+            sys.exit(f"Sign-in refused ({exc.code}): run the web with AUTH_PROVIDER=mock.")
+
+
 def get(path):
-    with urllib.request.urlopen(API + path, timeout=30) as r:  # noqa: S310 - local API
+    with OPENER.open(API + path, timeout=30) as r:
         return json.load(r)
+
+
+sign_in()
 
 
 def table(rows, header_hint):
@@ -282,6 +307,25 @@ tile_rows.append(
     )
 )
 
+# R5 T5: the Today funnel equals the stage recount of the sheet, and each bar opens a list
+# with the same count.
+from saley.qa.sheet_verify import funnel_recount  # noqa: E402
+
+funnel_want = funnel_recount(sheet)
+for step in get("/api/today").get("funnel", []):
+    listed = get(f"/api/people?filter={step['link']['filter']}&limit=1")["total"]
+    want = funnel_want.get(step["key"])
+    tile_rows.append(
+        (
+            f"Funnel: {step['label']} (sheet {want})",
+            step["n"],
+            listed,
+            step["n"] == want == listed,
+        )
+    )
+if not funnel_want or not any(r[0].startswith("Funnel:") for r in tile_rows):
+    tile_rows.append(("Funnel missing in /api/today", None, None, False))
+
 # updated within 2 min of job_runs
 status = get("/api/status")
 last = datetime.fromisoformat(status["last_computed"])
@@ -290,7 +334,31 @@ fresh = (
 )
 
 health = get("/api/health/full")
-news_ok = all(n["n"] is None for n in health["news"])
+
+# R3: the news funnel. The tables are counted here with their own SQL (saley.qa.sheet_verify,
+# no view and no web code); the API numbers for the same day must be equal.
+from saley.qa.sheet_verify import FUNNEL_KEYS, NewsTables  # noqa: E402
+
+news_tables = NewsTables()
+news_days = [TODAY]
+news_latest = news_tables.latest_day()
+if news_latest is not None and news_latest != TODAY:
+    news_days.append(news_latest)
+news_diffs = []
+for news_day in news_days:
+    counted = news_tables.counts(news_day)
+    shown = {s["key"]: s["n"] for s in get(f"/api/news/funnel?day={news_day}")["steps"]}
+    news_diffs += [
+        f"{news_day} {k}: tables {counted[k]}, API {shown.get(k)}"
+        for k in FUNNEL_KEYS
+        if counted[k] != shown.get(k)
+    ]
+    if not counted["fetched"] >= counted["deduped"] >= counted["scored"] >= counted["linked"]:
+        news_diffs.append(f"{news_day}: the funnel goes up")
+today_steps = {s["key"]: s["n"] for s in get(f"/api/news/funnel?day={TODAY}")["steps"]}
+if today_steps != {s["key"]: s["n"] for s in health["news"]["steps"]}:
+    news_diffs.append("health funnel differs from the funnel endpoint")
+news_ok = not news_diffs
 
 # ---------------- report
 lines = [
@@ -336,8 +404,9 @@ lines += [
     "",
     f"- Updated line equals the last sheet sync (`{status['updated']}` = `{status['sheet']}`), last sync {last:%H:%M} IST: {'PASS' if fresh else 'FAIL'}",
     f"- Events in the next 30 days (sheet): {events_30}. The Events view is R3; not compared.",
-    f'- News funnel: news tables do not exist in R1; the dashboard shows "not started" for every step: {"PASS" if news_ok else "FAIL"}',
+    f"- News funnel (days {', '.join(str(d) for d in news_days)}): API numbers equal counts from the news tables: {'PASS' if news_ok else 'FAIL'}",
 ]
+lines += [f"  - DIFF {d}" for d in news_diffs]
 fails += not news_ok
 if co_bad:
     lines += ["", "## Company mismatches", ""] + [

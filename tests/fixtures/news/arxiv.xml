@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>arXiv Query: search_query=cat:cs.CL</title>
+  <id>http://arxiv.org/api/query</id>
+  <updated>2026-10-19T00:00:00-04:00</updated>
+  <entry>
+    <id>http://arxiv.org/abs/2610.00001v1</id>
+    <updated>2026-10-19T01:00:00Z</updated>
+    <published>2026-10-19T01:00:00Z</published>
+    <title>Benchmarking speech models on low-resource Indian languages</title>
+    <summary>We build a benchmark for speech recognition in Hindi, Tamil and Bengali.</summary>
+    <author><name>A. Researcher</name></author>
+    <link href="http://arxiv.org/abs/2610.00001v1" rel="alternate" type="text/html"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.00002v1</id>
+    <updated>2026-10-19T02:00:00Z</updated>
+    <published>2026-10-19T02:00:00Z</published>
+    <title>A note on tensor decompositions of graph Laplacians</title>
+    <summary>We prove a bound on the spectrum of certain matrices.</summary>
+    <author><name>B. Mathematician</name></author>
+    <link href="http://arxiv.org/abs/2610.00002v1" rel="alternate" type="text/html"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2610.00003v1</id>
+    <updated>2026-10-19T03:00:00Z</updated>
+    <published>2026-10-19T03:00:00Z</published>
+    <title>Human feedback quality in preference datasets</title>
+    <summary>We study annotator disagreement in RLHF preference data.</summary>
+    <author><name>C. Annotator</name></author>
+    <link href="http://arxiv.org/abs/2610.00003v1" rel="alternate" type="text/html"/>
+  </entry>
+</feed>

@@ -48,3 +48,10 @@ email-sink/
 Thumbs.db
 .vscode/
 .idea/
+
+# Dashboard v2 (R5, D144, D145): installed packages and the Vite build are never committed.
+web/node_modules/
+src/saley/web/dist/
+
+# Impeccable engine binary (D183): fetched per machine, checked by sha256, never committed.
+.claude/skills/impeccable/scripts/bin/

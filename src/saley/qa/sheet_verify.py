@@ -5,6 +5,10 @@ the raw sheet values with its own small rules, written again on purpose: it impo
 from `saley.sales` or the SQL views, so a bug there cannot hide here. It then reads the same
 numbers from the API in process (the app the browser uses) and compares with tolerance 0.
 Read-only: the caller passes raw values; the CLI reads them with the read-only scope.
+
+R3 adds the news funnel. `NewsTables` counts it straight from the news tables with its own SQL
+(no view, no `saley.web` code), then the API numbers for the same day must equal those counts.
+It also checks that the funnel only goes down (fetched, stored, scored, linked).
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Protocol
 
 EPOCH = date(1899, 12, 30)  # Google Sheets serial day 0
 STAGES = (
@@ -57,7 +61,8 @@ class Report:
 
     @property
     def ok(self) -> bool:
-        return all(r[3] for r in self.rows)
+        # Zero checks is not a pass: an empty comparison must never turn the gate green.
+        return bool(self.rows) and all(r[3] for r in self.rows)
 
     def markdown(self, title: str) -> str:
         lines = [f"# {title}", "", "| Metric | Sheet | API | Result |", "| --- | --- | --- | --- |"]
@@ -232,6 +237,112 @@ def late_items(raw: dict[str, list[list[Any]]], today: date) -> Iterable[dict[st
             yield r
 
 
+# ------------------------------------------------------------------ news funnel (R3)
+
+FUNNEL_KEYS = (
+    "tried",
+    "answered",
+    "fetched",
+    "dropped_seen",
+    "dropped_copy",
+    "dropped_gate",
+    "deduped",
+    "scored",
+    "scored_4",
+    "linked",
+)
+IST_DAY = "(%s at time zone 'Asia/Kolkata')::date"
+RUN_DAY = IST_DAY % "started_at"
+STORY_DAY = IST_DAY % "first_seen_at"
+# The independent side counts a RANGE on the column (it can use the plain index), where the
+# API view groups by the IST date. Both must give the same number for every day (B6).
+DAY_START = "(cast(:d as date)::timestamp at time zone 'Asia/Kolkata')"
+DAY_END = "((cast(:d as date) + 1)::timestamp at time zone 'Asia/Kolkata')"
+
+
+def _in_day(column: str) -> str:
+    return f"{column} >= {DAY_START} and {column} < {DAY_END}"
+
+
+RUNS_IN_DAY = _in_day("started_at")
+STORIES_IN_DAY = _in_day("first_seen_at")
+FUNNEL_SQL = {
+    "tried": f"select count(*) from news_source_runs where {RUNS_IN_DAY}",
+    "answered": (
+        f"select count(*) from news_source_runs where {RUNS_IN_DAY} and status in ('ok','304')"
+    ),
+    "fetched": f"select coalesce(sum(items_seen), 0) from news_source_runs where {RUNS_IN_DAY}",
+    "dropped_seen": (
+        f"select coalesce(sum(dropped_seen), 0) from news_source_runs where {RUNS_IN_DAY}"
+    ),
+    "dropped_copy": (
+        f"select coalesce(sum(dropped_copy), 0) from news_source_runs where {RUNS_IN_DAY}"
+    ),
+    "dropped_gate": (
+        f"select coalesce(sum(dropped_gate), 0) from news_source_runs where {RUNS_IN_DAY}"
+    ),
+    "deduped": f"select count(*) from news_stories where {STORIES_IN_DAY}",
+    "scored": f"select count(*) from news_stories where {STORIES_IN_DAY} and scored_at is not null",
+    "scored_4": f"select count(*) from news_stories where {STORIES_IN_DAY} and importance >= 4",
+    "linked": (
+        "select count(distinct s.id) from news_stories s join signal g on g.story_id = s.id "
+        f"where {_in_day('s.first_seen_at')} and s.scored_at is not null"
+    ),
+}
+LATEST_DAY_SQL = (
+    f"select max(d) from (select {RUN_DAY} as d from news_source_runs "
+    f"union select {STORY_DAY} from news_stories) x"
+)
+
+
+class NewsCounter(Protocol):
+    def counts(self, day: date) -> dict[str, int]: ...
+
+    def latest_day(self) -> date | None: ...
+
+
+class NewsTables:
+    """Counts the funnel from the news tables, with its own SQL (the independent side)."""
+
+    def counts(self, day: date) -> dict[str, int]:
+        from sqlalchemy import text as sql  # late: the pure helpers above need no database
+
+        from saley.core.db import rw_engine
+
+        with rw_engine().connect() as conn:
+            return {
+                key: int(conn.execute(sql(query), {"d": day}).scalar_one() or 0)
+                for key, query in FUNNEL_SQL.items()
+            }
+
+    def latest_day(self) -> date | None:
+        from sqlalchemy import text as sql
+
+        from saley.core.db import rw_engine
+
+        with rw_engine().connect() as conn:
+            return conn.execute(sql(LATEST_DAY_SQL)).scalar()
+
+
+def check_news(report: Report, get: Get, counter: NewsCounter, today: date) -> None:
+    """The API funnel equals the table counts for today and the latest day with news."""
+    days = [today]
+    latest = counter.latest_day()
+    if latest is not None and latest != today:
+        days.append(latest)
+    for day in days:
+        from_tables = counter.counts(day)
+        api = {s["key"]: s["n"] for s in get(f"/api/news/funnel?day={day.isoformat()}")["steps"]}
+        for key in FUNNEL_KEYS:
+            report.check(f"news {key} {day:%d %b}", from_tables[key], api.get(key))
+        t = from_tables
+        down = t["fetched"] >= t["deduped"] >= t["scored"] >= t["linked"] >= 0
+        report.check(f"news funnel goes down {day:%d %b}", True, down)
+    health = {s["key"]: s["n"] for s in get("/api/health/full")["news"]["steps"]}
+    shown = {s["key"]: s["n"] for s in get(f"/api/news/funnel?day={today.isoformat()}")["steps"]}
+    report.check("health funnel = funnel endpoint", shown, health)
+
+
 # ------------------------------------------------------------------ API side
 
 
@@ -281,6 +392,31 @@ def check_tiles(report: Report, get: Get) -> None:
     won = get("/api/people?filter=stage:Won&limit=1")["total"]
     deals = re.match(r"(\d+)", str(tiles["deals"]["value"] or ""))
     report.check("tile deals closed = Won", won, int(deals.group(1)) if deals else None)
+
+
+# R5 T5: the Today funnel. A person counts in a bar when at this stage or past it. The sheet
+# side recounts it from the stage counts, with the rank written again here on purpose.
+FUNNEL_FROM = {
+    "contacted": ("Contacted", "Connected", "Engaged", "Meeting", "Qualified", "Won"),
+    "connected": ("Connected", "Engaged", "Meeting", "Qualified", "Won"),
+    "talking": ("Engaged", "Meeting", "Qualified", "Won"),
+    "met": ("Meeting", "Qualified", "Won"),
+    "won": ("Won",),
+}
+
+
+def funnel_recount(sheet: Counter) -> dict[str, int]:
+    out = {"listed": sheet["people_total"]}
+    for key, stages in FUNNEL_FROM.items():
+        out[key] = sum(sheet[f"stage:{st}"] for st in stages)
+    return out
+
+
+def check_funnel(report: Report, get: Get, sheet: Counter) -> None:
+    """The Today funnel equals the stage recount of the sheet, bar by bar."""
+    api = {step["key"]: step["n"] for step in get("/api/today").get("funnel", [])}
+    for key, n in funnel_recount(sheet).items():
+        report.check(f"funnel {key}", n, api.get(key))
 
 
 DEAL_SIZE = "Estd. Deal Size (USD)"
@@ -385,7 +521,12 @@ def check_read(report: Report, raw: dict[str, list[list[Any]]]) -> bool:
     return ok and has_people
 
 
-def verify(raw: dict[str, list[list[Any]]], today: date, get: Get) -> Report:
+def verify(
+    raw: dict[str, list[list[Any]]],
+    today: date,
+    get: Get,
+    news: NewsCounter | None = None,
+) -> Report:
     report = Report()
     if not check_read(report, raw):
         report.notes.append("The sheet copy is not readable as expected. Nothing else compared.")
@@ -396,10 +537,10 @@ def verify(raw: dict[str, list[list[Any]]], today: date, get: Get) -> Report:
         # A metric missing on one side is a DIFF, never a silent 0.
         report.check(key, sheet.get(key), dash.get(key))
     check_tiles(report, get)
+    check_funnel(report, get, sheet)
     check_money(report, get, people(raw))
     check_companies(report, get, by_company)
     check_spot(report, get, people(raw))
-    news = get("/api/health/full")["news"]
-    report.check("news funnel not started (R1)", True, all(n["n"] is None for n in news))
+    check_news(report, get, news or NewsTables(), today)
     report.notes.append("Sheet side: own rules in saley.qa.sheet_verify. API side: in process.")
     return report

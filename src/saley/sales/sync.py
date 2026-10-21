@@ -14,10 +14,10 @@ import json
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -42,6 +42,7 @@ from saley.core.models import (
 from saley.core.settings import get_settings
 from saley.sales.columns import log_resolution
 from saley.sales.goalmap import load_goal_map, short_name
+from saley.sales.outbox import keep_open_cells, open_cells
 from saley.sales.parse import (
     BAD_DATE,
     TEXT_DATE,
@@ -107,6 +108,16 @@ CORE_TABS = ("poc", "master", "goals", "deliverables")
 TAB_NEEDS = {"poc": ("master",)}
 # A sync that would remove more than this share of live people is refused.
 MAX_REMOVED_SHARE = 0.2
+# Rows made by `saley/qa/seed.py` for the browser check carry this prefix. They are not in the
+# sheet, so the sync must neither remove them nor merge a sheet row into one (R2 phase 7).
+QA_ROW_PREFIX = "qa:"
+# R5 T15 (D217): the seeded QA events. The sheet sync keeps them only while a QA seed is active:
+# the seed's throwaway user `qa` exists (teardown deletes it) and is younger than QA_SEED_MAX_AGE
+# (a gate run is far shorter). A seed left by a crashed run is stale: the next sync removes its
+# events (self-heal). No other tab keeps a `qa:` row.
+QA_EVENT_PREFIX = f"{QA_ROW_PREFIX}event:"
+QA_SEED_USER = "qa"
+QA_SEED_MAX_AGE = timedelta(hours=6)
 MIN_ROWS_FOR_SHARE_CHECK = 10
 
 
@@ -194,11 +205,14 @@ def _keyed_upsert(
     stats: SyncStats,
     problems: Problems | None = None,
     tab_name: str = "",
+    keep_prefix: str | None = None,
 ) -> dict[str, Any]:
     """Upsert by sheet_row_key for the small tabs. Unseen rows get removed_at.
 
     Duplicates are flagged, never silently merged. Losing more than MAX_REMOVED_SHARE of a
     tab in one run means the tab broke, not that the team deleted rows: refuse.
+    `keep_prefix`: unseen rows with this key prefix stay (the active QA seed's events only).
+    `qa:` rows never count in the share check: they are not sheet rows.
     """
     existing = {obj.sheet_row_key: obj for obj in session.scalars(select(model))}
     seen: dict[str, Any] = {}
@@ -217,17 +231,23 @@ def _keyed_upsert(
             obj.updated_at = now
             stats.changed += 1
         seen[key] = obj
-    gone = [o for k, o in existing.items() if k not in seen and o.removed_at is None]
-    _check_removals(tab_name or model.__tablename__, len(gone), len(existing) - _removed(existing))
+    gone = [
+        o
+        for k, o in existing.items()
+        if k not in seen
+        and o.removed_at is None
+        and not (keep_prefix and k.startswith(keep_prefix))
+    ]
+    real_gone = sum(1 for o in gone if not o.sheet_row_key.startswith(QA_ROW_PREFIX))
+    real_live = sum(
+        1 for k, o in existing.items() if o.removed_at is None and not k.startswith(QA_ROW_PREFIX)
+    )
+    _check_removals(tab_name or model.__tablename__, real_gone, real_live)
     for obj in gone:
         obj.removed_at = now
         stats.removed += 1
     session.flush()
     return seen
-
-
-def _removed(objs: dict[str, Any]) -> int:
-    return sum(1 for o in objs.values() if o.removed_at is not None)
 
 
 def _check_removals(what: str, gone: int, live_before: int) -> None:
@@ -410,7 +430,19 @@ def sync_events(
             )
         )
     stats.rows += len(rows)
-    return _keyed_upsert(session, Event, rows, now, stats, problems, TAB_NAMES["events"])
+    keep = QA_EVENT_PREFIX if qa_seed_active(session, now) else None
+    return _keyed_upsert(
+        session, Event, rows, now, stats, problems, TAB_NAMES["events"], keep_prefix=keep
+    )
+
+
+def qa_seed_active(session: Session, now: datetime) -> bool:
+    """True while a QA seed runs: its user `qa` exists and is younger than QA_SEED_MAX_AGE."""
+    found = session.execute(
+        text("select 1 from users where short = :qa and created_at > :since"),
+        {"qa": QA_SEED_USER, "since": now - QA_SEED_MAX_AGE},
+    ).first()
+    return found is not None
 
 
 _STOP_TOKENS = frozenset({"the", "and", "all", "tbd", "none", "n/a", "na", "etc", "for", "with"})
@@ -621,10 +653,12 @@ class AccountBook:
         return account
 
     def finish(self) -> None:
-        live = [a for a in self.by_key.values() if a.removed_at is None]
+        # A QA company (`qa:` key) is not in the sheet; like QA contacts, the sync leaves it alone.
+        real = [a for a in self.by_key.values() if not a.sheet_row_key.startswith(QA_ROW_PREFIX)]
+        live = [a for a in real if a.removed_at is None]
         gone = [a for a in live if a.id not in self.seen]
         _check_removals("accounts", len(gone), len(live))
-        for account in self.by_key.values():
+        for account in real:
             if account.in_master and account.id not in self.master_seen:
                 account.in_master = False  # left Master Pipeline; kept while PoCs point to it
                 account.updated_at = self.now
@@ -789,13 +823,18 @@ def sync_contacts(
     log_resolution(TAB_NAMES["poc"], tab.resolution)
     for role in tab.resolution.unmapped_roles:
         problems.add(TAB_NAMES["poc"], "header", role, "missing_column")
-    existing = {c.sheet_row_key: c for c in session.scalars(select(Contact))}
+    existing = {
+        c.sheet_row_key: c
+        for c in session.scalars(select(Contact))
+        if not c.sheet_row_key.startswith(QA_ROW_PREFIX)
+    }
     by_person = {(c.name_key, c.account_id): c for c in existing.values()}
     touches = {
         (t.contact_id, t.type): t
         for t in session.scalars(select(Touch).where(Touch.source == "sheet"))
     }
     opportunities = {o.contact_id: o for o in session.scalars(select(Opportunity))}
+    pending = open_cells(session)
     package_by_name = {norm_name(p.name): p for p in packages.values()} | {
         k.rsplit(":", 1)[-1]: p for k, p in packages.items()
     }
@@ -828,6 +867,12 @@ def sync_contacts(
                 and candidate.sheet_row_key not in all_keys
             ):
                 contact = candidate
+        if contact is not None:
+            # R2 (D45): a cell with an open outbox row keeps its stored value, so a sync that
+            # read the sheet before the push cannot revert the pending write.
+            roles = pending.get(key, set()) | pending.get(contact.sheet_row_key, set())
+            if roles:
+                keep_open_cells(values, contact, roles)
         stage, reason = derive_stage(_stage_inputs(values, tab, row))
         values |= {
             "account_id": account.id,
@@ -958,6 +1003,8 @@ def write_problems(
             DataQuality.last_seen < now,
             DataQuality.resolved_at.is_(None),
             DataQuality.tab.not_in(list(not_read)),
+            # Lines of other jobs (unreadable meeting notes) are theirs to close.
+            DataQuality.tab.not_like("notes:%"),
         )
         .values(resolved_at=now)
     )

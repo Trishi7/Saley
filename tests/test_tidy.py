@@ -74,6 +74,21 @@ def test_classify_sorts_untracked_files(tidy: ModuleType, repo: Path) -> None:
     assert "server.log" in lists.byproduct
 
 
+def test_web_sources_are_kept(tidy: ModuleType, repo: Path) -> None:
+    """R5 T10 (D144): the dashboard v2 sources belong in git, its install and build do not."""
+    for rel in (
+        "web/package.json",
+        "web/package-lock.json",
+        "web/.nvmrc",
+        "web/components.json",
+        "web/src/App.tsx",
+        "web/scripts/stamp.mjs",
+    ):
+        write(repo, rel)
+    assert all(tidy.is_keep(p) for p in tidy.untracked(repo) if p.startswith("web/"))
+    assert not [p for p in tidy.stray(repo) if p.startswith("web/")]
+
+
 def test_key_material_is_never_movable(tidy: ModuleType, repo: Path) -> None:
     write(repo, "tmp_service-account.json")
     lists = tidy.classify(repo)

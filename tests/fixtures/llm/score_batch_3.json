@@ -1,0 +1,7 @@
+{
+  "items": [
+    {"id": 1, "importance": 5, "impact": 1, "tag": "Market", "why": "Gemini 4 Aragon launched with 2M context."},
+    {"id": 2, "importance": 4, "impact": 3, "tag": "Tender", "why": "Sarvam AI opens a speech data tender for Indian languages."},
+    {"id": 3, "importance": 2, "impact": 0, "tag": "Market", "why": "Priya Menon of Zeta Corp called it a win for 99 teams on 5 May 2031."}
+  ]
+}

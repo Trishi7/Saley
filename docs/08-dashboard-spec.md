@@ -7,13 +7,14 @@ Sid and Vaishnavi use this dashboard instead of the sheet. Saley is the only wri
 
 ## Shell
 - Left rail: Run the plan (Today, Q4 goals, Accounts, People, Suggestions) · Watch (Signals, Blockers, Events) · Team (Inbox, Commitments, Decisions, Weekly pack, Scorecard) · Sources and health (admin).
-- Top bar on every page: signed-in person, global search ("Search everything: a company, a person, a city, a news story"), and "Updated HH:MM IST · sheet HH:MM · news HH:MM".
+- Top bar on every page: Saley, global search ("Search everything: a company, a person, a city, a news story"), "Updated HH:MM IST · sheet HH:MM · news HH:MM", the signed-in email, Sign out. Nothing else (D207): no "View as" and no "Viewing as" person tabs, in any mode. Every page shows the signed-in person's own data; Today asks `/api/today` with no `?user=`. A test that needs another person sends the `X-Saley-As` header with the mock provider only (D50, D116); there is no UI for it.
+- A failed load names the data and the reason, with a Retry button (a button, `data-retry`): "Could not load {what}." plus "The server did not answer." for a network error, or the server's own line for an HTTP error. Never the raw browser text ("Failed to fetch"). After a network error the Updated line tries again by itself every 30 s, so a server restart heals it.
 - The Updated bar turns red (D43): "Worker not running since HH:MM" when no sync started in 3 × SHEET_SYNC_SECONDS; "Sheet sync failing since HH:MM" when syncs run but none succeeds; "Old data: tab … not read" when a tab is stale (D41). On a laptop, `saley dev` runs web and worker in one process on `WEB_PORT` (default 8090).
 - Every page has its own "Search in this page" box. Global search opens a results page: people, companies, news, decisions, with links.
 - Every number tile is a link. It opens the tab with the filter set. Every tile carries a `source` (the sheet tab or table it counts). A number that is not known shows "—", never 0; a tile whose sheet tab was never read says so.
 - Subtitle under every page title: one plain sentence for Sid and Vaishnavi (see mock).
 - Auth: Google sign-in. `WEB_ALLOWED_EMAILS`. Roles from `users.role`: viewer, approver, admin. Approver sees decide buttons. Admin sees Sources and health.
-- Dev: `SALEY_ENV=dev` skips sign-in and uses `DEV_USER_EMAIL`.
+- Dev: `SALEY_ENV=dev` also needs a session. On loopback the mock provider signs in as `DEV_USER_EMAIL` (D116).
 - Laptop first. Phone readable. No horizontal scroll except tables.
 - Stack: FastAPI serves `/api/*` JSON and `/` static. Static = plain HTML + one JS file + one CSS file. No build step. Fetch JSON, render tables.
 ## Writes and the approval model (decision D24)
@@ -27,7 +28,7 @@ Sid and Vaishnavi use this dashboard instead of the sheet. Saley is the only wri
 
 | # | View | Endpoint | SQL view | Fields | Filters | Actions | Reqs |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Today | GET /api/today?user= | v_today_user | **Order: numbers → my tasks → needs a look → blocked → Saley suggests.** Numbers: 6 tiles (deals closed of 3, people in a live conversation, connected with no email, priority people waiting on LinkedIn, new people contacted this week vs last week, late items that block goals), each a link. My tasks: built per signed-in person from the rules due today (R05 pick 5, R06 find email, R08 brief, R09 next steps, R10 deal ask, R13 email/research/DM/call steps, R14 reconnect, commitments due, decisions to confirm), each with the action buttons and a Done tick; Done writes the sheet cell(s) and logs the signature. Needs a look: news ≥ 4 linked to our accounts, prospect replies with no answer in 24 h, events ≤ 3 days, tenders with deadlines. Blocked: late deliverables that block goals, asks waiting on others, data-quality fixes with a one-click yes. Saley suggests: new companies and people, warm intro paths, park lists, with one primary button each. | user (from sign-in) | tick, draft, open, one-click write, undo | S03 S22 S42 S36 R05 R06 R08 R09 R10 R13 R14 |
+| 1 | Today | GET /api/today?user= | v_today_user | **Order: numbers → my tasks → needs a look → blocked → Saley suggests.** Numbers: 6 tiles (deals closed of 3, people in a live conversation, connected with no email, priority people waiting on LinkedIn, new people contacted this week vs last week, late items that block goals), each a link. My tasks: built per signed-in person from the rules due today (R05 pick 5, R06 find email, R08 brief, R09 next steps, R10 deal ask, R13 email/research/DM/call steps, R14 reconnect, commitments due, decisions to confirm), each with the action buttons and a Done tick; Done writes the sheet cell(s) and logs the signature. Built in R2: a step-block task (R13 steps) records the tick and writes no step cell (D49); a booked meeting past its date is a Sid task whose Done writes Meeting Status = completed (D59); email timers are in D58; each Done has an Undo for `UNDO_MINUTES`. Needs a look: news ≥ 4 linked to our accounts, prospect replies with no answer in 24 h, events ≤ 3 days, tenders with deadlines. Blocked: late deliverables that block goals, asks waiting on others, data-quality fixes with a one-click yes. Saley suggests: new companies and people, warm intro paths, park lists, with one primary button each. | user (from sign-in) | tick, draft, open, one-click write, undo | S03 S22 S42 S36 R05 R06 R08 R09 R10 R13 R14 |
 | 2 | Q4 goals | GET /api/goals | v_goal_status | per goal: text, value band, active conversations (list), need, blockers (deliverables), weighted USD, forecast commit/likely/possible, days left, RAG | none | none | S03 S04 S54 R04 |
 | 3 | Accounts | GET /api/accounts?filter= | v_account_coverage | company, industry, goal, motion, people, contacted, connected, emailed, coverage %, warmth (stage), buying-group gaps, P1 count, account plan (next 7 d), "Saley says" | all · p1 · has_connection · goal:Gn · industry:X · search | open account drawer (people, touches, facts, signals) | S15 S49 R13 R10 |
 | 4 | People | GET /api/people?filter=&q= | v_contact_stage | name, company, title, stage, working_on + source + date, email status, next step, last 3 touches, priority, city. Person drawer (D39): the real email as a `mailto:` link (only when the cell holds an address), LinkedIn, paper and website as https links in a new tab; empty = "None on file". | backlog · p1_waiting · in_conversation · reconnect_due · stage:X · search | open person drawer; "Act" opens the matching proposal | S29 S14 R06 R13 R14 |
@@ -35,18 +36,44 @@ Sid and Vaishnavi use this dashboard instead of the sheet. Saley is the only wri
 | 6 | Signals | GET /api/signals?tab=all&range=day|week|month|year&cat=&src=&tag= and tab=linked | v_signal_all, v_signal_linked | All: headline, outlets, source, category, tag, importance, impact, published · Linked: + entity, action hint, state | range, category, source, tag, entity | Linked: Add to action · Dismiss · Ask | R01 |
 | 7 | Blockers | GET /api/blockers | v_deliverable_late | item, owner, due, late by, blocks (goals, deals, motions), status, money blocked. Goal links come from the goal's Dependencies text, or from docs/goal-deliverable-map.yaml for the goals listed there (D34). Money blocked (D42): a tile on this page (Today keeps 6 tiles) and a list at GET /api/money-blocked: deal · company · deal value · blocking deliverable (+N) · owner. A deal-size band counts its midpoint ("USD 30–50k" → "≈ USD 40k (USD 30–50k)"); an exact value counts as given; no value = "No value on file", never 0. Total = sum of the list. | none | Remind (creates a polite ask) | R04 R12 |
 | 8 | Events | GET /api/events | v_event_targets | event, city, dates, days left, registered, people in city, connected, P1, speaker matches | upcoming · past | Build target list (proposal event_prep) | R03 S11 S12 |
-| 9 | Inbox | GET /api/inbox | ask, reminder, decision(proposed) | Saley's questions to the team with age, team questions to Saley, reminders, strategy decisions to confirm. No writes the human already asked for. | type, age | Answer · Confirm · Snooze | S35 S36 S28 S45 |
-| 10 | Commitments | GET /api/commitments | commitment | owner, text, due, source, state, reminders sent | owner, state | Mark done | S42 |
-| 11 | Decisions | GET /api/decisions | decision | id, text, state (proposed/confirmed/active), approver, time, surface, applies to | state | Confirm (approver) | S45 |
+| 9 | Inbox | GET /api/inbox | ask, reminder, decision(proposed) | Saley's questions to the team with age, team questions to Saley, reminders, strategy decisions to confirm. No writes the human already asked for. | type (`card`, `confirm`, `ask`, `reminder`) | Confirm and Dismiss are built in R2. Answer and Snooze are not built. A reminder leaves the Inbox after its due day (D63). A "LI likely connected" card writes on one click (D60). | S35 S36 S28 S45 |
+| 10 | Commitments | GET /api/commitments | commitment | owner, text, due, source, state, reminders sent | owner, state (`open`, `done`, `dropped`, `all`; default `open`) | Mark done: signed, with an undo window of `UNDO_MINUTES`. It skips the reminders still waiting; undo puts them back (D66). | S42 |
+| 11 | Decisions | GET /api/decisions | decision | id, text, state (proposed/confirmed/active), approver, time, surface, applies to | person, surface, undo (`open`, `undone`, `undo_failed`, `closed`), state | Confirm (approver) on a proposed strategy decision. Undo on a column write, task tick or commitment Done while its undo window is open. A failed sheet write shows its state and a fixed reason. | S45 |
 | 12 | Weekly pack | GET /api/pack?week= | metric_snapshot + views | scoreboard, funnel vs last week, motion table target vs actual, backlog, slips, next 10, one plan suggestion, 1:1 agenda | week | none | S31 S44 S05 |
 | 13 | Scorecard | GET /api/scorecard | v_segment_scorecard | per industry: people, contacted, connect %, reply %, meetings, deals; 7-day delta | none | none | S57 |
 | 14 | Sources and health (admin) | GET /api/health/full | job_runs, egress_log, llm_calls, news_* , parity_checks | Jobs: last run, status, note. News today as a funnel: sources tried, answered, items pulled, dropped seen / duplicate / not relevant, stored, scored, scored ≥ 4, about our people, sent. Failed or slow sources with problem, since, fallback. Parity: last hourly check of dashboard vs sheet vs news tables (row counts, stage counts, last story time) with red on mismatch. Sheet tabs: last read, stale tabs with the missing header in red, and unknown headers as "new columns" (D41). | none | re-run parity | S33 S72 |
+
+## R4 view notes
+- Weekly pack (view 12): the page is `/#pack`, under Team in the left rail. It reads `GET /api/pack`. A number that is missing shows "—", never 0.
+- Today (view 1): the Ask card sits at the foot of Today. One typed question goes to `POST /api/ask`. The answer is plain text: up to 5 items with citations by name, then "more". Questions only, no action (D119, D131).
+- Scorecard (view 13): the "Last week" column shows each industry's value from the snapshot 7 days back. No snapshot for that industry shows a dash, never 0 (D118).
+- Inbox (view 9): an action card with one draft cell has an inline Edit. Save calls `POST /api/proposal/{id}/edit`, signed, with the undo window. The first saver wins; the other gets "Already done by X at HH:MM" (D129, D137).
+
+## Today: task order, Done and Undo (R5 T3, D152, D153, D143)
+- Order: due day, then importance, then PoC Priority (AJ: P1, P2, P3, blank), then company, then name. A task with no due day does not count as today: it ranks after every task dated today, before tomorrow's, and shows "No date" (D180). li_confirm and li_first are due today by the rule below, so they keep that day. Importance: meeting and status_check 1 · reconnect 2 · email step (research, email1 to email3) 3 · LinkedIn (li_confirm, li_first) 4 · commitment 5 · decision, review_write, inbox_cards 6.
+- Paging: `GET /api/today?tasks_offset=` (0 to 1000, else 422). A page is 10 tasks. `my_tasks` has `offset`, `more` (total minus shown minus offset, never below 0) and `more_label` ("12 more", or null).
+- Done value: the client sends the task name only (`payload.done`). The server picks the value from the cells the column already holds (view `v_column_vocab`). Meeting Status: the first of Completed, Done, Met, Held that the column holds, in the column's own spelling. First Contact: TRUE. First Contact Type: LI or LinkedIn, the form the column uses more. Dates: today as an ISO date. If the column holds no fitting value, the answer is 409 "This column has no done value yet." and nothing is written. Reconnect and the email steps write no step cell (D49).
+- Undo in place: a Done answer carries `write_id` and `undo_until`. `/api/today` keeps a ticked task on the list while its tick is inside the window: `done` is true, `action` is null, and `undo_id`, `undo_ids` and `undo_until` are set. `UNDO_MINUTES` is 5 (D143).
+
+### Due-date rule
+| Task | Due day | Sheet columns read |
+| --- | --- | --- |
+| meeting | today | Meeting Date (AA) = today, Meeting Status (AB) open |
+| status_check | Meeting Date | Meeting Date (AA) before today, Meeting Status (AB) booked (D51, D59) |
+| reconnect | Reconnect Date | Reconnect Date (AC) (D14, D36) |
+| add_email (research) | LI Connected Date + 4 days | LI Connected Date (O); Email id (G) blank; LI DM Sent/Date (Y, Z) blank |
+| email1 / 2 / 3 | anchor + 2 / 7 / 3 days | anchor = last step date (the latest date in the row), else First Contact Date (M) (D51, D58) |
+| li_confirm | today | First Contact Type (L) or Sid - LI Addition (N) shows a request; LI Connected Date (O) blank |
+| li_first | today | First Contact (K), Type (L), Date (M) blank; Stage Listed |
+| commitment | commitment due | DB (meeting notes, Discord), not the sheet |
+
+The rules read these columns by role, never by letter. The letters are for the reader only.
 
 ## Shared rules
 - Empty state text per view: "No items. Last computed HH:MM." Never a blank panel.
 - Evidence link: `GET /api/evidence?fact=&signal=&rule=&row=` opens a drawer with the source (sheet row key, story URL, rule text, fact author and date).
 - Numbers: tabular. Dates: IST, "Fri 17 Oct". Money: USD.
-- Per-user seen does not apply to the dashboard. It applies to bot answers only.
+- Per-user seen applies to the dashboard too (D75), as it does to bot answers. Every list shows the items this person has not seen first, and says "N you saw are left out" with a link to show them. Seen is per person, never per channel.
 - Owner of a person (which list a task lands on), decision D31 (replaces D25): "VR" / "Sid" text in `First Contact` names the owner; else a LinkedIn request recorded in `Sid - LI Addition` → Sid; else `First Contact Type` = LI → Sid; else Vaishnavi. A human can reassign from the person drawer.
 - Goal links (D30): until the sheet has a Goal column, people link to goals by industry. The link source is shown as "industry rule".
 - Parity: a `parity_check` job runs hourly. It compares view counts with the sheet copy and the news tables. The result shows on Sources and health. Claude Code runs the `dashboard-parity` skill before any dashboard release.
@@ -57,10 +84,10 @@ Sid and Vaishnavi use this dashboard instead of the sheet. Saley is the only wri
 - R1: shell, sign-in (dev mode), global and page search, last-updated bar, Today numbers only, views 2, 3, 4, 7, 13 read-only, view 14 with jobs and parity. Read from the sheet copy.
 - R2: Today "my tasks" per person with Done writes and undo, Inbox, Commitments, Decisions, People drawer with "working on".
 - R3: Signals All + Linked, Events, Suggestions with add-to-pipeline, "needs a look" and "Saley suggests" on Today. News health funnel.
-- R4: Weekly pack, Scorecard deltas, Google sign-in for real users.
+- R4: Weekly pack, Scorecard deltas, Google sign-in for real users, @Saley answers in Discord and the Ask card on Today (same engine, citations by name; D119, D131).
 
-## Appendix A — API endpoints (R1.1)
-All endpoints are `GET`, read-only, and same-origin. Any other method gets 404 or 405.
+## Appendix A — API endpoints (R1.1 to R4)
+All `GET` endpoints are read-only and same-origin. The R2, R3 and R4 `POST` routes below are the only writes. Every `/api` route needs a signed-in session in every mode (R4, D116); without one the answer is 401. Any other method gets 404 or 405. Every POST needs the header `X-Saley-Act: 1`, a same-origin request, and a body of at most 16 KB (413 above that). In dev only, the `Host` port must be the port the server listens on (D68). The `X-Saley-As` header (loopback and the mock provider only, D50, D116) acts as another team member.
 Rules for every endpoint (R1.1 ticket C, D40):
 - Each response has `sync_id`, `last_computed`, `last_computed_label` and `stale`, and only the fields its view shows.
 - A parameter the endpoint does not declare gives 422. A wrong type or a value out of range gives 422.
@@ -72,11 +99,57 @@ Rules for every endpoint (R1.1 ticket C, D40):
 - Headers on every response: Content-Security-Policy (`default-src 'self'`), X-Frame-Options DENY, nosniff, no-referrer, Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy same-origin.
 - Errors never carry a stack trace, SQL, a sheet id, a path or an env value.
 
+### Every route and its auth need (R4)
+
+Auth words. **Session** = a signed-in team member (any role). **Approver or admin** = the SQL function refuses other roles with 403 "Only approvers can do this.". **Header** = `X-Saley-Act: 1` and a same-origin request (D24). **Admin** = the admin check in the app.
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/healthz` | None | Container health check: `{"status": "ok"}`. |
+| GET | `/api/me` | Session | Who is signed in, the role and the team list. |
+| GET | `/api/status` | Session | Top bar: sync state, write counts, news freshness. |
+| GET | `/api/today` | Session | Today tiles, my tasks, needs a look, Saley suggests. |
+| GET | `/api/goals` | Session | Q4 goals with blockers and weighted pipeline. |
+| GET | `/api/accounts` | Session | Account list with coverage per industry. |
+| GET | `/api/accounts/{account_id}` | Session | One account with its people and touches. |
+| GET | `/api/people` | Session | People list with filter tabs and counts. |
+| GET | `/api/people/{contact_id}` | Session | One person: links, notes, touches, stage history. |
+| GET | `/api/blockers` | Session | Late deliverables and the money-blocked tile. |
+| GET | `/api/money-blocked` | Session | Deals blocked by a late item, with value. |
+| GET | `/api/scorecard` | Session | Per industry scores, with "last week" (R4). |
+| GET | `/api/pack` | Session | The weekly pack of one Monday, or the newest (R4). |
+| GET | `/api/search` | Session | Global search: people, companies, goals, deliverables, decisions. |
+| GET | `/api/signals` | Session | News signals, All or Linked. |
+| GET | `/api/events` | Session | Upcoming or past events, with people in the city. |
+| GET | `/api/suggest/{kind}` | Session | Suggestions: warm, best, newco, res. |
+| GET | `/api/news/funnel` | Session | The news funnel for one day. |
+| GET | `/api/inbox` | Session | Cards, decisions to confirm, asks and reminders. |
+| GET | `/api/commitments` | Session | Commitments by owner and state. |
+| GET | `/api/decisions` | Session | Decision log with undo state. |
+| GET | `/api/health/full` | Admin | Sources and health: jobs, writes, mail, news, parity. |
+| POST | `/api/act` | Approver or admin; header | Task Done, one-click cards, cell writes, row add, find people. |
+| POST | `/api/undo/{write_id}` | Approver or admin; header | Undo a signed write while its window is open. |
+| POST | `/api/decision/{decision_id}/confirm` | Approver or admin; header | Confirm a proposed strategy decision. |
+| POST | `/api/proposal/{proposal_id}/dismiss` | Approver or admin; header | Dismiss an action card. |
+| POST | `/api/proposal/{proposal_id}/edit` | Approver or admin; header | Save the edited draft of a one-cell card (R4). |
+| POST | `/api/commitment/{commitment_id}/done` | Approver or admin; header | Mark a commitment done, with undo. |
+| POST | `/api/seen` | Approver or admin; header | Record the items this person saw (per person). |
+| POST | `/api/ask` | Session; header | Ask one question. Same engine as @Saley (R4). |
+| GET | `/` | Session (else 303 to `/signin`) | The dashboard page. |
+| GET | `/static/{file}` | None | CSS and JS files. They hold no data. |
+| GET | `/signin` | None | Sign-in page: a Google button, or the mock button where allowed (R4). |
+| POST | `/auth/mock` | None; mock provider only | Sign in as the dev user or an allowlisted address. Dev and loopback only. |
+| GET | `/auth/google` | None; Google provider only | Redirect to Google with state and PKCE. |
+| GET | `/auth/callback` | None; Google provider only | Finish Google sign-in. Checks state, claims and the allowlist. |
+| POST | `/auth/signout` | Session cookie | End the session and go back to `/signin`. |
+
+### Detail by route (R1.1 to R4)
+
 | Endpoint | Parameters | Returns | View |
 | --- | --- | --- | --- |
 | `/api/me` | — | email, role, team members | Top bar |
-| `/api/status` | — | state (`ok`, `worker_down`, `sync_failing`, `never`), message, late total | Updated bar |
-| `/api/today` | `user` (team short name) | greeting, date, 6 tiles with `source` and `link` | 1 Today |
+| `/api/status` | — | state (`ok`, `worker_down`, `sync_failing`, `never`), message, late total, `pending`, `held`, `failed`, `write_note`, `write_bad` (R2) | Updated bar |
+| `/api/today` | `user` (team short name), `tasks_offset` (0 to 1000, R5 T3) | greeting, date, 6 tiles with `source` and `link`, `my_tasks` (`person`, `items`, `total`, `offset`, `more`, `more_label`, `empty`; each task has its `action`: an endpoint and a body); R3 adds `needs_look` (linked signals, importance 4 or more, events within 3 days; `left_out_seen`) and `saley_suggests` (top 3 newco and warm, one button each) | 1 Today |
 | `/api/goals` | `limit`, `offset` | goals with active conversations, blockers (sorted by days late), weighted pipeline or a note, `why` | 2 Q4 goals |
 | `/api/accounts` | `filter` (`all`, `p1`, `has_connection`, `goal:G<n>`, `industry:<text>`), `q`, `limit`, `offset` | companies, coverage per industry | 3 Accounts |
 | `/api/accounts/{id}` | — | one company, its people, touches, stage history | Account drawer |
@@ -84,7 +157,37 @@ Rules for every endpoint (R1.1 ticket C, D40):
 | `/api/people/{id}` | — | one person: email (`mailto:`), LinkedIn, website and paper links (https only), notes, touches, stage history, deal | Person drawer |
 | `/api/blockers` | `q`, `limit`, `offset` | late deliverables, packages not ready, money blocked tile | 7 Blockers |
 | `/api/money-blocked` | `limit`, `offset` | deals blocked by a late item: deal, company, value, blocking item, owner; total = sum of known values; count with no value (D42) | Money blocked list |
-| `/api/scorecard` | `limit`, `offset` | per industry: people, contacted, connect %, reply % (null until R2), meetings, deals | 13 Scorecard |
-| `/api/health/full` | — (admin only) | jobs, sheet tabs with state and new columns, parity, data quality, news funnel, calls out, LLM use | 14 Sources and health |
+| `/api/scorecard` | `limit`, `offset` | per industry: people, contacted, connect %, reply % (null until R2), meetings, deals. R4 adds `last_week` and `last_week_note`: the same industry from the snapshot 7 days back (D118). No snapshot gives `null`, shown as a dash | 13 Scorecard |
+| `/api/pack` | `week` (a Monday; another day gives 422; a Monday with no pack gives 404; none = the newest pack) | `week_start`, `built_at`, `body`: team numbers with `last_week`, Scorecard rows, late items, packed reminders, tasks per person. The same stored body the test-channel post uses (R4, D117, D134) | Weekly pack (`/#pack`) |
+| `/api/health/full` | — (admin only) | writes (enabled, message, open, failed), mail (state, message, last_ok), jobs, sheet tabs with state and new columns, parity, data quality, calls out, LLM use; R3 adds `news` (funnel steps with `href`, failed sources, per-source counts), `search` and `apollo` (always "off" in R3, D78) | 14 Sources and health |
 | `/api/search` | `q` (1–100 characters) | results grouped as people, companies, goals, deliverables, decisions; `match` = [start, length] for bold text | Search |
+| `/api/inbox` | `type` (`card`, `confirm`, `ask`, `reminder`), `limit`, `offset` | items (one per card, decision to confirm, ask or reminder), total, empty text (R2) | 9 Inbox |
+| `/api/commitments` | `owner`, `state` (`open`, `done`, `dropped`, `all`; default `open`), `limit`, `offset` | commitments: owner, text, due, source, state, reminders sent (R2) | 10 Commitments |
+| `/api/decisions` | `person`, `surface` (`dashboard`, `chat`, `card`), `undo` (`open`, `undone`, `undo_failed`, `closed`), `state` (`proposed`, `confirmed`, `active`), `limit`, `offset` | decisions with label, text, value, undo state, sync reason, `can_confirm`, `can_undo` (R2) | 11 Decisions |
+| `/api/signals` | `tab` (`all` or `linked`; default `all`), `range` (`day`, `week`, `month`, `year`; default `week`), `day` (date; more than 5 years from today gives 422), `cat` (one letter A–L), `src` (text, at most 120 characters), `tag` (`Opportunity`, `People`, `Risk`, `Market`, `Tender`, `Discover`, `Ours`), `entity` (text), `min_importance` (1–5), `linked_only`, `include_seen`, `limit`, `offset` | `tab`, items (each with `why`, `published_label`, `seen`), `total`, `window` (`from`, `to`, `label`), `left_out_seen`, `left_out_note` (R3, F-R3-07, D75) | Signals (All, Linked) |
+| `/api/events` | `when` (`upcoming` or `past`; default `upcoming`), `include_seen`, `limit`, `offset` | items (name, city, dates and `date_label`, `days_left`, `days_text`, registered, people in city, connected, P1, `speaker_matches` "not built" until S12, `href` https only, `seen`), `total`, `window`, `left_out_seen` (R3) | Events |
+| `/api/suggest/{kind}` | path `kind` (`warm`, `best`, `newco`, `res`), `include_seen`, `limit`, `offset` | `kind`, ranked items (person, company, title, evidence, `seen`, search `hits` with `engine`, `url`, `title` and an Add `form` prefilled from sheet values and the hit), `total`, `empty`, `window`, `left_out_seen`, `left_out_note`, `capped` and `capped_note` (the rank reads at most 1000 rows, by `ref_id`) (R3) | Suggestions (warm, best, newco, res) |
+| `/api/news/funnel` | `day` (date; default today IST) | `day`, `label`, `steps` (fetched, dropped seen/copy/gate, deduped, scored, scored 4 or more, linked, sent "no digest until R4") (R3, D73) | Sources and health (news funnel) |
+| `POST /api/act` | body: `action` (`write`, `email_write`, `task_done`, R3: `row_add` or `find_people`), `target_ids[]`, `payload` (`row_add`: `fields[]` of `role` and `value`, new-row roles only, docs/10) | `write_id`, `undo_until`, `label`, `already`, one item per cell (R2). `row_add` answers the same way and writes one decision and one sheet `append`; `find_people` (one company in `target_ids`, no payload) answers `request_id`, `already`, `label` and queues one search for the worker (R3, D76, D77) | Tasks, cards, Done; R3: Suggestions add form and "Find people" |
+| `POST /api/undo/{write_id}` | — | `write_id`, `cancelled` (R2) | Undo |
+| `POST /api/decision/{id}/confirm` | — | `decision_id`, `already` (R2) | 9 Inbox, 11 Decisions |
+| `POST /api/proposal/{id}/dismiss` | — | `proposal_id`, `already` (R2) | 9 Inbox (card) |
+| `POST /api/proposal/{id}/edit` | body: `text` (1–200 characters, not blank). Needs `X-Saley-Act` | `ok`, `proposal_id`, `already`, `write_id`, `undo_until`, `label`. Saves the edited draft of an action card, signed (surface dashboard), with an undo window. Calls `saley_proposal_resolve`; the first saver wins, a later save gets 409 "Already done by X at HH:MM" (R4 ticket 7, D129, D137) | Inbox (card inline editor, ticket 10) |
+| `POST /api/commitment/{id}/done` | — | `commitment_id`, `already`, `write_id`, `undo_until` (R2) | 10 Commitments |
+| `POST /api/seen` | body: `item_type` (`story`, `signal`, `event`, `suggest_warm`, `suggest_best`, `suggest_newco`, `suggest_res`), `ids[]` (1–200 positive integers), `query_id` (optional, at most 64 characters: letters, digits, `_ . : -`) | `ok`, `marked`. Writes `user_seen` for the signed-in person only, through `saley_mark_seen`. Idempotent: the first time a person saw an item stays (R3, D75, D97) | Signals, Events, Suggestions |
+| `POST /api/ask` | body: `text` (1–300 characters, not blank). Needs `X-Saley-Act` | `text`, `known`, `shown`, `more`, `left_out`. Same engine as @Saley in Discord (`saley.bot.answer`): 5 items with citations by name, then `more`; marks the shown items seen for the signed-in person and logs the exchange, through `saley_mark_seen` and `saley_ask_log` only. Questions only, no action (R4 ticket 6, D131) | Today (Ask card, ticket 10) |
+
+POST answers (R2):
+- 200 `ok`. `already: true` means the same instruction was done before (D48). A write that failed in the sheet is never `already` (D67).
+- 403: not an approver or admin, a locked column, email writes off, a missing or wrong header, or a cross-site request.
+- 404: no such person row, write, decision, card or commitment.
+- 409: busy (a lock wait, deadlock or serialization failure, M1), cooldown (another person wrote the same cell within `ACT_COOLDOWN_SECONDS`), superseded (a newer write sits on the cell), undo already done, undo window closed, card closed.
+- 413: body over 16 KB. 422: bad value (including text that starts with `=`, `+`, `-` or `@`) or bad action.
+- Errors carry fixed text only. Never a SQL text, a sheet id or a stack trace.
+
+POST answers (R3):
+- `/api/seen`: 403 for a user who is not an approver. 422 for a bad item type or id.
+- `row_add`: 403 for a locked role or a role outside the new-row set. 422 for a bad value, a LinkedIn URL that is not a `linkedin.com/in/` link, or a repeated role. A duplicate name and company is refused (D76, D85) with 409: "Already added by <who>" when a live row add holds the person (D111), else "That person is already in the sheet or queued."
+- `find_people`: 422 when `target_ids` has not exactly one company or a payload is sent. A repeat of the same request answers `already: true` (D77).
+- Undo of a row add uses `POST /api/undo/{write_id}`. It removes the row only when the row is unchanged (D91).
 | `/healthz` | — | `{"status": "ok"}` | Container health check |

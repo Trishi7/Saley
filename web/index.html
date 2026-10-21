@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- D146: FastAPI puts a fresh nonce here and in the CSP header on every request. -->
+    <meta name="csp-nonce" content="__CSP_NONCE__" />
+    <title>Saley</title>
+    <!-- As the legacy page: no favicon request, so no 404 in the console. -->
+    <link rel="icon" href="data:," />
+    <!-- D163: the theme before the first paint (external file: the CSP allows no inline script). -->
+    <script src="/theme-init.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

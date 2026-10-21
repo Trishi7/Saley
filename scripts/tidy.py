@@ -38,6 +38,9 @@ KEEP = (
     "migrations/*",
     "deploy/*",
     "docs/*",
+    # The dashboard v2 sources (R5, D144): src, package.json, package-lock.json, .nvmrc,
+    # .npmrc, components.json, configs. node_modules and the dist build are gitignored.
+    "web/*",
     ".claude/*",
     ".github/*",
     "pyproject.toml",
@@ -56,7 +59,10 @@ KEEP = (
 SCRATCH_NAMES = ("debug_*", "tmp_*", "*_output.*", "*.ipynb")
 # Ad-hoc scripts: a script outside the code folders.
 SCRIPT_EXT = (".py", ".ps1", ".sh", ".bat", ".cmd")
-CODE_DIRS = ("src/", "tests/", "scripts/", "migrations/", ".claude/", ".github/", "deploy/")
+CODE_DIRS = (
+    *("src/", "tests/", "scripts/", "migrations/", ".claude/", ".github/", "deploy/"),
+    "web/",
+)
 # The only things tidy deletes: caches the tools make again.
 CACHE_DIRS = {
     "__pycache__",

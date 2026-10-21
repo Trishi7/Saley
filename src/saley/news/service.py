@@ -1,33 +1,47 @@
-"""News service entry. In R1 it only logs "news idle" every 10 minutes.
+"""News service: APScheduler runs the editions in this process only (D70).
 
-Why: the container and its compose entry exist from R1, so R3 adds behaviour without
-touching deployment. No news tables exist yet; nothing is fetched.
+Why: the container and its compose entry exist from R1. R3 gives it work: four editions a day,
+the arXiv and OpenAlex batches and the nightly clean. The production worker never fetches
+news. D151 adds one dev exception (`news.jobs.register_dev_news`: the main-slot dev worker,
+not the gate). One bounded live fetch is the separate `saley news fetch`.
+Times are IST. Each job runs under its lock and leaves a job_runs row (worker.registry.run_job).
 """
 
 from __future__ import annotations
 
-import time
-from collections.abc import Callable
+import signal
 
+from apscheduler.schedulers.blocking import BlockingScheduler
+
+from saley.core.clock import tz
 from saley.core.logging import get_logger
+from saley.news.jobs import register_news
+from saley.worker.registry import REGISTRY, run_job
 
 log = get_logger("saley.news")
 
-IDLE_SECONDS = 600
+
+def build_scheduler() -> BlockingScheduler:
+    """All news jobs on one blocking scheduler, in IST."""
+    names = register_news()
+    scheduler = BlockingScheduler(
+        timezone=tz(), job_defaults={"coalesce": True, "max_instances": 1}
+    )
+    for name in names:
+        spec = REGISTRY[name]
+        scheduler.add_job(run_job, spec.trigger, args=[name], id=name, **spec.trigger_args)
+    return scheduler
 
 
-def tick() -> None:
-    log.info("news idle", next_in_seconds=IDLE_SECONDS)
+def run_forever() -> None:
+    """Run until stopped."""
+    from saley.core.settings import set_process
 
-
-def run_forever(sleep: Callable[[float], None] = time.sleep, max_ticks: int | None = None) -> None:
-    """Loop until stopped. `max_ticks` lets tests run a fixed number of ticks."""
-    ticks = 0
+    set_process("news")
+    scheduler = build_scheduler()
+    log.info("news_start", jobs=sorted(job.id for job in scheduler.get_jobs()))
+    signal.signal(signal.SIGTERM, lambda *_: scheduler.shutdown(wait=False))
     try:
-        while max_ticks is None or ticks < max_ticks:
-            tick()
-            ticks += 1
-            if max_ticks is None or ticks < max_ticks:
-                sleep(IDLE_SECONDS)
-    except KeyboardInterrupt:
+        scheduler.start()
+    except (KeyboardInterrupt, SystemExit):
         log.info("news_stop")

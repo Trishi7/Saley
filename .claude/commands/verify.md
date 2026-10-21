@@ -10,10 +10,41 @@ Run this after every build, in every release. A release is done only when the re
 GATE: PASS. Never ping on a partial pass. Never skip a step.
 
 If a step fails: fix it, add a regression test, and run `/verify` again from step 1.
+
+Memory (D112). Never wait for the human to rerun the gate. When the run stops for low RAM:
+1. Stop the stale processes you started: `saley dev`, `saley worker`, pytest, and msedge or
+   chromium with a Playwright profile (`playwright_` in the command line). Never another program.
+   The gate starts `python -m saley.cli dev` and its `-m saley.cli worker` child. A `saley.exe dev`
+   (from a terminal) is the human's server: never stop it; if it holds the port, ask (Q-R3-9).
+2. Run the gate again from step 1 with `--low-memory`: browser QA runs one browser process per
+   width (1440 all groups; 1024 and 390 views only) and merges the results. Below `LOW_RAM_MB`
+   (3072 MB) free, `scripts/verify.py` does this by itself; step 8 names the free RAM.
+3. After three memory failures in a row: write `Q-<release>-mem` in `docs/QUESTIONS.md` with
+   the free-RAM number, ping "blocked", and go on with the next stage that needs no browser.
+Laptop rule (D142): at most one background agent or test run at a time. Never run the full
+suite while a build agent is still working. pytest always with `-x -p no:cacheprovider`.
+On this laptop always pass `--low-memory` to `scripts/verify.py` (one browser width per run).
+After GATE: PASS: `/tidy`, docs, the release ping, STATUS "Current release" = next release, and
+start it at stage 0 without asking.
 If a fix needs a human decision: write it in `docs/QUESTIONS.md`, then ping with "blocked":
 `echo '{"message":"blocked: <question>"}' | python .claude/hooks/notify.py`.
 
 The agent that runs this command is `saley-tester` (`.claude/agents/saley-tester.md`).
+
+## The build pipeline (docs/16 §1) (every release, same order, no skips)
+
+| Stage | Who | Output | Done when |
+|---|---|---|---|
+| 0 Tidy-in | `scripts/tidy.py --check` | clean tree | no stray files; caches deleted |
+| 1 Plan | agent `planner` | docs/plans/<release>.md | scope, matrix rows to add, decisions needed, needs from the human |
+| 2 Build | agent `tdd-guide`; skills python-patterns, fastapi-patterns, postgres-patterns, database-migrations; UI: make-interfaces-feel-better, frontend-design-direction | code + tests + matrix rows | every feature has a tests/matrix/<release>.yaml row |
+| 3 Review | agents code-reviewer, python-reviewer, fastapi-reviewer, database-reviewer, security-reviewer, silent-failure-hunter | review notes in the test report | zero open "must fix" |
+| 4 Verify | agent `saley-tester` runs `scripts/verify.py --release <id>` (the 12 gate steps + the matrices up to this release) | docs/test-reports/<release>-<date>.md | GATE: PASS |
+| 5 Fix | agent `build-error-resolver` | regression test per fix | back to stage 3, then 4 from step 1 |
+| 6 Tidy-out | `/tidy` (report-only refactor-cleaner) | tidy-<date>.md | "tidy: nothing broke" |
+| 7 Docs | agent `doc-updater`; skill living-docs-governance | README, .env.example, docs/08 appendix, DECISIONS, STATUS, QUESTIONS | all current |
+| 8 Ping | `python .claude/hooks/notify.py --release <id> "<line>"` | one Discord line | only after GATE: PASS and tidy clean |
+| 9 Next | — | STATUS.md "current" = next release | start at stage 0 |
 
 ## Skills and agents for each step
 
@@ -41,13 +72,16 @@ The report names the skill or agent used for each step.
 
 1. Automated steps 1–9:
    ```
-   uv run python scripts/verify.py --release $ARGUMENTS
+   uv run python scripts/verify.py --release $ARGUMENTS --low-memory
    ```
    It runs, in order, and stops nothing on the first failure (every step gets a result):
    1. Static: first `python scripts/tidy.py --check` (a stray untracked file fails the gate
       and the list is in the note; see `/tidy`), then `python -m py_compile` on every Python
       file, `ruff check`, `ruff format --check`.
    2. Tests on `saley_test`: `pytest`, 100 % pass, coverage report; no new source file under 80 %.
+      The matrices load with no error and every plan feature (`| F-<release>-NN |`) has a row.
+      After step 9 every matrix row of this release and the earlier ones is evaluated
+      (docs/16 §3); `--release` defaults to `Current release:` in docs/STATUS.md.
    3. STE lint: every UI label, empty state, tooltip and bot string ≤ 60 characters; no word
       from `docs/ste-banned-words.txt`.
    4. Sheet robustness tests: insert column, rename header, delete row, move row, value
@@ -56,11 +90,14 @@ The report names the skill or agent used for each step.
       `docs/test-reports/<release>-api-abuse.md`.
    6. `saley sheet verify` (skill `dashboard-parity`): recompute from the sheet copy
       (read-only), compare with the API, table metric · sheet · API · OK/DIFF.
-   7. Start `saley dev` on port `WEB_PORT` (default 8090, read from settings and `.env`).
-      First a pre-check: if the port is in use, step 7 fails and the error names the program
+   7. Start the gate's own `saley dev` (D113) on `GATE_PORT` (default 8091) against the
+      `saley_test` database, worker slot `worker:gate`. It never touches `WEB_PORT`, the dev
+      database or the dev worker, so a human's `saley dev` may keep running. The gate rebuilds
+      `saley_test` at head and holds the test-database lock until its server stops.
+      First a pre-check: if `GATE_PORT` is in use, step 7 fails and the error names the program
       (and the Windows service) that holds it. Wait for the first sync. "Updated HH:MM" must be
       within SHEET_SYNC_SECONDS.
-   8. Browser QA (skill `browser-qa`, read-only) on http://localhost:<WEB_PORT>: every docs/08 view,
+   8. Browser QA (skill `browser-qa`, read-only) on http://localhost:<GATE_PORT>: every docs/08 view,
       every tile click, the 5 terms in `tests/fixtures/search-terms.txt`, 3 People drawers,
       widths 1440 / 1024 / 390, zero console errors, screenshots in
       `docs/test-reports/<release>-screens/`. Verdict SHIP required.

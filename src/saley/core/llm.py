@@ -177,6 +177,26 @@ def _store(key: str, model: str, output: dict[str, Any]) -> None:
         s.execute(stmt)
 
 
+def cache_get(key: str) -> dict[str, Any] | None:
+    """A cached output by key (used for per-story scores), or None when missing or expired."""
+    return _cached(key)
+
+
+def cache_put(key: str, model: str, output: dict[str, Any]) -> None:
+    _store(key, model, output)
+
+
+def cap_reached() -> bool:
+    """True when today's call budget is spent. Text jobs pause until tomorrow (S41)."""
+    return calls_today() >= get_settings().llm_daily_call_cap
+
+
+def log_cache_hits(job: str, model: str, key: str, hits: int) -> None:
+    """One cached row per batch of hits, so the health view shows the saving without noise."""
+    if hits > 0:
+        _log_call(job, model, key, cached=True)
+
+
 def _log_call(job: str, model: str, key: str, **fields: Any) -> None:
     with session_scope() as s:
         s.add(LlmCall(job=job, model=model, input_hash=key, **fields))

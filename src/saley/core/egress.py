@@ -45,6 +45,10 @@ class EgressBlocked(Exception):
     """The URL is not allowed out: blocklisted, not allowlisted, or a bad scheme."""
 
 
+class BodyTooLarge(Exception):
+    """The answer is bigger than the caller allows. The rest of the body was never read."""
+
+
 class EgressRateLimited(EgressBlocked):
     """The host bucket is empty for longer than the caller may wait."""
 
@@ -255,6 +259,19 @@ def _last_result(retry_state: Any) -> Any:
     return retry_state.outcome.result()
 
 
+def _retrying(safe: bool) -> Retrying:
+    return Retrying(
+        stop=stop_after_attempt(RETRY_ATTEMPTS if safe else 1),
+        wait=wait_exponential(multiplier=0.5, max=8),
+        retry=(
+            retry_if_exception_type(httpx.TransportError)
+            | retry_if_result(lambda r: r.status_code in RETRY_STATUSES)
+        ),
+        retry_error_callback=_last_result,
+        reraise=True,
+    )
+
+
 def request(
     client: httpx.Client,
     method: str,
@@ -267,17 +284,60 @@ def request(
     # A POST is retried only when the caller says it is safe: a timeout after the server
     # accepted it would otherwise send it twice.
     safe = method.upper() in IDEMPOTENT if idempotent is None else idempotent
-    retrying = Retrying(
-        stop=stop_after_attempt(RETRY_ATTEMPTS if safe else 1),
-        wait=wait_exponential(multiplier=0.5, max=8),
-        retry=(
-            retry_if_exception_type(httpx.TransportError)
-            | retry_if_result(lambda r: r.status_code in RETRY_STATUSES)
-        ),
-        retry_error_callback=_last_result,
-        reraise=True,
-    )
-    return retrying(client.request, method, url, **kwargs)
+    return _retrying(safe)(client.request, method, url, **kwargs)
+
+
+ERROR_BODY_BYTES = 65_536  # an error page is read up to here, for its message only
+
+
+def request_capped(
+    client: httpx.Client,
+    method: str,
+    url: str,
+    *,
+    max_bytes: int,
+    idempotent: bool | None = None,
+    **kwargs: Any,
+) -> httpx.Response:
+    """Like `request`, but the body is streamed and the read stops at `max_bytes` (B1).
+
+    Why: `client.request` loads the whole body before the caller can look at its size, so a
+    hostile or broken host could fill memory. Here the read stops one byte past the cap and
+    raises BodyTooLarge. Every redirect hop still passes the egress transport. The returned
+    response holds the (decoded) body, so `.content`, `.text` and `.json()` work as usual.
+    An error status is read only up to ERROR_BODY_BYTES and never raises BodyTooLarge.
+    """
+    safe = method.upper() in IDEMPOTENT if idempotent is None else idempotent
+
+    def once() -> httpx.Response:
+        with client.stream(method, url, **kwargs) as streamed:
+            failed = streamed.status_code >= 400
+            limit = min(max_bytes, ERROR_BODY_BYTES) if failed else max_bytes
+            declared = streamed.headers.get("content-length", "")
+            if not failed and declared.isdigit() and int(declared) > limit:
+                raise BodyTooLarge(f"{declared} bytes declared, cap {limit}")
+            chunks: list[bytes] = []
+            size = 0
+            for chunk in streamed.iter_bytes():
+                size += len(chunk)
+                if size > limit:
+                    if failed:
+                        break
+                    raise BodyTooLarge(f"more than {limit} bytes")
+                chunks.append(chunk)
+            headers = [
+                (k, v)
+                for k, v in streamed.headers.multi_items()
+                if k.lower() not in ("content-encoding", "content-length", "transfer-encoding")
+            ]
+            return httpx.Response(
+                streamed.status_code,
+                headers=headers,
+                content=b"".join(chunks),
+                request=streamed.request,
+            )
+
+    return _retrying(safe)(once)
 
 
 class GuardedHTTPClient(HTTPClient):

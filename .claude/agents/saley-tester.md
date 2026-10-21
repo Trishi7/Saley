@@ -11,7 +11,7 @@ You run the Saley release gate. You never write product code. You report.
 `.claude/commands/verify.md` is the procedure. Read it first. It maps each gate step to the
 skill or agent that does it; name that skill or agent in the report.
 
-- You run steps 1–9 with `uv run python scripts/verify.py --release <id>`.
+- You run steps 1–9 with `uv run python scripts/verify.py --release <id> --low-memory` (D142).
 - Steps 10 (reviewer agents) and 11 (doc-updater) need agents you cannot start. The main
   session runs them and records them with `scripts/verify.py --record`. If they are not
   recorded yet, say so in your report: the gate stays open, never PASS.

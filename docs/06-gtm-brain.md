@@ -183,7 +183,7 @@ flowchart TB
   end
   subgraph TRACK["TRACK (continuous)"]
     T1["Stage changes, replies,<br/>meetings, slips"] --> T2["Metrics snapshot<br/>per day"]
-    T2 --> T3["Weekly review pack<br/>Monday 09:00 IST"]
+    T2 --> T3["Weekly review pack<br/>Monday 14:00 IST"]
   end
   subgraph IMPROVE["IMPROVE (monthly)"]
     M1["Compare motions:<br/>meetings per 100 contacts"] --> M2["Propose changes:<br/>targets, sequence, focus"]
@@ -296,7 +296,7 @@ Two kinds. Leading metrics predict. Lagging metrics confirm. The weekly pack sho
 | Agent | Proposal accept rate | approved ÷ proposed | > 60 % | new |
 | Agent | Actions closed on time | done ÷ proposed within SLA | > 80 % | new |
 
-### 7.1 Weekly review pack (Monday 09:00 IST, Discord + web)
+### 7.1 Weekly review pack (Monday 14:00 IST, Discord + web)
 
 * Scoreboard: 5 goals, each with active conversations, weighted USD, days left, blockers. Red / amber / green.
 * Funnel this week vs last week. Contacts, connects, emails, replies, meetings.
@@ -316,7 +316,7 @@ Two kinds. Leading metrics predict. Lagging metrics confirm. The weekly pack sho
 | D4 | Sequence timing | Fixed days (0 / 4 / 7 / 12) · Per motion · Manual | Fixed now. Per motion after 2 months of data. |
 | D5 | Reply log source | Human marks in sheet · Saley reads a sales mailbox (read-only) · Both | Human marks now. Mailbox read in stage 3 of v2. |
 | D6 | New columns Saley may write | None · Stage, Motion, Goal · Also Tier, Account status | Stage, Motion, Goal. Human writes Tier. |
-| D7 | Weekly pack day and place | Monday 09:00 IST · Friday 17:00 · Both | Monday 09:00, Discord summary, full pack on web |
+| D7 | Weekly pack day and place | Monday 09:00 IST · Friday 17:00 · Both | Monday 14:00 (D134), Discord summary, full pack on web |
 | D8 | Plan change authority | Saley proposes only · Saley edits targets within ±20 % | Proposes only. Human edits the tab. |
 
 ### Suggested order of work (v2, GTM part)
