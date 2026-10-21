@@ -16,7 +16,7 @@ Sid and Vaishnavi use this dashboard instead of the sheet. Saley is the only wri
 - Auth: Google sign-in. `WEB_ALLOWED_EMAILS`. Roles from `users.role`: viewer, approver, admin. Approver sees decide buttons. Admin sees Sources and health.
 - Dev: `SALEY_ENV=dev` also needs a session. On loopback the mock provider signs in as `DEV_USER_EMAIL` (D116).
 - Laptop first. Phone readable. No horizontal scroll except tables.
-- Stack: FastAPI serves `/api/*` JSON and `/` static. Static = plain HTML + one JS file + one CSS file. No build step. Fetch JSON, render tables.
+- Stack (R5, D144, D145, D224): FastAPI serves `/api/*` JSON and, at `/`, the dashboard app: React 19 + TypeScript + Tailwind, built by Vite from `web/` into `src/saley/web/dist/` (served under `/static/app/`). `/` needs a session (else 303 to `/signin`) and puts a fresh CSP style nonce into the page and the header (D146). Hash routes (`/#today`, `/#people?filter=all`) pick the view. The sign-in and message pages are server HTML with one stylesheet, `/static/signin.css`. No Node at runtime. The legacy static app (plain HTML + JS files) and `/next` were removed at the cut-over (R5 T16b).
 ## Writes and the approval model (decision D24)
 - An instruction from an approver IS the approval. A button click on the dashboard or a chat instruction writes at once. Nothing waits for a second yes. Nothing is asked twice across chat and dashboard.
 - Saley's own ideas (rules, suggestions) show once as a card with one primary button. The click writes. They never pile up in a queue.
@@ -73,7 +73,7 @@ The rules read these columns by role, never by letter. The letters are for the r
 - Empty state text per view: "No items. Last computed HH:MM." Never a blank panel.
 - Evidence link: `GET /api/evidence?fact=&signal=&rule=&row=` opens a drawer with the source (sheet row key, story URL, rule text, fact author and date).
 - Numbers: tabular. Dates: IST, "Fri 17 Oct". Money: USD.
-- Per-user seen applies to the dashboard too (D75), as it does to bot answers. Every list shows the items this person has not seen first, and says "N you saw are left out" with a link to show them. Seen is per person, never per channel.
+- Per-user seen applies to the dashboard too (D75), as it does to bot answers. Signals, Suggestions and Events show a New tab (what this person has not seen, 10 a page) and a Seen earlier tab, each with its count (D157, D216). No "left out" line on the dashboard; the bot footer keeps it. Seen is per person, never per channel.
 - Owner of a person (which list a task lands on), decision D31 (replaces D25): "VR" / "Sid" text in `First Contact` names the owner; else a LinkedIn request recorded in `Sid - LI Addition` → Sid; else `First Contact Type` = LI → Sid; else Vaishnavi. A human can reassign from the person drawer.
 - Goal links (D30): until the sheet has a Goal column, people link to goals by industry. The link source is shown as "industry rule".
 - Parity: a `parity_check` job runs hourly. It compares view counts with the sheet copy and the news tables. The result shows on Sources and health. Claude Code runs the `dashboard-parity` skill before any dashboard release.
@@ -135,8 +135,9 @@ Auth words. **Session** = a signed-in team member (any role). **Approver or admi
 | POST | `/api/commitment/{commitment_id}/done` | Approver or admin; header | Mark a commitment done, with undo. |
 | POST | `/api/seen` | Approver or admin; header | Record the items this person saw (per person). |
 | POST | `/api/ask` | Session; header | Ask one question. Same engine as @Saley (R4). |
-| GET | `/` | Session (else 303 to `/signin`) | The dashboard page. |
-| GET | `/static/{file}` | None | CSS and JS files. They hold no data. |
+| GET | `/` | Session (else 303 to `/signin`) | The dashboard app: the built page with a per-request CSP style nonce (D146, D224). 503 with one plain line when there is no build. |
+| GET | `/static/app/{file}` | None | The built CSS, JS and font files (hashed names, cached for a year). They hold no data. `index.html` and `build-stamp.json` are not served here. |
+| GET | `/static/signin.css` | None | The stylesheet of the sign-in and message pages. No other file under `/static/` is served (D224). |
 | GET | `/signin` | None | Sign-in page: a Google button, or the mock button where allowed (R4). |
 | POST | `/auth/mock` | None; mock provider only | Sign in as the dev user or an allowlisted address. Dev and loopback only. |
 | GET | `/auth/google` | None; Google provider only | Redirect to Google with state and PKCE. |
@@ -164,9 +165,9 @@ Auth words. **Session** = a signed-in team member (any role). **Approver or admi
 | `/api/inbox` | `type` (`card`, `confirm`, `ask`, `reminder`), `limit`, `offset` | items (one per card, decision to confirm, ask or reminder), total, empty text (R2) | 9 Inbox |
 | `/api/commitments` | `owner`, `state` (`open`, `done`, `dropped`, `all`; default `open`), `limit`, `offset` | commitments: owner, text, due, source, state, reminders sent (R2) | 10 Commitments |
 | `/api/decisions` | `person`, `surface` (`dashboard`, `chat`, `card`), `undo` (`open`, `undone`, `undo_failed`, `closed`), `state` (`proposed`, `confirmed`, `active`), `limit`, `offset` | decisions with label, text, value, undo state, sync reason, `can_confirm`, `can_undo` (R2) | 11 Decisions |
-| `/api/signals` | `tab` (`all` or `linked`; default `all`), `range` (`day`, `week`, `month`, `year`; default `week`), `day` (date; more than 5 years from today gives 422), `cat` (one letter A–L), `src` (text, at most 120 characters), `tag` (`Opportunity`, `People`, `Risk`, `Market`, `Tender`, `Discover`, `Ours`), `entity` (text), `min_importance` (1–5), `linked_only`, `include_seen`, `limit`, `offset` | `tab`, items (each with `why`, `published_label`, `seen`), `total`, `window` (`from`, `to`, `label`), `left_out_seen`, `left_out_note` (R3, F-R3-07, D75) | Signals (All, Linked) |
-| `/api/events` | `when` (`upcoming` or `past`; default `upcoming`), `include_seen`, `limit`, `offset` | items (name, city, dates and `date_label`, `days_left`, `days_text`, registered, people in city, connected, P1, `speaker_matches` "not built" until S12, `href` https only, `seen`), `total`, `window`, `left_out_seen` (R3) | Events |
-| `/api/suggest/{kind}` | path `kind` (`warm`, `best`, `newco`, `res`), `include_seen`, `limit`, `offset` | `kind`, ranked items (person, company, title, evidence, `seen`, search `hits` with `engine`, `url`, `title` and an Add `form` prefilled from sheet values and the hit), `total`, `empty`, `window`, `left_out_seen`, `left_out_note`, `capped` and `capped_note` (the rank reads at most 1000 rows, by `ref_id`) (R3) | Suggestions (warm, best, newco, res) |
+| `/api/signals` | `tab` (`all` or `linked`; default `all`), `range` (`day`, `week`, `month`, `year`; default `week`), `day` (date; more than 5 years from today gives 422), `cat` (a topic name: Hiring, Funding, Product launch, Research, Partnership, Event; a letter gives 422, D156), `src` (text, at most 120 characters), `tag` (`Opportunity`, `People`, `Risk`, `Market`, `Tender`, `Discover`, `Ours`), `entity` (text), `min_importance` (1–5), `linked_only`, `view` (`new` or `seen`: the New or Seen earlier tab, 10 a page; R5 T7, D157), `limit`, `offset` | `tab`, items (each with `why`, `published_label`, `seen`), `total`, `window` (`from`, `to`, `label`), `left_out_seen` (0 with `view`), `view`, `new_total`, `seen_total`, `new_empty` (R3, F-R3-07, D75; `include_seen` and `left_out_note` removed at the cut-over, D224) | Signals (All, Linked) |
+| `/api/events` | `when` (`upcoming` or `past`; default `upcoming`), `view` (`new` or `seen`), `limit`, `offset` | items (name, city, dates and `date_label`, `days_left`, `days_text`, registered, people in city, connected, P1, `speaker_matches` "not built" until S12, `href` https only, `seen`), `total`, `window`, `left_out_seen` (R3) | Events |
+| `/api/suggest/{kind}` | path `kind` (`warm`, `best`, `newco`, `res`), `view` (`new` or `seen`), `limit`, `offset` | `kind`, ranked items (person, company, title, evidence, `seen`, search `hits` with `engine`, `url`, `title` and an Add `form` prefilled from sheet values and the hit), `total`, `empty`, `window`, `left_out_seen`, `view`, `new_total`, `seen_total`, `new_empty`, `capped` and `capped_note` (the rank reads at most 1000 rows, by `ref_id`) (R3) | Suggestions (warm, best, newco, res) |
 | `/api/news/funnel` | `day` (date; default today IST) | `day`, `label`, `steps` (fetched, dropped seen/copy/gate, deduped, scored, scored 4 or more, linked, sent "no digest until R4") (R3, D73) | Sources and health (news funnel) |
 | `POST /api/act` | body: `action` (`write`, `email_write`, `task_done`, R3: `row_add` or `find_people`), `target_ids[]`, `payload` (`row_add`: `fields[]` of `role` and `value`, new-row roles only, docs/10) | `write_id`, `undo_until`, `label`, `already`, one item per cell (R2). `row_add` answers the same way and writes one decision and one sheet `append`; `find_people` (one company in `target_ids`, no payload) answers `request_id`, `already`, `label` and queues one search for the worker (R3, D76, D77) | Tasks, cards, Done; R3: Suggestions add form and "Find people" |
 | `POST /api/undo/{write_id}` | — | `write_id`, `cancelled` (R2) | Undo |
@@ -191,3 +192,44 @@ POST answers (R3):
 - `find_people`: 422 when `target_ids` has not exactly one company or a payload is sent. A repeat of the same request answers `already: true` (D77).
 - Undo of a row add uses `POST /api/undo/{write_id}`. It removes the row only when the row is unchanged (D91).
 | `/healthz` | — | `{"status": "ok"}` | Container health check |
+
+## Appendix B: DOM hooks for the gate
+
+The browser checks (`scripts/browser_qa.py`, gate steps 8 and 9) read the page through these hooks only (plan R5 §3.4, D199, D214, D216, D220, D224). A change to a hook is a change to this list and to the checks in the same ticket. Since the cut-over (R5 T16b) every check runs on `/`: one run covers the R1.1 to R5 rows.
+
+**Shell (every page)**
+- Rail links `.rail a[data-v]`; the shown page `section.view.on#v-<name>` (also `money` and `search`) with `data-features`.
+- Top bar `header`: `#me`, `#gsearch`, `#updated`, `#pending`, the Retry Button `[data-retry]`; the theme toggle.
+- `#toast` (always in the DOM); a failed load `[data-retry]` inside the page.
+- Legend `[data-legend]` with entries `[data-tag]`; a tag on the page `[data-tag-ref]` (each one in the legend).
+- Off features: the place `[data-feature="<name>"]` holds the badge `[data-soon="<name>"]` while `/api/me.features` says off (D164).
+- Lists that page: `[data-pager]`, rows `[data-row]` inside `[data-pager-list]`.
+- Every state-changing control: `[data-act]` with `data-endpoint` and `type="button"`; no `<form>` and no button without `type="button"` on a page.
+
+**Today (`#v-today`)**
+- Funnel `[data-funnel] a[data-tile=<stage>] .v` (stages listed, contacted, connected, talking, met, won); each bar opens People with its filter.
+- Tiles `#tiles a.tile[data-tile] .v` with a `title` that names the source: `deals`, `backlog`, `p1`, `week` (D202). The blockers line `#tiles [data-blockers-line][data-count]` with `[data-blockers-open]`.
+- Tasks `#tasks li.task` with `[data-act="done"]` that turns into `[data-act="undo"]` in place (D204); `[data-add-email]` on an add_email task; `[data-pager]`.
+- Needs a look `#look a[data-kind]` (news, event, blocker, waiting), the mail-replies badge `#look [data-soon="mail_replies"]`.
+- Saley suggests `#suggests li` (one link each).
+- Ask card `#ask-card`, `#ask-input`, `#ask-send`, `#ask-state`, `#ask-answer`.
+
+**Drawers**
+- `.drawer.on` (`[data-drawer="person"]` or the company drawer), title `[data-slot="sheet-title"]`, external links `a[target=_blank][rel~=noopener]`, the Email field `#drawer-email` and Save `[data-act="email-save"]`.
+- People rows `[data-row][data-person]` with `[data-open-person]`; Accounts rows `[data-row][data-account]` with `[data-open-account]`; `[data-follow-up]`, `[data-papers]`, `[data-working-source]`, `[data-stagebar]`, `[data-timeline]` (D214).
+
+**Signals, Suggestions, Events**
+- Seen tabs `[data-seen-tabs] [data-seen-tab="new"|"seen"][data-count]`, `[data-nothing-new]`, `[data-seen-failed]` (D216); the window line `[data-stamp]`.
+- Signals: `[data-sig-tabs] [data-filter="all"|"linked"]`, `[data-cat-chips] [data-filter]`, `[data-range-chips] [data-filter]`, `#sig-tag`, `#sig-src`, `#sig-entity`, rows `#sig-list > li[data-story][data-cat]`.
+- Suggestions: `[data-kind-tabs] [data-filter]`, rows `#sg-list > li[data-suggestion][data-kind]`, `[data-line]`, `[data-open-subject]`, Find people `[data-act="find"]` in `[data-feature="find_people"]`, its state `[data-field="search"]`, hits `li[data-hit]` with `[data-open="add"]`, the form `[data-form="add"]` and `[data-act="add"]` that turns into `[data-act="undo"]` in place.
+- Events: `[data-when-tabs] [data-filter]`, `#ev-table th[data-col]`, `tr[data-row][data-event][data-registered]`, `td[data-city]`, `td[data-venue]`.
+
+**Team pages**
+- Inbox `#inbox-list .inbox-card[data-kind][data-id]` with `[data-act="primary"|"edit-save"|"dismiss"|"undo"]`.
+- Commitments `#commit-table tbody tr` with `[data-act="commitment-done"]` and `[data-act="undo"]`.
+- Decisions `#dec-table tbody tr[data-id]`, `#dec-person`, `#dec-surface`, `#dec-undo`, `#dec-state`, `[data-act="confirm"|"undo"]`.
+- Weekly pack `#pack-week`, `#pack-tiles .tile .v/.d`, `#pack-late`, `#pack-reminders`, `#pack-tasks`, `#pack-score`; Scorecard `#sc-table`.
+- Sources and health (admin): `#news-run` with `[data-act="run-news"]`, `[data-news-state]`, `[data-news-line]`; `#news-funnel a[data-tile] .v`; `#news-sources` with `#news-pick` ("Showing: <step>") and `#src-table` (D225); `#jobs-table`, `#egress-table`, `#tabs-table`, `#parity-table`, `#dq-table`, `#conn-list`.
+
+**Search**
+- `#search-results`, groups `[data-group]`, hits `.hit` with the match in `<mark>`, `.empty-state` for no result.

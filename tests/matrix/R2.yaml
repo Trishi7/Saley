@@ -112,7 +112,7 @@ rows:
   - id: R2-B01
     feature: F-R2-10
     layer: browser
-    what: click-path Done -> toast -> Undo restores
+    what: click-path Done -> Undo in place -> Undo restores
     tool: browser
     command: browser done_undo
     pass: named browser check passes

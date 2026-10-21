@@ -1,10 +1,7 @@
 // One page of the dashboard: the section with the Appendix B hook `section.view.on#v-<name>`,
 // the title, the one-line subtitle (docs/08 Shell), the legend at the top (R5-Q01), the
 // "coming soon" badges of the page's off features (R5-Q03), then the body.
-import { ArrowUpRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { W } from "@/words";
 import { SoonStrip } from "./ComingSoon";
 import { Legend } from "./Legend";
 import type { ViewDef } from "./views";
@@ -38,24 +35,5 @@ export function ViewPage({
       <SoonStrip features={view.features} />
       {children}
     </section>
-  );
-}
-
-/** The body of a page that is not ported yet (T13–T16 replace it). The legacy page still
- *  works, so the person gets a Button to it, never a dead end. */
-export function NotPortedYet({ view }: { view: ViewDef }) {
-  return (
-    <div
-      data-content
-      className="bg-card flex flex-col items-start gap-3 rounded-lg border border-dashed p-6"
-    >
-      <p className="text-sm">{W.viewSoon}</p>
-      <Button asChild variant="outline" size="sm">
-        <a href={`/#${view.id}`} data-legacy-link>
-          {W.openCurrentPage}
-          <ArrowUpRightIcon aria-hidden />
-        </a>
-      </Button>
-    </div>
   );
 }

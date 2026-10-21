@@ -17,16 +17,11 @@ MORE_TEXT = re.compile(r"^(\d+) more$")
 RAW_URL = re.compile(
     r"(?i)^(?:https?://|www\.)\S+$|://|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/\S*"
 )
-ENTRIES = {"legacy": "/", "next": "/next"}  # --app: where the dashboard lives (D147)
-
-
-def entry_path(app: str) -> str:
-    """'next' -> '/next' (the strangler, D147); anything else -> '/' (the legacy app)."""
-    return ENTRIES.get(app, "/")
+ENTRY = "/"  # where the dashboard lives since the cut-over (T16b, D224); /next is gone
 
 
 def view_url(base: str, entry: str, view: str) -> str:
-    """http://localhost:8090 + /next + #today. The legacy entry keeps the R1-R4 form /#today."""
+    """http://localhost:8090 + / + #today (the R1-R4 form /#today)."""
     return f"{base}{entry}#{view}"
 
 

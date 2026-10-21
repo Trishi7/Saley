@@ -659,10 +659,9 @@ def test_s6_a_capped_suggestion_list_says_so(
     monkeypatch.setattr(web_signals, "SUGGEST_RANK_CAP", 1)
     capped = client.get("/api/suggest/warm").json()
     assert capped["capped"] is True and capped["capped_note"] == w.fill(w.SUGGEST_CAPPED, n=1)
-    words_js = Path("src/saley/web/static/words.js").read_text(encoding="utf-8")
-    assert "suggestCapped:" in words_js
-    signals_js = Path("src/saley/web/static/signals.js").read_text(encoding="utf-8")
-    assert "d.capped" in signals_js
+    # The page shows the server's line (the dashboard app since the cut-over, D224).
+    page = Path("web/src/views/suggest/SuggestPage.tsx").read_text(encoding="utf-8")
+    assert "data.capped_note" in page
 
 
 # ------------------------------------------------------------------ silent 7 health count

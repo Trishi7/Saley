@@ -8,15 +8,17 @@ routes in `act.py`; this module never writes.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Query
-from sqlalchemy import text
+from fastapi import APIRouter, Query, Request
+from sqlalchemy import Connection, text
 
 from saley.core.clock import day_label
 from saley.intel.decisions import list_decisions
 from saley.web import mine, queries, schemas
 from saley.web import words as w
+from saley.web.act import actor_short
 from saley.web.app import Db, Limit, Offset, User, meta
 from saley.web.queries import DEFAULT_LIMIT
 
@@ -81,8 +83,33 @@ def inbox(
     }
 
 
+def _my_open_undos(conn: Connection, me: str, ids: list[int]) -> dict[int, tuple[int, datetime]]:
+    """Commitment id -> (decision id, undo_until) of the newest Done the signed-in person
+    signed, not undone and still inside its window. A reload keeps the Undo in place (R5 T16a,
+    as Today). Only the signer may undo it (D155), so nobody else gets the fields."""
+    if not ids:
+        return {}
+    rows = conn.execute(
+        text(
+            "select distinct on (row_key) row_key, id, undo_until, undone_at, user_short "
+            "from v_decision where kind = 'commitment_done' "
+            "and row_key = any(cast(:keys as text[])) order by row_key, id desc"
+        ),
+        {"keys": [f"commitment:{i}" for i in ids]},
+    ).mappings()
+    found: dict[int, tuple[int, datetime]] = {}
+    now = conn.execute(text("select now()")).scalar_one()
+    for r in rows:
+        if r["user_short"] != me or r["undone_at"] is not None or r["undo_until"] is None:
+            continue
+        if r["undo_until"] > now:
+            found[int(r["row_key"].split(":", 1)[1])] = (int(r["id"]), r["undo_until"])
+    return found
+
+
 @router.get("/api/commitments", response_model=schemas.CommitmentsOut)
 def commitments(
+    request: Request,
     user: User,
     conn: Db,
     owner: ShortName = None,
@@ -107,7 +134,10 @@ def commitments(
         limit=limit,
         offset=offset,
     )
+    # The signer is the person who acts (X-Saley-As with the mock provider, D50), as in act.py.
+    undo = _my_open_undos(conn, actor_short(request, user), [row["id"] for row in found])
     for row in found:
+        row["undo_id"], row["undo_until"] = undo.get(row["id"], (None, None))
         row["source"] = SOURCE_LABELS.get(row["source_type"], w.SRC_OTHER)
         if row["source_removed"]:
             row["source"] = w.fill(w.SRC_REMOVED, source=row["source"])

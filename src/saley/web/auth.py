@@ -71,7 +71,7 @@ AUTH_RATE_WINDOW = 60.0
 LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 SHORT_RE = re.compile(r"[a-z]{1,20}")  # fullmatch only: "$" would accept a trailing newline
 ALLOW_EMAIL_RE = re.compile(r"[^@\s<>\"'=,;]{1,100}@[^@\s<>\"'=,;]{1,100}\.[^@\s<>\"'=,;]{1,50}")
-PAGE_CSS = "/static/app.css"
+PAGE_CSS = "/static/signin.css"  # the one file left of the R4 static app (D224)
 
 
 @dataclass(frozen=True)

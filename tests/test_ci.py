@@ -113,3 +113,23 @@ def migrate_a_fresh_database(test_db_url: str) -> None:
     finally:
         with psycopg.connect(dbname="postgres", **connect) as admin:
             admin.execute(f'drop database if exists "{name}" with (force)')
+
+
+def test_ci_has_node_and_the_web_checks_before_pytest() -> None:
+    """R5-X06: CI green on a fresh runner with Node. Gate step 1 and the web unit tests need
+    Node 24 and web/node_modules; CI was red when the test job had neither (21 Oct)."""
+    test_steps = steps()
+    node = [
+        i
+        for i, s in enumerate(test_steps)
+        if str(s.get("uses", "")).startswith("actions/setup-node@")
+    ]
+    assert len(node) == 1, "the test job sets up Node once"
+    assert test_steps[node[0]]["with"]["node-version-file"] == "web/.nvmrc"
+    assert (ROOT / "web" / ".nvmrc").read_text(encoding="utf-8").strip() == "24"
+    install = index_of("npm --prefix web ci --ignore-scripts")
+    checks = index_of("npm --prefix web test")
+    web_run = str(test_steps[checks]["run"])
+    assert "npm --prefix web run lint" in web_run and "npm --prefix web run typecheck" in web_run
+    pytest_at = index_of("uv run pytest")
+    assert node[0] < install < checks < pytest_at

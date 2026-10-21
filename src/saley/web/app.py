@@ -1,4 +1,4 @@
-"""FastAPI dashboard: JSON under /api, static page at /.
+"""FastAPI dashboard: JSON under /api, the built app at / (next_app.py, D224).
 
 Why: docs/08 is the contract. Every GET is read-only. The only POST routes live in act.py and
 call fixed SQL functions (R2, D24); the web role has no table grant. Routes are plain `def`
@@ -13,15 +13,13 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote, urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi import Path as PathParam
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from sqlalchemy import Connection, text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -55,7 +53,6 @@ from saley.web.guards import (
 )
 from saley.web.queries import DEFAULT_LIMIT, MAX_LIMIT, BadFilter
 
-STATIC = Path(__file__).parent / "static"
 STALE_FACTOR = 3  # "Updated" turns red after 3 × SHEET_SYNC_SECONDS without a sync (D43)
 ACTIVE_SHOWN = 8
 SHORT_LIMIT = 40
@@ -735,17 +732,11 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         return {"q": q, **queries.search(conn, q), **meta(conn)}
 
-    @app.get("/", include_in_schema=False)
-    def index(request: Request) -> Response:
-        if session_user(request) is None:
-            return RedirectResponse("/signin", status_code=303)
-        return FileResponse(STATIC / "index.html")
-
     # Late import: the routers need this module.
     from saley.web import act, admin, ask, next_app, pack, signals, team, today
 
     auth.install(app)
-    next_app.install(app)  # before the /static mount: /static/app must match first (D145)
+    next_app.install(app)  # `/` is the built app; /static serves only signin.css (D224)
     app.include_router(act.router)
     app.include_router(admin.router)
     app.include_router(ask.router)
@@ -753,7 +744,6 @@ def create_app() -> FastAPI:
     app.include_router(pack.router)
     app.include_router(today.router)
     app.include_router(signals.router)
-    app.mount("/static", StaticFiles(directory=STATIC), name="static")
     if get_settings().is_dev:
         # Blocks DNS rebinding: a web page cannot reach the laptop API under its own name.
         app.add_middleware(

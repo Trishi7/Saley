@@ -186,9 +186,10 @@ def test_status_me_and_static(client: TestClient) -> None:
     assert status["news"] == "—" and status["sheet_mode"] == "copy"
     me = client.get("/api/me").json()
     assert [p["name"] for p in me["people"]] == ["Vaishnavi", "Sid", "Kushal"]
-    page = client.get("/")
-    assert page.status_code == 200 and "Search everything" in page.text
-    assert client.get("/static/app.js").status_code == 200
+    page = client.get("/")  # the built app (test_web_assets), or the not-built line here
+    assert page.status_code in (200, 503)
+    assert client.get("/static/signin.css").status_code == 200  # the sign-in pages' style
+    assert client.get("/static/app.js").status_code == 404  # the legacy app is gone (D224)
     assert "default-src 'self'" in page.headers["content-security-policy"]
     assert client.get("/api/status").headers["cache-control"] == "no-store"
 
@@ -621,13 +622,13 @@ def test_every_endpoint_works_as_the_real_web_role(
                 # R3: every list below reads views only, as the real web role
                 "/api/signals",
                 "/api/signals?tab=linked&range=year&entity=a&src=b&cat=Funding&tag=Risk",
-                "/api/signals?include_seen=true&min_importance=3&linked_only=true",
+                "/api/signals?view=seen&min_importance=3&linked_only=true",
                 "/api/events",
                 "/api/events?when=past",
                 "/api/suggest/warm",
                 "/api/suggest/best",
                 "/api/suggest/newco",
-                "/api/suggest/res?include_seen=true",
+                "/api/suggest/res?view=seen",
                 "/api/news/funnel",
             ):
                 r = c.get(path)
@@ -710,88 +711,66 @@ def test_server_error_keeps_security_headers(
 
 
 # ---------------------------------------------------- R4 ticket 10: dashboard UI wiring
+# Since the cut-over (R5 T16b, D224) the page is the app in web/ (built to dist/, served at /).
+# These read its sources: the same guards the R4 tests kept on the legacy static files.
 
-STATIC = Path(schemas.__file__).parent / "static"
-
-
-def static_text(name: str) -> str:
-    return (STATIC / name).read_text(encoding="utf-8")
+WEB_SRC = Path(schemas.__file__).parents[3] / "web" / "src"
 
 
-def test_index_loads_the_pack_and_ask_scripts_and_drops_the_placeholder(client: TestClient) -> None:
-    page = client.get("/").text
-    assert '<script src="/static/pack.js" defer></script>' in page
-    assert '<script src="/static/ask.js" defer></script>' in page
-    assert client.get("/static/pack.js").status_code == 200
-    assert client.get("/static/ask.js").status_code == 200
-    assert 'id="pack-box"' in page and 'id="ask-card"' in page
-    assert "comingR4" not in page and "R4</span>" not in page
-    assert "<script>" not in page and " style=" not in page  # the CSP allows neither
+def web_text(name: str) -> str:
+    return (WEB_SRC / name).read_text(encoding="utf-8")
 
 
-def test_scorecard_note_about_the_7_day_change_is_gone() -> None:
-    assert "scoreNote2" not in static_text("words.js")
-    assert "scoreNote2" not in static_text("index.html")
-    assert "comes in R4" not in static_text("words.js")
-    assert "scLastWeek" in static_text("index.html")
+def web_sources() -> list[Path]:
+    return sorted(p for p in WEB_SRC.rglob("*") if p.suffix in {".ts", ".tsx"})
 
 
 def test_new_words_exist_and_fit_the_limit() -> None:
-    words = static_text("words.js")
-    for key in ("packNone", "packLateNone", "askSend", "askDown", "editSave", "packTasksOne"):
-        assert f"  {key}:" in words
-    assert "overdue" not in words.lower()
+    words = web_text("words.ts")
+    for key in ("packNone", "askSend", "askDown", "editSave", "undoneLine"):
+        assert f"  {key}:" in words, key
+    assert "overdue" not in words.lower() and "comes in R4" not in words
 
 
 def test_new_views_write_server_text_with_textcontent_only() -> None:
-    for name in ("pack.js", "ask.js", "team.js", "act.js", "app.js"):
-        source = static_text(name)
-        assert "innerHTML" not in source and "insertAdjacentHTML" not in source, name
-        assert "document.write" not in source and "eval(" not in source, name
-    assert "pre-line" in static_text("app.css")
-    assert "answer.text" in static_text("ask.js") and "textContent = answer.text" in static_text(
-        "ask.js"
-    )
+    """No page writes server text as markup: React text only (the chart's style element is a
+    comment in chart.tsx, never code)."""
+    for path in web_sources():
+        source = path.read_text(encoding="utf-8")
+        code = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("//"))
+        for bad in ("dangerouslySetInnerHTML", "innerHTML", "insertAdjacentHTML", "document.write"):
+            assert bad not in code, (path.name, bad)
+        assert "eval(" not in code, path.name
+    ask = web_text("views/today/AskCard.tsx")
+    assert "whitespace-pre-line" in ask  # the answer keeps its line breaks, as plain text
 
 
 def test_ask_card_posts_to_the_one_fixed_path_with_the_act_header() -> None:
-    source = static_text("ask.js")
-    assert source.count('"/api/ask"') == 1
-    assert '"X-Saley-Act": "1"' in source and 'credentials: "same-origin"' in source
-    for status in ("401", "422", "429"):
-        assert status in source
-    assert "askDown" in source  # any other 4xx or 5xx gets one plain line
+    ask = web_text("views/today/AskCard.tsx")
+    assert ask.count('"/api/ask"') == 1 and "askDown" in ask
+    api = web_text("api.ts")
+    assert '"X-Saley-Act": "1"' in api and 'credentials: "same-origin"' in api
 
 
 def test_card_editor_uses_the_edit_path_the_act_script_allows() -> None:
-    act = static_text("act.js")
-    allowed = re.search(r"var ALLOWED = (/.*/);", act)
+    api = web_text("api.ts")
+    allowed = re.search(r"const CONTROL_PATH =\s*(/.*/);", api)
     assert allowed and "(dismiss|edit)" in allowed.group(1)
-    team = static_text("team.js")
-    assert '"/api/proposal/" + draft.id + "/edit"' in team
-    assert "UI.run(save, path" in team  # same CSRF header and error lines as Done
-    assert (
-        "function (said)" in team
-    )  # a 409 line "Already done by X at HH:MM" shows beside the text
+    card = web_text("views/inbox/InboxCard.tsx")
+    assert "/api/proposal/${draft.id}/edit" in card
 
 
 def test_card_editor_is_defined_once_with_one_edit_button() -> None:
     """A pasted-twice block gave two Edit buttons, one bound to the wrong editor signature."""
-    team = static_text("team.js")
-    singles = ("function editor(", "function draftOf(", "var CARD_ID", "var draft = draftOf(item)")
-    for once in singles:
-        assert team.count(once) == 1, once
-    assert "editor(draft, card, reload)" in team and "editor(item," not in team
+    card = web_text("views/inbox/InboxCard.tsx")
+    assert card.count('act="edit-save"') <= 1 and card.count("/api/proposal/${draft.id}/edit") == 1
 
 
 def test_pack_page_shows_a_dash_for_a_missing_number() -> None:
-    source = static_text("pack.js")
-    assert "UI.num(n.value)" in source  # num() turns null into a dash, never 0
-    assert "UI.loaders.pack = loadPack" in source
-    assert "/api/pack" in source and source.count('"/api/pack"') == 1
-    app = static_text("app.js")
-    assert "function num(v) { return v == null ? " in app and "UI.scoreRow = scoreRow" in app
-    assert "lw.contacted" in app and "r.last_week_note" in app
+    parts = web_text("views/pack/PackParts.tsx")
+    assert "num(n.value)" in parts  # num() turns null into a dash, never 0
+    fmt = web_text("lib/format.ts")
+    assert "export function num(" in fmt and 'const DASH = "—"' in fmt
 
 
 def test_pack_route_serves_the_body_the_page_reads(client: TestClient, synced: Session) -> None:
@@ -1889,11 +1868,11 @@ def test_no_left_out_line_nothing_new_text(client: TestClient, synced: Session) 
     new = client.get("/api/signals?view=new", headers=sid).json()
     assert new["items"] == [] and (new["new_total"], new["seen_total"]) == (0, 2)
     assert new["new_empty"] == "Nothing new since your last visit"
-    assert new["left_out_note"] is None and new["left_out_seen"] == 0
+    assert "left_out_note" not in new and new["left_out_seen"] == 0  # the field went (D224)
 
     earlier = client.get("/api/signals?view=seen", headers=sid).json()
     assert {i["id"] for i in earlier["items"]} == {one.id, two.id}
-    assert earlier["new_empty"] is None and earlier["left_out_note"] is None
+    assert earlier["new_empty"] is None and "left_out_note" not in earlier
     assert "left out" not in json.dumps(earlier).lower()
 
     # Another person has not seen them: no empty line for her.
@@ -1903,16 +1882,18 @@ def test_no_left_out_line_nothing_new_text(client: TestClient, synced: Session) 
     # Events and Suggestions: no "left out" line in a tabbed answer, whatever the seen state.
     for path in ("/api/events?view=new", "/api/events?view=seen", "/api/suggest/warm?view=new"):
         body = client.get(path, headers=sid).json()
-        assert body["left_out_note"] is None and body["left_out_seen"] == 0, path
+        assert "left_out_note" not in body and body["left_out_seen"] == 0, path
     listed = client.get("/api/events?view=new", headers=sid).json()["items"]
     body = {"item_type": "event", "ids": [e["id"] for e in listed]}
     assert client.post("/api/seen", json=body, headers=act).status_code == 200
     events = client.get("/api/events?view=new", headers=sid).json()
     assert events["new_total"] == 0 and events["new_empty"] == "Nothing new since your last visit"
 
-    # The legacy page (no `view`) keeps its line until the cut-over (T16).
-    legacy = client.get("/api/signals", headers=sid).json()
-    assert legacy["left_out_note"] == "2 you saw are left out. Show them."
+    # No `view` (D224, the cut-over): new items only, the seen ones counted, never a line.
+    plain = client.get("/api/signals", headers=sid).json()
+    assert plain["items"] == [] and plain["left_out_seen"] == 2
+    assert "left out" not in json.dumps(plain).lower()
+    assert client.get("/api/signals?include_seen=true", headers=sid).status_code == 422
 
 
 # ------------------------------------------------------------------ Run news now (R5 T8)
@@ -2019,3 +2000,30 @@ def test_run_news_now_works_as_the_real_web_role(
         monkeypatch.undo()
         get_settings.cache_clear()
         dispose_engines()
+
+
+def test_commitments_keep_the_signers_open_undo_after_a_reload(
+    client: TestClient, synced: Session
+) -> None:
+    """R5 T16a review: /api/commitments gives `undo_id` and `undo_until` only for the row whose
+    newest Done the asking person signed, not undone and inside its window (as Today)."""
+    cid = _promise(synced, "vaishnavi")
+    as_v = {"X-Saley-Act": "1", "X-Saley-As": "vaishnavi"}
+    done = client.post(f"/api/commitment/{cid}/done", headers=as_v)
+    assert done.status_code == 200, done.text
+
+    def row(who: str) -> dict:
+        items = client.get("/api/commitments?state=all", headers={"X-Saley-As": who}).json()
+        return next(i for i in items["items"] if i["id"] == cid)
+
+    mine = row("vaishnavi")
+    assert mine["undo_id"] == done.json()["write_id"] and mine["undo_until"]
+    other = row("sid")  # another person never gets the signer's Undo (D155)
+    assert other["undo_id"] is None and other["undo_until"] is None
+    synced.execute(
+        text("update decision set undo_until = now() - interval '1 minute' where id = :i"),
+        {"i": done.json()["write_id"]},
+    )
+    synced.commit()
+    expired = row("vaishnavi")
+    assert expired["undo_id"] is None and expired["undo_until"] is None

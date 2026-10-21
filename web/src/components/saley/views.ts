@@ -1,7 +1,7 @@
 // The views of the dashboard (docs/08 Shell and Views). The ids are the legacy rail `data-v`
 // values (static/index.html), so `/#today` links keep working after the cut-over (D147).
 // Each view has its title, a one-line subtitle, its legend (R5-Q01) and the features that live
-// on it (R5-Q03, D164). T13–T16 replace each placeholder body with the real page.
+// on it (R5-Q03, D164). T13–T16a replaced each placeholder body with the real page.
 import {
   ActivityIcon,
   BanknoteIcon,
@@ -225,10 +225,13 @@ export const VIEWS: ViewDef[] = [
     sub: W.subAsks,
     group: "team",
     icon: InboxIcon,
+    // R5 T16a: one tag per kind of item (inbox-rules.ts INBOX_KINDS).
     legend: [
-      { tag: "confirm", tone: "primary", name: W.lgConfirm, explain: W.lgConfirmX },
-      { tag: "ask", tone: "info", name: W.lgAsk, explain: W.lgAskX },
+      { tag: "card", tone: "primary", name: W.lgCard, explain: W.lgCardX },
+      { tag: "confirm", tone: "info", name: W.lgConfirm, explain: W.lgConfirmX },
+      { tag: "ask", tone: "neutral", name: W.lgAsk, explain: W.lgAskX },
       { tag: "reminder", tone: "warn", name: W.lgReminder, explain: W.lgReminderX },
+      DASH,
       SOON,
     ],
     features: ["dms"],
@@ -244,6 +247,11 @@ export const VIEWS: ViewDef[] = [
       { tag: "open", tone: "info", name: W.lgOpen, explain: W.lgOpenX },
       { tag: "done", tone: "good", name: W.lgDone, explain: W.lgDoneX },
       { tag: "dropped", tone: "neutral", name: W.lgDropped, explain: W.lgDroppedX },
+      LATE,
+      DUE_TODAY,
+      DUE_LATER,
+      { tag: "no-date", tone: "neutral", name: W.cNoDue, explain: W.lgNoDateX },
+      DASH,
     ],
     features: [],
   },
@@ -257,7 +265,22 @@ export const VIEWS: ViewDef[] = [
     legend: [
       { tag: "proposed", tone: "warn", name: W.lgProposed, explain: W.lgProposedX },
       { tag: "confirmed", tone: "good", name: W.lgConfirmed, explain: W.lgConfirmedX },
+      { tag: "active", tone: "primary", name: W.lgActive, explain: W.lgActiveX },
+      { tag: "undo-open", tone: "info", name: W.undoOpen, explain: W.lgUndoOpenX },
       { tag: "undone", tone: "neutral", name: W.lgUndone, explain: W.lgUndoneX },
+      { tag: "undo-closed", tone: "neutral", name: W.undoClosed, explain: W.lgUndoClosedX },
+      { tag: "undo-failed", tone: "bad", name: W.undoFailed, explain: W.lgUndoFailedX },
+      { tag: "sync-pending", tone: "warn", name: W.syncPending, explain: W.lgSyncPendingX },
+      { tag: "sync-held", tone: "warn", name: W.syncHeld, explain: W.lgSyncHeldX },
+      { tag: "sync-done", tone: "good", name: W.syncDone, explain: W.lgSyncDoneX },
+      { tag: "sync-failed", tone: "bad", name: W.syncFailed, explain: W.lgSyncFailedX },
+      {
+        tag: "sync-cancelled",
+        tone: "neutral",
+        name: W.syncCancelled,
+        explain: W.lgSyncCancelledX,
+      },
+      DASH,
     ],
     features: [],
   },
@@ -292,6 +315,10 @@ export const VIEWS: ViewDef[] = [
       { tag: "ok", tone: "good", name: W.lgOk, explain: W.lgOkX },
       { tag: "failed", tone: "bad", name: W.lgFailed, explain: W.lgFailedX },
       { tag: "old", tone: "warn", name: W.lgOld, explain: W.lgOldX },
+      { tag: "running", tone: "info", name: W.lgRunning, explain: W.lgRunningX },
+      { tag: "queued", tone: "info", name: W.lgQueued, explain: W.lgQueuedX },
+      { tag: "skipped", tone: "neutral", name: W.lgSkipped, explain: W.lgSkippedX },
+      DASH,
       SOON,
     ],
     features: ["apollo"],

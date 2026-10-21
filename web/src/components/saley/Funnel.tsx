@@ -14,7 +14,15 @@ import { cn } from "@/lib/utils";
 import { fmt, W } from "@/words";
 import { FUNNEL_TONES, toneColour } from "./tones";
 
-export type FunnelStep = { key: string; label: string; n: number | null; link: ViewLink };
+/** One bar. `link` is a view of this app; `href` is a ready hash from the API (the news funnel
+ *  of Sources and health, R5 T16a), used as it is, never built here. */
+export type FunnelStep = {
+  key: string;
+  label: string;
+  n: number | null;
+  link?: ViewLink;
+  href?: string;
+};
 
 const GAP_PX = 4; // the same gap the chart uses between segments
 
@@ -24,7 +32,16 @@ export function funnelDrawable(steps: FunnelStep[]): boolean {
   return typeof first === "number" && first > 0;
 }
 
-export function Funnel({ steps, className }: { steps: FunnelStep[]; className?: string }) {
+export function Funnel({
+  steps,
+  className,
+  label = W.funnelLabel,
+}: {
+  steps: FunnelStep[];
+  className?: string;
+  /** The accessible name of the chart (from W). */
+  label?: string;
+}) {
   const wide = useMedia("(min-width: 640px)");
   const [hovered, setHovered] = useState<number | null>(null);
   const drawable = funnelDrawable(steps);
@@ -35,7 +52,7 @@ export function Funnel({ steps, className }: { steps: FunnelStep[]; className?: 
     color: toneColour(FUNNEL_TONES[s.key] ?? "primary"),
   }));
   return (
-    <figure data-funnel aria-label={W.funnelLabel} className={cn("relative", className)}>
+    <figure data-funnel aria-label={label} className={cn("relative", className)}>
       {drawable && (
         <div aria-hidden className={wide ? "pt-6 pb-9" : "px-[30%]"}>
           <FunnelChart
@@ -65,7 +82,7 @@ export function Funnel({ steps, className }: { steps: FunnelStep[]; className?: 
         {steps.map((step, i) => (
           <a
             key={step.key}
-            href={hrefFor(step.link)}
+            href={step.href ?? (step.link ? hrefFor(step.link) : undefined)}
             data-tile={step.key}
             aria-label={fmt(W.funnelStep, { label: step.label, n: num(step.n) })}
             onMouseEnter={() => setHovered(i)}

@@ -3,9 +3,9 @@
 Why: one check over the string catalogues, so plain short text stays plain and short as the
 dashboard grows. Rules: each string is at most 60 characters (a `{name}` placeholder counts
 as 4), and no word or phrase from docs/ste-banned-words.txt appears.
-Sources: saley/web/words.py, static/words.js, the text and labels in static/index.html, the
-dashboard v2 catalogue web/src/words.ts and web/index.html (R5, plan §3.3), and the UPPER_CASE
-string constants of saley/bot. static/words.js stays until the cut-over (T16).
+Sources: saley/web/words.py, the dashboard catalogue web/src/words.ts and web/index.html (R5,
+plan §3.3), and the UPPER_CASE string constants of saley/bot. The legacy static/words.js and
+static/index.html left the list at the cut-over (T16b, D224).
 
 Run: `uv run python -m saley.qa.ste_lint` (exit 1 on any finding).
 """
@@ -110,8 +110,6 @@ def html_strings(path: Path, label: str | None = None) -> list[tuple[str, str]]:
 
 def collect() -> list[tuple[str, str]]:
     strings = python_strings(WEB / "words.py")
-    strings += js_strings(WEB / "static" / "words.js")
-    strings += html_strings(WEB / "static" / "index.html")
     strings += js_strings(WEB_V2 / "src" / "words.ts")
     strings += html_strings(WEB_V2 / "index.html", "web/index.html")
     for path in sorted((ROOT / "src" / "saley" / "bot").glob("*.py")):

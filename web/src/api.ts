@@ -13,9 +13,12 @@ import { W } from "./words";
 const STATUS_PATH = "/api/status";
 const SEEN_PATH = "/api/seen";
 const ASK_PATH = "/api/ask";
+// The control POSTs of gate step 9 (scripts/verify.py ALLOWED_POST): the admin "Run news now"
+// (D150) is one of them since R5 T16a.
 const CONTROL_PATH =
-  /^\/api\/(act|undo\/\d+|decision\/\d+\/confirm|proposal\/\d+\/(dismiss|edit)|commitment\/\d+\/done)$/;
-const SERVER_LINE_STATUSES = new Set([403, 404, 409, 422]);
+  /^\/api\/(act|undo\/\d+|decision\/\d+\/confirm|proposal\/\d+\/(dismiss|edit)|commitment\/\d+\/done|admin\/news\/run)$/;
+// 429: the news run cooldown ("Wait N min before the next news run.") is a server line too.
+const SERVER_LINE_STATUSES = new Set([403, 404, 409, 422, 429]);
 const ERROR_LINE: Record<number, string> = {
   403: W.errForbidden,
   404: W.errGone,

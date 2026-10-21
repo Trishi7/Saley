@@ -85,8 +85,9 @@ The new dashboard lives in `web/` (Vite, React, TypeScript, Tailwind, vendored s
    ```
    No package needs its install script (esbuild, rollup, Tailwind oxide and lightningcss ship platform packages, D191).
 2. Build: `npm --prefix web run build`. The output goes to `src/saley/web/dist/` (gitignored) with `build-stamp.json` (D145).
-3. Preview: start `uv run saley dev`, sign in, and open http://localhost:8090/next. `/` stays the legacy page until the cut-over (D147).
-   Without a build, `/next` answers "The new dashboard is not built yet. Use the main page.".
+3. Open: start `uv run saley dev`, sign in, and open http://localhost:8090/ (hash routes: `/#today`, `/#people` ...). Since the cut-over (R5 T16b, D224) `/` is this app; the legacy static page and `/next` are gone.
+   Without a build, `/` answers "The dashboard is not built yet. Run the web build.".
+   Browser QA runs every check (R1.1 to R5) on `/` in one run: `uv run python scripts/browser_qa.py --base http://localhost:8090 --release R5 --widths 1440` (one width per process on this laptop, D142).
 4. Dev loop: run `npm --prefix web run build -- --watch` in a second terminal beside `uv run saley dev`, and reload the page after a save. There is no Vite dev server, so the CSP and the Host-port check stay as in production. Stop the watch before you run pytest (D142).
 5. Checks: `npm --prefix web run lint` (ESLint; all visible text comes from `web/src/words.ts`) and `npm --prefix web run typecheck`. Gate step 1 runs both and fails when the build stamp is older than `web/` ("Run npm --prefix web run build").
 6. Docker builds `web/` in a Node stage (`node:24-bookworm-slim`, pinned by digest); the run image only copies `dist/`.

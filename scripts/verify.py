@@ -51,6 +51,17 @@ RELEASE_RE = re.compile(r"^R\d+(\.\d+)*$")
 ALLOWED_POST = re.compile(
     r"^/api/(act|undo/\d+|decision/\d+/confirm|proposal/\d+/(dismiss|edit)|commitment/\d+/done|admin/news/run)$"
 )
+# R5 T16a (R5-K01, R5-K02): when the R5 app ran its click path, step 9 also needs these presses
+# (the `data-act` names of the new app) and one admin "Run news now" POST among the controls.
+R5_STEP9_KINDS = frozenset({"done", "undo", "commitment-done", "run-news"})
+# T16b review L2: since the cut-over the one run on `/` also holds the R2/R3 presses
+# (browser_qa core.CONTROL_KINDS minus the R5 ones), and step 9 demands them itself.
+R2_STEP9_KINDS = frozenset({"confirm", "primary", "dismiss", "add"})
+R5_GROUP_MARKS = ("commitment_owner_toast", "run_news_now")  # named checks only the R5 app runs
+NEWS_RUN_POST_PATH = "/api/admin/news/run"
+# browser_qa.py `app`: "/" is the one app since the cut-over (D224); "next" was the strangler's
+# R5 run (D147), kept so an older record still reads as an R5 run.
+R5_APP_NAMES = frozenset({"/", "next"})
 # One more known POST is not a control (R3, D75): after a list is drawn, the page tells Saley which
 # items it showed. It has no button, so it is counted apart (`seen_posts`) and has one fixed path.
 SEEN_POST_PATH = "/api/seen"
@@ -145,6 +156,11 @@ def step_static(_: argparse.Namespace) -> Result:
     )
 
 
+def web_deps_installed() -> bool:
+    """True when `npm --prefix web ci` has run (its own function, so tests can stub it)."""
+    return (ROOT / "web" / "node_modules").is_dir()
+
+
 def web_checks() -> str | None:
     """The dashboard v2 part of step 1 (R5, D144, D145): eslint, tsc, then the build stamp.
 
@@ -155,7 +171,7 @@ def web_checks() -> str | None:
     npm = shutil.which("npm")
     if npm is None:
         return "npm not found: install Node 24 (web/.nvmrc), then npm --prefix web ci"
-    if not (ROOT / "web" / "node_modules").is_dir():
+    if not web_deps_installed():
         return "web/node_modules is missing: run npm --prefix web ci"
     for name, script in (("eslint", "lint"), ("tsc", "typecheck")):
         code, out = run([npm, "--prefix", "web", "run", script])
@@ -605,43 +621,23 @@ def free_ram_mb() -> int | None:
     return None
 
 
-# The R5 browser checks (tests/matrix/R5.yaml, tool browser) run on the new app. During the
-# strangler (D147) it lives at /next, so the gate adds a run with `--app next`.
-# T16 cut-over: set to "" so the R5 checks run on / (then no extra run is made here).
-R5_APP_ENTRY = "next"
-R5_FIRST = (5,)  # releases from R5 on run the R5 group too (release_key("R5") == (5,))
-
-
-def runs_r5_group(release: str) -> bool:
-    """True from R5 on while the R5 app has its own entry (D147). A bad id gives False."""
-    try:
-        key = release_key(release)
-    except ValueError:
-        return False
-    return bool(R5_APP_ENTRY) and key >= R5_FIRST
-
-
 def run_browser_qa(
     base: str, release: str, low: bool, env: dict[str, str] | None = None
 ) -> tuple[int, str]:
     """One browser run, or (low memory, D112) one browser process per width, merged.
 
-    From R5 on, the same again with `--app <R5_APP_ENTRY>` for the R5 checks, merged into the
-    one result. `env` points the QA seed and the seen-mark check at the gate's database (D113).
+    Since the cut-over (T16b, D224) one run on `/` covers the R1.1-R5 checks; there is no
+    second `--app` run. `env` points the QA seed and the seen-mark check at the gate's database
+    (D113).
     """
     cmd = [sys.executable, "scripts/browser_qa.py", "--base", base, "--release", release]
-    apps = [cmd]
-    if runs_r5_group(release):
-        apps.append([*cmd, "--app", R5_APP_ENTRY])
+    if not low:
+        return run(cmd, timeout=1800, env=env)
     parts = []
-    for app in apps:
-        if not low:
-            parts.append(run(app, timeout=1800, env=env))
-            continue
-        for i, width in enumerate(QA_WIDTHS):
-            extra = ["--widths", str(width)] + (["--views-only"] if i else [])
-            parts.append(run([*app, *extra], timeout=1800, env=env))
-    return parts[0] if len(parts) == 1 else merge_qa(parts)
+    for i, width in enumerate(QA_WIDTHS):
+        extra = ["--widths", str(width)] + (["--views-only"] if i else [])
+        parts.append(run([*cmd, *extra], timeout=1800, env=env))
+    return merge_qa(parts)
 
 
 def merge_notes(runs: list[dict]) -> dict[str, list[str]]:
@@ -678,6 +674,14 @@ def merge_qa(parts: list[tuple[int, str]]) -> tuple[int, str]:
         "seen_posts": [x for q in runs for x in q.get("seen_posts", [])],
         "ask_posts": [x for q in runs for x in q.get("ask_posts", [])],
         "act_posts": sum(int(q.get("act_posts", 0)) for q in runs),
+        "act_kinds": sorted({str(k) for q in runs for k in q.get("act_kinds", [])}),
+        "waived": {
+            str(k): str(v)
+            for q in runs
+            if isinstance(q.get("waived"), dict)
+            for k, v in q["waived"].items()
+        },
+        "apps": sorted({str(q["app"]) for q in runs if q.get("app")}),
         "sign_ins": sum(int(q.get("sign_ins", 0)) for q in runs),  # D162, one run per width
         "named": named,
         "notes": merge_notes(runs),
@@ -797,6 +801,47 @@ def stray_ask(ask_posts: list[str]) -> list[str]:
     return stray
 
 
+def ran_r5_app(qa: dict) -> bool:
+    """True when the browser run was against the R5 app: a run with `app` "/" (or the
+    strangler's "next"; merged: `apps`), or the R5 named checks in the result. A skipped check
+    cannot hide the R5 run."""
+    apps = qa.get("apps") if isinstance(qa.get("apps"), list) else [qa.get("app")]
+    named = qa.get("named") if isinstance(qa.get("named"), dict) else {}
+    return bool(R5_APP_NAMES & set(apps)) or any(mark in named for mark in R5_GROUP_MARKS)
+
+
+def waived_presses(qa: dict) -> dict[str, str]:
+    """Presses a check could not make by design (kind -> reason), e.g. Run news now while a
+    request is open. Step 9 does not demand them and names them in its note."""
+    raw = qa.get("waived")
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): str(v) for k, v in raw.items() if k in R5_STEP9_KINDS and str(v).strip()}
+
+
+def r5_click_problems(qa: dict, non_get: list[str]) -> list[str]:
+    """R5-K02: when the R5 app ran, the R5 presses all happened and one of them was the admin
+    POST /api/admin/news/run, unless that press was waived with a reason. Before R5 nothing."""
+    if not ran_r5_app(qa):
+        return []
+    kinds = qa.get("act_kinds")
+    if not isinstance(kinds, list):
+        return ["browser QA gave no list of pressed controls"]
+    waived = waived_presses(qa)
+    problems = []
+    pressed = {str(k) for k in kinds}
+    missing = sorted(R5_STEP9_KINDS - pressed - set(waived))
+    if missing:
+        problems.append(f"R5 controls never pressed: {missing}")
+    older = sorted(R2_STEP9_KINDS - pressed)
+    if older:
+        problems.append(f"R2 controls never pressed: {older}")
+    paths = [urlsplit(entry.partition(" ")[2]).path for entry in non_get]
+    if "run-news" not in waived and NEWS_RUN_POST_PATH not in paths:
+        problems.append(f"no press reached POST {NEWS_RUN_POST_PATH}")
+    return problems
+
+
 def click_path_result(qa: dict, clicks: list[str], ship: bool) -> Result:
     """Step 9: allowed POSTs only, each from a [data-act] control; no form, no submit button.
 
@@ -827,11 +872,18 @@ def click_path_result(qa: dict, clicks: list[str], ship: bool) -> Result:
         problems.append(
             f"{len(non_get)} non-GET requests but {qa.get('act_posts')} control presses"
         )
+    problems += r5_click_problems(qa, non_get)
     if ship and not problems:
         seen_note = f"; {len(seen_posts)} seen marks after list render" if seen_posts else ""
         seen_note += f"; {len(ask_posts)} Ask questions" if ask_posts else ""
         sign_ins = qa.get("sign_ins")
         seen_note += f"; {sign_ins} sign-in" if type(sign_ins) is int else ""  # not a JSON true
+        if ran_r5_app(qa):
+            waived = waived_presses(qa)
+            pressed = sorted(R5_STEP9_KINDS - set(waived))
+            seen_note += f"; R5 presses: {', '.join(pressed)}"
+            seen_note += "" if "run-news" in waived else " and Run news now"
+            seen_note += "".join(f"; {k} not pressed: {why}" for k, why in sorted(waived.items()))
         return Result(
             9,
             "PASS",

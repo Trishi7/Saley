@@ -608,50 +608,33 @@ def test_d112_low_memory_runs_one_browser_process_per_width(
     ]
 
 
-def test_r5_gate_adds_the_next_app_run_one_width_per_process(
+def test_one_browser_run_on_the_one_app_after_the_cut_over(
     verify: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """From R5 on the gate also runs `--app next` (D147, T12 review), merged into one result;
-    under low memory each app runs one width per process. R1.1-R4 runs stay as they were."""
+    """Since the cut-over (D224) the gate makes one browser run on `/` for every release: no
+    `--app` run is added; under low memory it is one width per process (D112), merged."""
     calls: list[list[str]] = []
 
     def fake_run(cmd: list[str], timeout: int, env: dict | None = None) -> tuple[int, str]:
         calls.append(cmd)
-        app = cmd[cmd.index("--app") + 1] if "--app" in cmd else "legacy"
-        return 0, qa_line(named={f"views_{app}": True}, notes={"pagers": [app]})
+        return 0, qa_line(app="/", named={"views": True}, notes={"pagers": [cmd[-1]]})
 
     monkeypatch.setattr(verify, "run", fake_run)
-    assert verify.R5_APP_ENTRY == "next"
-    assert [verify.runs_r5_group(r) for r in ("R1.1", "R4", "R5", "R5.1", "R10", "bad")] == [
-        False,
-        False,
-        True,
-        True,
-        True,
-        False,
+    assert not hasattr(verify, "R5_APP_ENTRY") and not hasattr(verify, "runs_r5_group")
+    for release in ("R4", "R5", "R5.1"):
+        calls.clear()
+        verify.run_browser_qa(BASE, release, low=False)
+        assert len(calls) == 1 and "--app" not in calls[0], release
+    calls.clear()
+    code, out = verify.run_browser_qa(BASE, "R5", low=True)
+    assert [c[c.index("--widths") :] for c in calls] == [
+        ["--widths", "1440"],
+        ["--widths", "1024", "--views-only"],
+        ["--widths", "390", "--views-only"],
     ]
-    code, out = verify.run_browser_qa(BASE, "R5", low=False)
-    assert [c.count("--app") for c in calls] == [0, 1]
-    assert calls[1][calls[1].index("--app") + 1] == "next"
+    assert all("--app" not in c for c in calls)
     merged = json.loads(out)
-    assert code == 0 and merged["named"] == {"views_legacy": True, "views_next": True}
-    assert merged["notes"] == {"pagers": ["legacy", "next"]}
-    calls.clear()
-    verify.run_browser_qa(BASE, "R5", low=True)
-    shape = [("--app" in c, c[c.index("--widths") :]) for c in calls]
-    assert shape == [
-        (False, ["--widths", "1440"]),
-        (False, ["--widths", "1024", "--views-only"]),
-        (False, ["--widths", "390", "--views-only"]),
-        (True, ["--widths", "1440"]),
-        (True, ["--widths", "1024", "--views-only"]),
-        (True, ["--widths", "390", "--views-only"]),
-    ]
-    # T16 flips one switch: then no extra /next run is made.
-    monkeypatch.setattr(verify, "R5_APP_ENTRY", "")
-    calls.clear()
-    verify.run_browser_qa(BASE, "R5", low=False)
-    assert len(calls) == 1 and "--app" not in calls[0]
+    assert code == 0 and merged["apps"] == ["/"] and merged["named"] == {"views": True}
 
 
 def test_merge_keeps_notes_and_the_step_note_shows_them(verify: ModuleType) -> None:
@@ -965,6 +948,8 @@ def _web_run(verify: ModuleType, monkeypatch: pytest.MonkeyPatch, codes: dict[st
 
     monkeypatch.setattr(verify, "run", fake_run)
     monkeypatch.setattr(verify.shutil, "which", lambda name: "/bin/npm")
+    # A CI runner may have no web/node_modules: stub it like eslint and tsc (no npm runs).
+    monkeypatch.setattr(verify, "web_deps_installed", lambda: True)
     return calls
 
 
@@ -991,7 +976,7 @@ def test_step_1_fails_on_a_stale_or_missing_build(
     assert "Run npm --prefix web run build" in result.note
 
 
-def test_step_1_fails_on_eslint_or_tsc_or_no_npm(
+def test_step_1_fails_on_eslint_or_tsc_or_no_npm_or_no_install(
     verify: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(verify.build_stamp, "check", lambda: SimpleNamespace(ok=True, note="ok"))
@@ -999,6 +984,10 @@ def test_step_1_fails_on_eslint_or_tsc_or_no_npm(
     assert verify.step_static(SimpleNamespace()).note.startswith("eslint:")
     _web_run(verify, monkeypatch, {"typecheck": 2})
     assert verify.step_static(SimpleNamespace()).note.startswith("tsc:")
+    _web_run(verify, monkeypatch, {})
+    monkeypatch.setattr(verify, "web_deps_installed", lambda: False)
+    result = verify.step_static(SimpleNamespace())
+    assert result.status == "FAIL" and "npm --prefix web ci" in result.note
     _web_run(verify, monkeypatch, {})
     monkeypatch.setattr(verify.shutil, "which", lambda name: None)
     result = verify.step_static(SimpleNamespace())
@@ -1021,3 +1010,133 @@ def test_fingerprint_reads_web_sources_but_not_installs_builds_or_keys(
         path.write_text("x", encoding="utf-8")
     names = [p.relative_to(tmp_path).as_posix() for p in verify.code_files(tmp_path / "web")]
     assert names == ["web/package-lock.json", "web/src/App.tsx"]
+
+
+# ------------------------------------------------------------------ R5 T16a: step 9 on the new app
+
+R5_NAMED = {"views": True, "commitment_owner_toast": True, "run_news_now": True, "click_path": True}
+R5_POSTS = [
+    f"POST {BASE}/api/act",
+    f"POST {BASE}/api/undo/12",
+    f"POST {BASE}/api/commitment/5/done",
+    f"POST {BASE}/api/commitment/6/done",  # the non-owner press: 403, still one press
+    f"POST {BASE}/api/undo/13",
+    f"POST {BASE}/api/admin/news/run",
+]
+R5_KINDS = [
+    "add",
+    "commitment-done",
+    "commitment-refused",
+    "confirm",
+    "dismiss",
+    "done",
+    "primary",
+    "run-news",
+    "undo",
+]
+
+
+@pytest.mark.parametrize("gone", ["confirm", "primary", "dismiss", "add"])
+def test_step_9_fails_when_an_r2_press_is_missing(verify: ModuleType, gone: str) -> None:
+    """T16b review L2: the one run on `/` must also hold every R2/R3 press; step 9 itself
+    demands them (not only the browser check), and a waiver of R5 kinds never covers them."""
+    browser_kinds = {"done", "undo", "confirm", "primary", "dismiss", "commitment-done", "add"}
+    assert browser_kinds <= verify.R2_STEP9_KINDS | verify.R5_STEP9_KINDS  # core.CONTROL_KINDS
+    kinds = [k for k in R5_KINDS if k != gone]
+    out = qa_json(
+        non_get=R5_POSTS,
+        act_posts=len(R5_POSTS),
+        act_kinds=kinds,
+        named=R5_NAMED,
+        waived={gone: "no reason counts"},
+    )
+    _, r9 = verify.browser_results(0, out)
+    assert r9.status == "FAIL" and f"R2 controls never pressed: ['{gone}']" in r9.note
+
+
+def test_step_9_allows_the_admin_news_run_post_as_a_control(verify: ModuleType) -> None:
+    """D150: "Run news now" is a control POST; any other admin path or a query is not."""
+    assert verify.stray_requests([f"POST {BASE}/api/admin/news/run"]) == []
+    bad = [
+        f"POST {BASE}/api/admin/news/run?x=1",
+        f"POST {BASE}/api/admin/news",
+        f"POST {BASE}/api/admin/news/run/extra",
+        f"POST {BASE}/api/admin/other",
+        f"GET {BASE}/api/admin/news/run",
+        f"PUT {BASE}/api/admin/news/run",
+    ]
+    assert verify.stray_requests(bad) == bad
+
+
+def test_step_9_passes_the_r5_click_path_with_every_r5_press(verify: ModuleType) -> None:
+    out = qa_json(non_get=R5_POSTS, act_posts=len(R5_POSTS), act_kinds=R5_KINDS, named=R5_NAMED)
+    _, r9 = verify.browser_results(0, out)
+    assert r9.status == "PASS", r9.note
+    assert "R5 presses" in r9.note and "Run news now" in r9.note
+
+
+@pytest.mark.parametrize("gone", ["done", "undo", "commitment-done", "run-news"])
+def test_step_9_fails_when_an_r5_press_is_missing(verify: ModuleType, gone: str) -> None:
+    kinds = [k for k in R5_KINDS if k != gone]
+    out = qa_json(non_get=R5_POSTS, act_posts=len(R5_POSTS), act_kinds=kinds, named=R5_NAMED)
+    _, r9 = verify.browser_results(0, out)
+    assert r9.status == "FAIL" and gone in r9.note
+
+
+def test_step_9_fails_the_r5_run_without_the_admin_post_or_the_kinds(verify: ModuleType) -> None:
+    posts = R5_POSTS[:-1]
+    out = qa_json(non_get=posts, act_posts=len(posts), act_kinds=R5_KINDS, named=R5_NAMED)
+    _, r9 = verify.browser_results(0, out)
+    assert r9.status == "FAIL" and "/api/admin/news/run" in r9.note
+    out = qa_json(non_get=R5_POSTS, act_posts=len(R5_POSTS), named=R5_NAMED)  # no act_kinds
+    _, r9 = verify.browser_results(0, out)
+    assert r9.status == "FAIL" and "no list of pressed controls" in r9.note
+
+
+def test_step_9_before_r5_needs_no_r5_press(verify: ModuleType) -> None:
+    """A run without the R5 named checks (the legacy app, R1.1-R4) keeps the old rule."""
+    _, r9 = verify.browser_results(0, qa_json())
+    assert r9.status == "PASS" and "R5 presses" not in r9.note
+
+
+def test_merge_keeps_the_pressed_kinds_of_every_run(verify: ModuleType) -> None:
+    legacy = qa_line(act_kinds=["primary", "dismiss"], named={"click_path": True})
+    r5 = qa_line(act_kinds=["run-news", "done"], named={"run_news_now": True})
+    _, out = verify.merge_qa([(0, legacy), (0, r5), (0, qa_line())])
+    assert json.loads(out)["act_kinds"] == ["dismiss", "done", "primary", "run-news"]
+
+
+def test_step_9_needs_the_r5_presses_whenever_the_run_was_against_next(verify: ModuleType) -> None:
+    """T16a review (LOW): a run on the R5 app (`/` since the cut-over, D224; "next" in an older
+    record) needs the R5 presses even when its named checks are missing, so a skipped check
+    cannot make step 9 pass on nothing."""
+    for app in ("/", "next"):
+        out = qa_json(app=app, act_kinds=[], named={"views": True})
+        _, r9 = verify.browser_results(0, out)
+        assert r9.status == "FAIL" and "R5 controls never pressed" in r9.note, app
+    _, merged = verify.merge_qa([(0, qa_line(app="legacy")), (0, qa_line(app="next"))])
+    assert json.loads(merged)["apps"] == ["legacy", "next"]
+    _, r9 = verify.browser_results(0, merged)
+    assert r9.status == "FAIL" and "R5 controls never pressed" in r9.note
+    _, r9 = verify.browser_results(0, qa_json(app="legacy"))
+    assert r9.status == "PASS"
+
+
+def test_step_9_waives_run_news_only_with_a_reason_it_shows(verify: ModuleType) -> None:
+    """T16a review: Run news now off by design (a request is open) is not demanded, and the
+    reason reaches the step 9 note; an empty reason or another kind waives nothing."""
+    posts = R5_POSTS[:-1]
+    kinds = [k for k in R5_KINDS if k != "run-news"]
+    why = "open request; button off as designed"
+    common = {"non_get": posts, "act_posts": len(posts), "act_kinds": kinds, "named": R5_NAMED}
+    _, r9 = verify.browser_results(0, qa_json(**common, waived={"run-news": why}))
+    assert r9.status == "PASS", r9.note
+    assert f"run-news not pressed: {why}" in r9.note and "and Run news now" not in r9.note
+    _, r9 = verify.browser_results(0, qa_json(**common, waived={"run-news": " "}))
+    assert r9.status == "FAIL"
+    _, r9 = verify.browser_results(0, qa_json(**common, waived={"other": why}))
+    assert r9.status == "FAIL"
+    _, merged = verify.merge_qa(
+        [(0, qa_line(waived={"run-news": why})), (0, qa_line(waived="bad"))]
+    )
+    assert json.loads(merged)["waived"] == {"run-news": why}

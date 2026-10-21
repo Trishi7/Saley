@@ -602,3 +602,10 @@ rows:
     tool: pytest
     command: pytest tests/test_qa_browser.py::test_load_error_and_view_as_rules
     pass: test passes
+  - id: R5-X06
+    feature: F-R5-19
+    layer: guardrails
+    what: CI green on a fresh runner with Node - the test job sets up Node 24, runs npm --prefix web ci, then web lint, type check and unit tests before pytest; the gate step 1 tests stub web/node_modules
+    tool: pytest
+    command: pytest tests/test_ci.py::test_ci_has_node_and_the_web_checks_before_pytest tests/test_verify.py::test_step_1_fails_on_eslint_or_tsc_or_no_npm_or_no_install
+    pass: tests pass

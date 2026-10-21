@@ -1,4 +1,8 @@
-"""Per-user seen (R3-U01, D75): seen is per person, a list says how many it left out.
+"""Per-user seen (R3-U01, D75): seen is per person, a list counts the seen items it left out.
+
+D157 removed the "N you saw are left out" line from the page and D224 (the cut-over) removed
+`left_out_note` and `include_seen` from the API: the count `left_out_seen` and the Seen earlier
+tab (`view=seen`) carry the same facts.
 
 The page posts the ids it showed. The function that records them is the only door the web role
 has to `user_seen`; these tests also guard that door with abuse cases.
@@ -44,7 +48,8 @@ def listed(client: TestClient, who: dict[str, str], path: str = "/api/signals") 
 
 
 def test_seen_is_per_user_with_left_out_count(client: TestClient, synced: Session) -> None:
-    """R3-U01: A sees, B still sees, A gets "left out 1 you saw"."""
+    """R3-U01: A sees, B still sees, A gets "left out 1 you saw": `left_out_seen` 1 and the item
+    in A's Seen earlier tab (the words line went with D157 and D224; see Q-R5-12)."""
     one = add_story(synced, "First market story", importance=3)
     two = add_story(synced, "Second market story", importance=2)
 
@@ -57,15 +62,14 @@ def test_seen_is_per_user_with_left_out_count(client: TestClient, synced: Sessio
     a = listed(client, SID)
     assert [i["id"] for i in a["items"]] == [two.id]
     assert a["left_out_seen"] == 1 and a["total"] == 1
-    assert a["left_out_note"] == "1 you saw is left out. Show it."
+    assert "left_out_note" not in a and a["seen_total"] == 1
     b = listed(client, VAISHNAVI)
     assert {i["id"] for i in b["items"]} == {one.id, two.id}  # B still sees both
-    assert b["left_out_seen"] == 0 and b["left_out_note"] is None
+    assert b["left_out_seen"] == 0 and b["seen_total"] == 0
 
-    shown = listed(client, SID, "/api/signals?include_seen=true")
-    assert {i["id"] for i in shown["items"]} == {one.id, two.id}
-    assert {i["id"]: i["seen"] for i in shown["items"]} == {one.id: True, two.id: False}
-    assert shown["left_out_seen"] == 0
+    earlier = listed(client, SID, "/api/signals?view=seen")
+    assert [(i["id"], i["seen"]) for i in earlier["items"]] == [(one.id, True)]
+    assert earlier["left_out_seen"] == 0
     rows = synced.execute(
         text("select user_short, item_type, item_id, query_id from v_user_seen")
     ).all()
@@ -107,7 +111,7 @@ def test_linked_events_and_suggestions_have_their_own_seen(
     assert mark(client, SID, "suggest_newco", [account]).status_code == 200
     newco = listed(client, SID, "/api/suggest/newco")
     assert newco["items"] == [] and newco["left_out_seen"] == 1
-    assert listed(client, SID, "/api/suggest/newco?include_seen=true")["items"][0]["seen"] is True
+    assert listed(client, SID, "/api/suggest/newco?view=seen")["items"][0]["seen"] is True
     assert len(listed(client, VAISHNAVI, "/api/suggest/newco")["items"]) == 1
 
 

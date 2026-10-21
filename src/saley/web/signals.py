@@ -113,10 +113,6 @@ def news_meta(conn: Connection) -> dict[str, Any]:
     }
 
 
-def left_out(count: int) -> str | None:
-    return w.fill_count(w.LEFT_OUT_ONE, w.LEFT_OUT, count) if count else None
-
-
 def checked_day(day: date | None) -> date | None:
     """A `day` filter must lie within 5 years of today (A2). Else the date maths overflows."""
     if day is None:
@@ -301,13 +297,12 @@ def signals(
     entity: EntityText = None,
     min_importance: Annotated[int | None, Query(ge=1, le=5)] = None,
     linked_only: bool = False,
-    include_seen: bool = False,
     view: seen_tabs.ViewParam = None,
     limit: Limit = DEFAULT_LIMIT,
     offset: Offset = 0,
 ) -> dict[str, Any]:
     me = actor_short(request, user)
-    pl = seen_tabs.plan(view, include_seen)
+    pl = seen_tabs.plan(view)
     limit, offset = pl.page(limit, offset)
     window, start, end = range_window(range, checked_day(day), now_ist())
     filters = {
@@ -329,7 +324,6 @@ def signals(
         "total": total,
         "window": window,
         "left_out_seen": pl.left_out(seen_n),
-        "left_out_note": left_out(pl.left_out(seen_n)),
         **pl.fields(new_n, seen_n),
         **news_meta(conn),
     }
@@ -384,13 +378,12 @@ def events(
     user: User,
     conn: Db,
     when: Literal["upcoming", "past"] = "upcoming",
-    include_seen: bool = False,
     view: seen_tabs.ViewParam = None,
     limit: Limit = DEFAULT_LIMIT,
     offset: Offset = 0,
 ) -> dict[str, Any]:
     me = actor_short(request, user)
-    pl = seen_tabs.plan(view, include_seen)
+    pl = seen_tabs.plan(view)
     limit, offset = pl.page(limit, offset)
     order = events_model.ORDER_UPCOMING if when == "upcoming" else events_model.ORDER_PAST
     params: dict[str, Any] = {"up": when == "upcoming", "me": me}
@@ -422,7 +415,6 @@ def events(
         "total": pl.total(new_n, seen_n),
         "window": window,
         "left_out_seen": pl.left_out(seen_n),
-        "left_out_note": left_out(pl.left_out(seen_n)),
         **pl.fields(new_n, seen_n),
         **base,
     }
@@ -518,13 +510,12 @@ def suggest(
     request: Request,
     user: User,
     conn: Db,
-    include_seen: bool = False,
     view: seen_tabs.ViewParam = None,
     limit: Limit = DEFAULT_LIMIT,
     offset: Offset = 0,
 ) -> dict[str, Any]:
     me = actor_short(request, user)
-    pl = seen_tabs.plan(view, include_seen)
+    pl = seen_tabs.plan(view)
     limit, offset = pl.page(limit, offset)
     source = SUGGEST_VIEWS[kind]
     # A5: the rank is plain code over the rows, so it cannot be a SQL page. The rows ranked are
@@ -561,7 +552,6 @@ def suggest(
         "empty": w.fill(w.EMPTY_LIST, t=base["last_computed_label"]),
         "window": sheet_window(base),
         "left_out_seen": pl.left_out(seen_n),
-        "left_out_note": left_out(pl.left_out(seen_n)),
         **pl.fields(new_n, seen_n),
         "capped": capped,  # silent failure 6: the page says the list is cut
         "capped_note": w.fill(w.SUGGEST_CAPPED, n=SUGGEST_RANK_CAP) if capped else None,
@@ -705,7 +695,6 @@ def needs_look_block(
             "label": w.WINDOW_LOOK,
         },
         "left_out_seen": 0,
-        "left_out_note": None,
     }
 
 
@@ -716,7 +705,6 @@ def saley_suggests_block(conn: Connection, empty: str, me: str | None = None) ->
         "empty": empty,
         "window": sheet_window(meta(conn)),
         "left_out_seen": hidden,
-        "left_out_note": left_out(hidden),
     }
 
 

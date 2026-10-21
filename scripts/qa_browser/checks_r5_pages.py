@@ -2,7 +2,7 @@
 
 goals_cards (R5-G02), accounts_page (R5-A03), people_drawer (R5-P03). A file of its own:
 `checks_r5.py` is near the 800-line ceiling. `checks_r5` imports these names, so the CLI finds
-them with the other R5 checks (`--app next`). The rules live in `r5_rules.py` (pure, tested);
+them with the other R5 checks (run on `/`). The rules live in `r5_rules.py` (pure, tested);
 this file only reads the page. Read only: no check here presses a control that writes.
 """
 

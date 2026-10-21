@@ -2,15 +2,17 @@
 
 T12 (shell and design system): csp_clean (R5-S06), legend_every_page (R5-Q01),
 no_underlined_links (R5-Q02), coming_soon_badges (R5-Q03), themes (R5-Q04), pagers (R5-Q07).
-T13 (Today): today_funnel (R5-T02), no_page_search (R5-T03), done_undo (R5-T09; the legacy
-R2 done_undo stays in checks_r1_r4 for `--app legacy`), needs_look_cards (R5-T13),
-add_email (R5-T16).
+T13 (Today): today_funnel (R5-T02), no_page_search (R5-T03), done_undo (R5-T09, and R2-B01
+since the cut-over: D204 Undo in place), needs_look_cards (R5-T13), add_email (R5-T16).
 T14 (Q4 goals, Accounts, People): goals_cards (R5-G02), accounts_page (R5-A03), people_drawer
 (R5-P03) live in `checks_r5_pages.py` (this file is near the line ceiling) and are imported here.
 T15 (Signals, Suggestions, Events): seen_tabs (R5-N03), signals_categories (R5-N05),
 events_page (R5-E02) live in `checks_r5_watch.py`, imported here the same way.
-D207 (both apps, `entry` "/" or "/next"): no_view_as (R5-V02), load_error_retry (R5-V01).
-Each check takes `entry`: "/next" during the strangler (D147, `--app next`), "/" after T16.
+T16a (team pages): commitment_owner_toast (R5-C03), run_news_now (R5-N09) and the new app's
+click_path (R5-K01) live in `checks_r5_team.py`, imported here the same way.
+D207: no_view_as (R5-V02), load_error_retry (R5-V01).
+Each check takes `entry`: "/" since the cut-over (T16b, D224; it was "/next" during the
+strangler, D147).
 The rules live in `r5_rules.py` (pure, tested); this file only reads the page.
 """
 
@@ -21,11 +23,15 @@ from collections.abc import Callable
 
 from playwright.sync_api import ConsoleMessage, Locator, Page, Request, Route
 
-from qa_browser.checks_r1_r4 import click_act
 from qa_browser.checks_r5_pages import (  # noqa: F401 (T14 checks, found by the CLI here)
     accounts_page,
     goals_cards,
     people_drawer,
+)
+from qa_browser.checks_r5_team import (  # noqa: F401 (T16a checks, found by the CLI here)
+    click_path,
+    commitment_owner_toast,
+    run_news_now,
 )
 from qa_browser.checks_r5_watch import (  # noqa: F401 (T15 checks, found by the CLI here)
     events_page,
@@ -40,6 +46,8 @@ from qa_browser.core import (
     SETTLE_MS,
     WIDE,
     Run,
+    api_items,
+    click_act,
     rail_names,
     settle,
     today_list_of,
@@ -480,6 +488,16 @@ def done_undo(page: Page, base: str, run: Run, entry: str) -> None:
         done_undo_on_sid(page, base, run, entry)
 
 
+def _reconnect_rows(page: Page, base: str, undo: str) -> list[dict]:
+    """task_done rows of the seeded reconnect task signed by the QA user ('' = any undo state)."""
+    query = f"/api/decisions?person={QA_USER}&limit=200" + (f"&undo={undo}" if undo else "")
+    return [
+        d
+        for d in api_items(page, base, query)
+        if d.get("kind") == "task_done" and d.get("person") == "QA Seed Reconnect"
+    ]
+
+
 def done_undo_on_sid(page: Page, base: str, run: Run, entry: str) -> None:
     open_today(page, base, entry)
     audit_today_controls(page, run)
@@ -490,8 +508,13 @@ def done_undo_on_sid(page: Page, base: str, run: Run, entry: str) -> None:
     if not run.expect(done.count() == 1, "done_undo: the seeded task has no Done"):
         return
     done.evaluate("(b) => b.setAttribute('data-qa-pressed', '1')")
+    before = {d.get("id") for d in _reconnect_rows(page, base, "")}
     if click_act(page, run, done, "done") is None:
         return
+    # R2-B01 (T16b review M2): exactly one NEW open task_done row for this task, signed by the
+    # QA user (the person filter); older rows of earlier runs cannot satisfy it.
+    opened = [d for d in _reconnect_rows(page, base, "open") if d.get("id") not in before]
+    run.expect(len(opened) == 1, f"done_undo: {len(opened)} new open Done rows, want 1")
     row = page.locator("#tasks li.task", has_text="QA Seed Reconnect")
     problems = undo_row_problems(row.evaluate(UNDO_FACTS))
     run.expect(not problems, f"done_undo: {problems}")
@@ -504,6 +527,12 @@ def done_undo_on_sid(page: Page, base: str, run: Run, entry: str) -> None:
     run.expect(not problems, f"done_undo: {problems}")
     back = row.locator('[data-act="done"]:not([aria-disabled="true"])').count()
     run.expect(back == 1, "done_undo: Done did not come back after Undo")
+    # R2-B01: Undo marked exactly that row undone, and no Done row of this task stays open.
+    ids = {d.get("id") for d in opened}
+    gone = [d for d in _reconnect_rows(page, base, "undone") if d.get("id") in ids]
+    run.expect(len(opened) == 1 and len(gone) == 1, "done_undo: the Done row is not undone")
+    still = [d for d in _reconnect_rows(page, base, "open") if d.get("id") in ids]
+    run.expect(not still, "done_undo: the Done row is still open after Undo")
     run.notes["done_undo"] = ["Done -> Undo in place -> Done on 'QA Seed Reconnect'"]
 
 
@@ -569,10 +598,10 @@ def add_email_on_vaishnavi(page: Page, run: Run, base: str, entry: str, email_on
     run.notes["add_email"] = [f"email_write {'on' if email_on else 'off'}; nothing saved"]
 
 
-# ---------------------------------------------------------------- D207: both apps
+# ---------------------------------------------------------------- D207: top bar
 
 STATUS_API = re.compile(r"/api/status(?:\?|$)")
-TOP_RETRY = ".topbar [data-retry]:visible, header [data-retry]:visible"  # legacy, then /next
+TOP_RETRY = "header [data-retry]:visible"
 # The removed picker was pressable person Buttons in a header (#who, aria-pressed). People and
 # goal rows also carry `data-person` as a row hook (T14); they open a drawer and are not a picker.
 VIEW_AS_HOOKS = (

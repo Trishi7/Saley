@@ -37,6 +37,14 @@ reach the real sheet. So the check seeds its own rows and removes them again:
   the seed is active (`sync.qa_seed_active`: user `qa` exists, under 6 h old); a stale one
   is removed.
   Teardown removes the events, their metric rows and their seen marks.
+- R5 T16a (commitment_owner_toast, R5-C03): a second `qa:` promise owned by another team member
+  (Kushal, as the seeded decisions), with NO due day: no reminder is ever planned for it, it is
+  no Today task and it is not in the pack. The QA user presses Done on it and must get the
+  owner's 403 line; nothing is written.
+- R5 T16a (run_news_now, R5-N09): a throwaway ADMIN `qaadmin` ("QA Seed Admin"). The check
+  sends "Run news now" as this person, so the request row is signed by a QA user and never by
+  the real admin. `teardown` deletes its requests first, then the user. The gate's worker slot
+  never registers the job that runs a request (D151), so the gate fetches no news.
 - Dev only: the seed refuses to run when SALEY_ENV is not dev.
 """
 
@@ -76,6 +84,12 @@ NAMES = {
 }
 DECISIONS = (f"{PREFIX}D1", f"{PREFIX}D2")
 COMMITMENT_TEXT = f"{PREFIX} send the QA note"
+# R5 T16a: a promise of another person (D155: only its owner may mark it done).
+OTHER_COMMITMENT_TEXT = f"{PREFIX} a promise of another person"
+OTHER_OWNER = "kushal"
+# R5 T16a: the throwaway admin that signs "Run news now" in the browser check (D150).
+QA_ADMIN = "qaadmin"
+QA_ADMIN_NAME = "QA Seed Admin"
 # A Monday long ago: /api/pack shows the newest pack, so a real pack always wins. Without a
 # pack the page loads a 404, and the browser logs it as a console error (R4-B02).
 QA_PACK_WEEK = date(2000, 1, 3)
@@ -162,13 +176,46 @@ class SeedInfo:
     stories: list[int] = field(default_factory=list)
     account: int | None = None
     events: list[int] = field(default_factory=list)
+    other_commitment: int | None = None  # R5 T16a: owned by another team member
 
     def summary(self) -> str:
         return (
             f"{len(self.contacts)} people · {len(self.cards)} cards · "
-            f"{len(self.decisions)} decisions · 1 commitment · "
+            f"{len(self.decisions)} decisions · "
+            f"{1 + (self.other_commitment is not None)} commitments · "
             f"{len(self.stories)} stories · 1 company · {len(self.events)} events"
         )
+
+
+def hide_other_news(session: Session) -> int:
+    """Mark every story and signal that is NOT a QA row as seen by the QA user only.
+
+    Why (R5 T16b, D226): the new Signals page shows New 10 a page, ranked. Real stories of the
+    gate database can push a seeded story past the first page, and `signals_pages` must find
+    both seeded stories on New. The rows belong to the QA user (`teardown` deletes all of its
+    `user_seen` rows); nobody real is marked (A11). Returns the rows added.
+
+    Only on a database whose name ends in `_test` (the gate's, D113): run by mistake against
+    the dev database it would add one seen row per real story for the QA user (T16b review).
+    """
+    database = session.execute(text("select current_database()")).scalar_one()
+    if not str(database).endswith("_test"):
+        raise RuntimeError(f"hide_other_news runs only on a _test database, not {database}")
+    added = 0
+    for item_type, ids in (
+        ("story", f"select id from news_stories where id not in ({STORIES})"),
+        ("signal", f"select id from signal where id not in ({SIGNALS})"),
+    ):
+        result = session.execute(
+            text(
+                "insert into user_seen (user_id, item_type, item_id, query_id) "
+                f"select ({QA_ID}), :t, x.id, 'qa-setup' from ({ids}) x "
+                "on conflict do nothing"
+            ),
+            {"qa": QA_USER, "t": item_type},
+        )
+        added += result.rowcount or 0
+    return added
 
 
 def reset_seen(session: Session) -> int:
@@ -200,6 +247,7 @@ def teardown(session: Session) -> dict[str, int]:
         "p": LIKE,
         "c": CARD_RE,
         "qa": QA_USER,
+        "qadmin": QA_ADMIN,
         "pw": QA_PACK_WEEK,
         "src": [
             row[0]
@@ -294,6 +342,13 @@ def _qa_user_steps() -> tuple[tuple[str, str], ...]:
         # R4 ticket 10: the Ask card check logs one exchange for the QA user (bot_exchange.user_id).
         ("qa_exchanges", f"delete from bot_exchange where user_id in ({QA_ID})"),
         ("qa_user", "delete from users where short = :qa"),
+        # R5 T16a: the throwaway admin and the news requests it signed.
+        (
+            "qa_news_requests",
+            "delete from news_run_request where requested_by in "
+            "(select id from users where short = :qadmin)",
+        ),
+        ("qa_admin", "delete from users where short = :qadmin"),
     )
 
 
@@ -359,6 +414,10 @@ def seed(session: Session, today: date | None = None) -> SeedInfo:
         text("insert into users (short, name, role) values (:s, :n, 'approver')"),
         {"s": QA_USER, "n": QA_USER_NAME},
     )
+    session.execute(
+        text("insert into users (short, name, role) values (:s, :n, 'admin')"),
+        {"s": QA_ADMIN, "n": QA_ADMIN_NAME},
+    )
     _insert_pack(session, today)
 
     contacts = {
@@ -413,9 +472,19 @@ def seed(session: Session, today: date | None = None) -> SeedInfo:
         ),
         {"t": COMMITMENT_TEXT, "d": today, "o": QA_USER},
     ).scalar_one()
+    other = session.execute(
+        text(
+            "insert into commitment (owner, text, due, source_type) "
+            "select id, :t, null, 'meeting_note' from users where short = :o "
+            "returning id"
+        ),
+        {"t": OTHER_COMMITMENT_TEXT, "o": OTHER_OWNER},
+    ).scalar_one()
     account, stories = _insert_news(session)
     events = _insert_events(session, today)
-    return SeedInfo(contacts, cards, decisions, commitment, stories, account, events)
+    return SeedInfo(
+        contacts, cards, decisions, commitment, stories, account, events, other_commitment=other
+    )
 
 
 def _insert_events(session: Session, today: date) -> list[int]:

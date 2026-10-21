@@ -421,7 +421,7 @@ def test_only_https_links_become_hrefs(client: TestClient, synced: Session) -> N
         "day=2026-13-45",
         "limit=1001",
         "offset=-1",
-        "include_seen=maybe",
+        "include_seen=true",  # removed at the cut-over (D224): unknown, so refused
         "debug=1",
     ],
 )
@@ -581,7 +581,7 @@ def test_suggest_newco_and_res(
     assert {"res_paper", "topic"} <= parts
 
     assert client.get("/api/suggest/nope").status_code == 422
-    assert client.get("/api/suggest/warm?include_seen=2").status_code == 422
+    assert client.get("/api/suggest/warm?include_seen=true").status_code == 422  # gone (D224)
     assert client.get("/api/suggest/warm?debug=1").status_code == 422
 
 

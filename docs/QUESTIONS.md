@@ -2,7 +2,30 @@
 
 (newest first)
 
-## Q-R5-10 · 2026-10-21 · R5 T15 · Signals, Suggestions, Events, Blockers, Money, Search
+## Q-R5-13 · 2026-10-21 · R5 T16b · The cut-over (resolved)
+- **Answer (Trishi, 21 Oct, chat):** D224–D226 confirmed; /next as 404 is right (D228). **Resolved.**
+- decision needed: what `/next` does after the cut-over, and what is left of `static/`; took: `/` serves the app, `/next` is a 404, only `/static/signin.css` is served by name; `include_seen` and `left_out_note` leave the API, `left_out_seen` stays as a count (D224); why: the plan deletes `/next` and the legacy static app; a redirect would keep a dead path alive; the count is still true and costs nothing.
+- decision needed: the news funnel links of Sources and health opened nothing on the new page; took: port the legacy per-source card with "Showing: <step>" (D225); why: a number that opens nothing breaks D73, and the R3 check reads that line.
+- decision needed: how the gate runs browser QA after the cut-over; took: one run on `/` with every R1.1–R5 check, `--app` removed, the R5 click path also presses the R2 Inbox Primary, the QA user sees real news as "seen" before `signals_pages` (D226); why: one app, one run; the New tab shows 10 a page, so real news must not push the seeded stories off the first page.
+- for the human: `git rm` the legacy files (tracked; nothing serves or tests them now): `src/saley/web/static/act.js`, `app.css`, `app.js`, `ask.js`, `index.html`, `pack.js`, `signals.js`, `team.js`, `words.js`. Keep `src/saley/web/static/signin.css` (new, untracked: `git add` it).
+
+## Q-R5-12 · 2026-10-21 · R5 T16b · matrix rows whose wording predates a decision (resolved)
+- **Answer (Trishi, 21 Oct, chat):** yes, row text of R2-B01 and R3-U01 updated as proposed (D227, D228). **Resolved.**
+No row was edited (docs/16). The checks verify the decided behaviour and name the decision (D227). Approve a text update for these rows?
+- R2-B01 (`browser done_undo`): "click-path Done -> toast -> Undo restores". Since D204 Undo is in place in the same button, with no toast and no timer. Proposed text: "click-path Done -> Undo in place -> Undo restores".
+- R3-U01 (`pytest tests/test_seen.py::test_seen_is_per_user_with_left_out_count`): "A gets 'left out 1 you saw'". D157 removed the line from the page and D224 the `left_out_note` field; the test checks `left_out_seen` 1 and the item in A's Seen earlier tab. Proposed text: "seen per user - A sees, B still sees, A's list counts 1 seen item and shows it in Seen earlier".
+- For information (row text still true, the steps changed by decision): R1.1-B01 tiles (D202, 4 tiles and the funnel bars), R2-B03 step 9 (D220, a done promise turns into Undo in place instead of leaving the open list), R3-B01 `signals_pages` (D157, D158, D164, D202, D204, D216, D225; see D227).
+
+## Q-R5-11 · 2026-10-21 · R5 T16a · Team pages on /next (resolved)
+- **Answer (Trishi, 21 Oct, chat):** D220–D223 confirmed (D228). **Resolved.**
+- decision needed: which controls and hooks the team pages use; took: the legacy POSTs and `data-act` names, Undo in place for card writes and the owner's Commitment Done, Skip as the card's dismiss label, the legacy ids kept, new `run-news` (D220); why: gate step 9 and the R1.1–R4 checks read these names, and Today already uses Undo in place.
+- decision needed: the numbers, the pack week picker and the news funnel; took: counts per kind and state, Week before/after/Newest by Mondays, totals only when every part is known, funnel on the item steps only (D221); why: the API lists no pack weeks; a sum with a hole is a made-up number; the other news steps count other things.
+- decision needed: what data the owner toast and Run news now checks use; took: a `qa:` promise of Kushal with no due day, a throwaway admin `qaadmin` that signs the news request, its rows deleted before and after (D222); why: never sign a press as a real person; the gate slot never runs the request (D151).
+- decision needed: what gate step 9 adds for the new app; took: the R5 presses (done, undo, commitment-done, run-news) and one admin news POST are required when the R5 checks ran; the 403 non-owner press is one press (D223); why: R5-K01 and R5-K02 name these controls.
+- open for the cut-over (T16b): legacy R1.1–R4 browser checks read hooks the new app does not have: drawers (`#ppl-table tbody tr.click`, `.drawer.on h1`); tiles (`.view.on .card.goal` when a tile opens Q4 goals); signals_pages (`#look-list`, `#look-replies`, `#sug-list`, `#sug-empty`, `#look-card`/`#blocked-card`/`#sug-card` order, `#sig-window`, `#sig-range`, `[data-left="show"]`, `.it-title a`, `.it-meta`, `.pill`, and the "N you saw are left out" line that D157 removed); legacy done_undo (`#toast-undo`, the "Saved · Undo (m:ss)" toast; the new app has Undo in place); legacy click_path (a finished promise leaves the open list at once; now Undo in place). Already there: `#me`, the search hooks, the Ask card ids, `#tiles a.tile`, `#inbox-list .inbox-card`, `#dec-*`, `#pack-*`. These checks must be ported or retired by a decision at T16b; the matrix rows are not edited.
+
+## Q-R5-10 · 2026-10-21 · R5 T15 · Signals, Suggestions, Events, Blockers, Money, Search (resolved)
+- **Answer (Trishi, 21 Oct, chat):** D216–D219 confirmed (D228). **Resolved.**
 - decision needed: how the New and Seen earlier tabs behave on the page, and which pages have them; took: Signals, Suggestions and Events; the shown items stay for this visit, "Next" on New asks again from offset 0 after the seen mark, no Previous on New; Signals drops its client sort; Events shows speaker matches as the page badge (D216); why: the plan lists /api/events with `view`, and offset paging shifts as items move to Seen earlier.
 - decision needed: may T15 change the backend for the one-line suggestion and the QA events; took: `line` on /api/suggest (null when the guard refuses), the sync keeps `qa:event:*` rows only while a QA seed is active, seed events and topics (D217); why: the brief wants one line per card, and a check without seed data passes on nothing.
 - decision needed: the "Build target list" act on Events; took: not built, the legacy page has no such act (D218); why: no API action exists to port.

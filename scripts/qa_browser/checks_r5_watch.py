@@ -2,7 +2,7 @@
 
 seen_tabs (R5-N03), signals_categories (R5-N05), events_page (R5-E02). A file of its own:
 `checks_r5.py` is near the 800-line ceiling. `checks_r5` imports these names, so the CLI finds
-them with the other R5 checks (`--app next`). The rules live in `r5_rules.py` (pure, tested);
+them with the other R5 checks (run on `/`). The rules live in `r5_rules.py` (pure, tested);
 this file only reads the page. No check here presses a control that writes: tabs and chips
 are GETs. The pages' own seen marks (POST /api/seen, no button) are counted apart by `watch`.
 Each check compares the page with the answer the PAGE got (captured from its own request),
@@ -19,7 +19,16 @@ from urllib.parse import urlparse
 from playwright.sync_api import Page, Request, Response, Route
 
 from qa_browser.checks_r5_pages import open_view
-from qa_browser.core import QA_USER, SEEN_PATH, SETTLE_MS, WIDE, Run, forget_seen, settle
+from qa_browser.core import (
+    QA_USER,
+    SEEN_PATH,
+    SETTLE_MS,
+    WIDE,
+    Run,
+    forget_seen,
+    hide_other_news,
+    settle,
+)
 from qa_browser.r5_rules import (
     category_chip_problems,
     category_pick_problems,
@@ -105,15 +114,26 @@ def seen_tabs(page: Page, base: str, run: Run, entry: str) -> None:
     """R5-N03: on Signals and Suggestions, the New and Seen earlier tabs carry the counts of the
     page's own answer, New shows at most 10 rows and marks exactly them seen (one POST, the
     legacy body), Seen earlier pages by offset, no "left out" line anywhere, and an empty New
-    tab (the answer emptied in a route) says "Nothing new since your last visit"."""
+    tab (the answer emptied in a route) says "Nothing new since your last visit".
+    T16b review M3: the checks before this one (views, csp_clean, signals_pages) showed the
+    seeded stories, so they are made new again first (D226); Signals New must then hold at
+    least one unseen row, and its one mark must name exactly those rows."""
     notes = []
     for view, path, item_type in LISTS:
         open_view(page, base, entry, "today")  # a clean page; its marks are not counted below
+        if view == "signals":
+            forget_seen()
+            if not hide_other_news(run, "seen_tabs"):
+                return
         bodies, listener = _seen_bodies(page)
         try:
             api = _open_list(page, base, entry, view, path)
             facts = page.evaluate(SEEN_FACTS)
             problems = seen_tab_problems(f"{view} new", api, facts)
+            if view == "signals":
+                unseen = [i for i in api.get("items") or [] if not i.get("seen")]
+                if not unseen:
+                    problems.append("signals new: no unseen row, so the mark was never tested")
             problems += seen_post_problems(view, item_type, api.get("items") or [], bodies)
         finally:
             page.remove_listener("request", listener)

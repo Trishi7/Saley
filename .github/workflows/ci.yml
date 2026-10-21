@@ -22,8 +22,6 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --ignore-scripts
-      - run: npm run lint
-      - run: npm run typecheck
       - run: npm run build
       # Runtime packages: a high advisory fails the job. Dev tools: report only.
       - name: npm audit (runtime)
@@ -61,6 +59,19 @@ jobs:
         with:
           name: web-dist
           path: src/saley/web/dist
+      # Gate step 1 (verify.py) and the web unit tests need Node 24 and web/node_modules on
+      # this runner too (CI was red on a fresh runner without them, 21 Oct).
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm --prefix web ci --ignore-scripts
+      - name: Web lint, type check and unit tests
+        run: |
+          npm --prefix web run lint
+          npm --prefix web run typecheck
+          npm --prefix web test
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: "0.13.1"

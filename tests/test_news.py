@@ -1151,9 +1151,10 @@ def test_funnel_is_monotone_and_clickable(synced: Session, set_env: Callable[...
             if not step["href"].startswith("#signals?"):
                 continue
             query = dict(parse_qsl(urlsplit(step["href"][1:]).query))
-            assert query["tab"] == "all" and query["include_seen"] == "true"
+            assert query["tab"] == "all" and "include_seen" not in query  # gone (D224)
             listed = client.get("/api/signals", params=query).json()
-            assert listed["total"] == step["n"], key  # the number equals the list it opens
+            # The number equals the list it opens: its New and Seen earlier tabs together.
+            assert listed["new_total"] + listed["seen_total"] == step["n"], key
             opened += 1
         assert opened == 3
         other = client.get("/api/news/funnel?day=2025-01-01").json()

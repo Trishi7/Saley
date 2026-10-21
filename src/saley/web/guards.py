@@ -27,8 +27,8 @@ CSP = (
 )
 # The sign-in pages post a form to this origin, so they need form-action 'self'.
 CSP_FORMS = CSP.replace("form-action 'none'", "form-action 'self'")
-# Pages whose handler sets its own CSP with a per-request style nonce (D146, D147).
-NONCE_PAGES = frozenset({"/next"})
+# Pages whose handler sets its own CSP with a per-request style nonce (D146; `/` since D224).
+NONCE_PAGES = frozenset({"/"})
 NONCE_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 
 

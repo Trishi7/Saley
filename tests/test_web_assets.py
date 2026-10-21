@@ -1,4 +1,4 @@
-"""The dashboard v2 build and how this API serves it (R5 T10: D145, D146, D147).
+"""The dashboard v2 build and how this API serves it (R5 T10: D145, D146; cut-over T16b: D224).
 
 Why most tests use a small fixture dist: pytest must not need Node. S01 and S03 check the
 serving code against a tmp dist that has the same shape as a Vite build. S02 reads the real
@@ -64,13 +64,13 @@ def client(synced: Session) -> Iterator[TestClient]:
 
 
 def test_index_served_from_dist(fixture_dist: Path, client: TestClient) -> None:
-    """R5-S01. During the strangler (D147) the built index is served at /next; T16 moves it
-    to /. The built files are under /static/app/ (D145). Like /, it needs a session."""
-    away = client.get("/next", follow_redirects=False)
+    """R5-S01. Since the cut-over (D224) the built index is served at /, with a session. The
+    built files are under /static/app/ (D145). `/next` and the legacy static app are gone."""
+    away = client.get("/", follow_redirects=False)
     assert away.status_code == 303 and away.headers["location"] == "/signin"
 
     sign_in(client)
-    page = client.get("/next")
+    page = client.get("/")
     assert page.status_code == 200
     assert page.headers["content-type"].startswith("text/html")
     assert page.headers["cache-control"] == "no-store"
@@ -81,13 +81,15 @@ def test_index_served_from_dist(fixture_dist: Path, client: TestClient) -> None:
     assert asset.status_code == 200 and asset.text == "export {};\n"
     assert "immutable" in asset.headers["cache-control"]
     assert client.get("/static/app/assets/none.js").status_code == 404
-    # The stamp is for the gate on disk; index.html only through /next (T10 reviews).
+    # The stamp is for the gate on disk; index.html only through / (T10 reviews).
     for hidden in ("build-stamp.json", "Build-Stamp.JSON", "index.html"):
         assert client.get(f"/static/app/{hidden}").status_code == 404, hidden
-    # The legacy app stays at / until the cut-over (D147).
-    legacy = client.get("/")
-    assert legacy.status_code == 200 and "csp-nonce" not in legacy.text
-    assert client.get("/static/app.css").status_code == 200
+    # D224: /next is gone; of the legacy static files only the sign-in stylesheet is served.
+    assert client.get("/next", follow_redirects=False).status_code == 404
+    for legacy in ("app.js", "app.css", "index.html", "words.js", "act.js", "../app.py"):
+        assert client.get(f"/static/{legacy}").status_code == 404, legacy
+    css = client.get("/static/signin.css")
+    assert css.status_code == 200 and css.headers["content-type"].startswith("text/css")
 
 
 @pytest.fixture
@@ -98,15 +100,15 @@ def missing_dist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return missing
 
 
-def test_next_without_a_build_says_so(missing_dist: Path, client: TestClient) -> None:
+def test_page_without_a_build_says_so(missing_dist: Path, client: TestClient) -> None:
     """No dist (a laptop before the first build): 503 with a plain line, never a trace. The
     503 and the signed-out redirect carry the fixed CSP, with no nonce."""
-    away = client.get("/next", follow_redirects=False)
+    away = client.get("/", follow_redirects=False)
     assert away.status_code == 303 and "nonce-" not in away.headers["content-security-policy"]
     sign_in(client)
-    page = client.get("/next")
+    page = client.get("/")
     assert page.status_code == 503
-    assert page.text == w.NEXT_NOT_BUILT
+    assert page.text == w.APP_NOT_BUILT
     assert "nonce-" not in page.headers["content-security-policy"]
     assert client.get("/static/app/assets/x.js").status_code == 404
 
@@ -117,7 +119,7 @@ def test_csp_script_self_style_nonce_per_request(fixture_dist: Path, client: Tes
     sign_in(client)
     nonces = []
     for _ in range(2):
-        page = client.get("/next")
+        page = client.get("/")
         csp = page.headers["content-security-policy"]
         assert "script-src 'self';" in csp
         assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
@@ -129,8 +131,8 @@ def test_csp_script_self_style_nonce_per_request(fixture_dist: Path, client: Tes
     assert len(nonces[0]) >= 16
 
     # Every other page keeps the fixed policy: no nonce, style-src 'self' only.
-    for path in ("/", "/signin", "/healthz"):
-        csp = client.get(path).headers["content-security-policy"]
+    for path in ("/signin", "/healthz", "/static/signin.css", "/api/me"):
+        csp = client.get(path, follow_redirects=False).headers["content-security-policy"]
         assert "style-src 'self';" in csp and "nonce-" not in csp
     with pytest.raises(ValueError):
         next_app.csp_with_style_nonce("bad'; script-src *")
@@ -199,7 +201,7 @@ def test_every_word_key_is_used_and_exists() -> None:
     assert keys - used == set(), "words.ts keys that no code uses"
 
 
-def test_next_during_a_rebuild_says_not_built(
+def test_page_during_a_rebuild_says_not_built(
     fixture_dist: Path, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Vite empties dist while it builds: an unreadable index gives the 503 line, not a 500."""
@@ -209,5 +211,5 @@ def test_next_during_a_rebuild_says_not_built(
         raise FileNotFoundError("index.html")
 
     monkeypatch.setattr(Path, "read_text", gone)
-    page = client.get("/next")
-    assert page.status_code == 503 and page.text == w.NEXT_NOT_BUILT
+    page = client.get("/")
+    assert page.status_code == 503 and page.text == w.APP_NOT_BUILT

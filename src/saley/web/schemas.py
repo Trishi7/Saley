@@ -935,6 +935,9 @@ class CommitmentItem(Out):
     reminders_sent: int
     last_reminded_on: date | None
     in_pack: bool
+    # R5 T16a: the signed-in person's own Done still inside its window (a reload keeps Undo).
+    undo_id: int | None = None
+    undo_until: datetime | None = None
 
 
 class CommitmentsOut(Meta):
@@ -985,11 +988,11 @@ class Window(Out):
 
 
 class ListMeta(Meta):
-    """What every R3 list adds: its window, how many seen items it left out (D75)."""
+    """What every R3 list adds: its window, how many seen items it left out (D75; a count,
+    no "left out" line since D157, the line field went at the cut-over, D224)."""
 
     window: Window
     left_out_seen: int
-    left_out_note: str | None
 
 
 class TabbedMeta(ListMeta):
@@ -1164,7 +1167,6 @@ class NeedsLook(Out):
     replies_note: str | None
     window: Window
     left_out_seen: int
-    left_out_note: str | None
 
 
 class SaleySuggests(Out):
@@ -1172,7 +1174,6 @@ class SaleySuggests(Out):
     empty: str
     window: Window
     left_out_seen: int
-    left_out_note: str | None
 
 
 class FunnelOut(Meta):

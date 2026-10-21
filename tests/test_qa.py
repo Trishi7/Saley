@@ -143,7 +143,7 @@ def test_ste_lint_flags_long_text_and_banned_words(tmp_path: Path) -> None:
 
 def test_ste_lint_reads_words_ts() -> None:
     """R5-S07: the lint reads the dashboard v2 catalogue (web/src/words.ts) and the text of
-    web/index.html, and still reads static/words.js until the cut-over (T16). No literal text
+    web/index.html; the legacy static/words.js left at the cut-over (T16b, D224). No literal text
     in TSX is ESLint's job (react/jsx-no-literals, gate step 1); test_web_assets checks that
     every W key is used and exists."""
     from saley.qa import ste_lint
@@ -158,7 +158,7 @@ def test_ste_lint_reads_words_ts() -> None:
         assert f"words.ts:{key}" in sources
         assert value in texts
     assert "web/index.html" in sources and "Saley" in texts  # the <title> of web/index.html
-    assert any(s.startswith("words.js:") for s in sources)  # legacy stays until T16
+    assert not any(s.startswith(("words.js:", "index.html")) for s in sources)  # gone (D224)
 
 
 def test_verify_fails_on_an_unreadable_sheet(get: Any, sheet_today: date) -> None:
@@ -269,7 +269,7 @@ def test_seed_makes_marked_rows_and_teardown_removes_all_of_them(synced: Session
 
     removed = seed.teardown(synced)
     synced.commit()
-    assert removed["contacts"] == 4 and removed["cards"] == 2 and removed["commitments"] == 1
+    assert removed["contacts"] == 4 and removed["cards"] == 2 and removed["commitments"] == 2
     assert _counts(synced) == before
     assert sum(seed.teardown(synced).values()) == 0  # a second teardown does nothing
 
@@ -307,7 +307,8 @@ def test_seeding_twice_leaves_one_set(synced: Session) -> None:
         synced.execute(text("select count(*) from contact where name like 'QA Seed%'")).scalar_one()
         == 4
     )
-    assert synced.execute(text("select count(*) from commitment")).scalar_one() == 1
+    assert synced.execute(text("select count(*) from commitment")).scalar_one() == 2
+    assert synced.scalar(text("select count(*) from users where short = 'qaadmin'")) == 1
     seed.teardown(synced)
     synced.commit()
 
@@ -471,6 +472,33 @@ def test_seed_makes_news_a_linked_story_a_newco_and_a_search_hit(synced: Session
     assert removed["stories"] == 2 and removed["accounts"] == 1 and removed["sources"] == 1
     assert _news_counts(synced) == before
     assert sum(seed.teardown(synced).values()) == 0
+
+
+def test_hide_other_news_marks_real_stories_for_the_qa_user_only(synced: Session) -> None:
+    """D226: before `signals_pages` the real stories and signals are seen by the QA user, so the
+    New tab shows the two seeded stories on page 1; nobody real is marked; teardown removes it."""
+    from saley.qa import seed
+    from tests.test_signals import add_story
+
+    real = add_story(synced, "A real market story", importance=5)
+    seed.seed(synced)
+    synced.commit()
+    assert seed.hide_other_news(synced) >= 1
+    assert seed.hide_other_news(synced) == 0  # a second call adds nothing
+    synced.commit()
+    rows = synced.execute(
+        text("select user_short, item_type, item_id from v_user_seen where item_type = 'story'")
+    ).all()
+    assert {(r.user_short, r.item_id) for r in rows} == {(seed.QA_USER, real.id)}
+    with SignedClient(create_app()) as client:
+        new = client.get("/api/signals?view=new", headers={"X-Saley-As": seed.QA_USER}).json()[
+            "items"
+        ]
+        assert sorted(i["title"] for i in new) == sorted([seed.LINKED_TITLE, seed.QUIET_TITLE])
+    seed.teardown(synced)
+    synced.commit()
+    left = synced.execute(text("select count(*) from user_seen where query_id = 'qa-setup'"))
+    assert left.scalar_one() == 0
 
 
 def test_seed_gives_events_topics_and_suggestion_lines(
@@ -791,6 +819,55 @@ def test_teardown_deletes_the_qa_user_with_its_seen_rows_and_decisions(synced: S
     synced.commit()
 
 
+def test_seed_gives_another_owners_promise_and_a_qa_admin(synced: Session) -> None:
+    """R5 T16a (R5-C03, R5-N09): a `qa:` promise owned by Kushal with no due day (no reminder,
+    no Today task, not in the pack) refuses the QA user's Done with the owner line and writes
+    nothing; the throwaway admin signs "Run news now"; teardown removes both, request first."""
+    from saley.qa import seed
+
+    users = synced.scalar(text("select count(*) from users"))
+    info = seed.seed(synced)
+    synced.commit()
+    assert info.other_commitment and "2 commitments" in info.summary()
+    row = synced.execute(
+        text(
+            "select u.short, c.due, c.text from commitment c join users u on u.id = c.owner "
+            "where c.id = :i"
+        ),
+        {"i": info.other_commitment},
+    ).one()
+    assert (row.short, row.due) == (seed.OTHER_OWNER, None) and row.text.startswith("qa:")
+    admin = synced.execute(text("select role, name from users where short = 'qaadmin'")).one()
+    assert tuple(admin) == ("admin", seed.QA_ADMIN_NAME)
+    name = synced.scalar(text("select name from users where short = :o"), {"o": seed.OTHER_OWNER})
+    with SignedClient(create_app()) as client:
+        refused = client.post(f"/api/commitment/{info.other_commitment}/done", headers=QA_HEADERS)
+        assert refused.status_code == 403
+        line = f"This is {name}'s commitment. Only they can mark it done."
+        assert refused.json()["detail"] == line
+        listed = client.get(f"/api/commitments?owner={seed.OTHER_OWNER}").json()["items"]
+        assert [c["state"] for c in listed if c["id"] == info.other_commitment] == ["open"]
+        kushal = client.get(f"/api/today?user={seed.OTHER_OWNER}").json()["my_tasks"]["items"]
+        assert not any(i["kind"] == "commitment" for i in kushal)  # no due day: no task
+        run = client.post(
+            "/api/admin/news/run", headers={"X-Saley-Act": "1", "X-Saley-As": seed.QA_ADMIN}
+        )
+        assert run.status_code == 200
+        state = client.get("/api/admin/news/run", headers={"X-Saley-As": seed.QA_ADMIN}).json()
+        assert state["latest"]["requested_by"] == seed.QA_ADMIN and state["open"] is True
+    done = synced.scalar(
+        text("select count(*) from decision where kind = 'commitment_done' and row_key = :k"),
+        {"k": f"commitment:{info.other_commitment}"},
+    )
+    assert done == 0
+    assert synced.scalar(text("select count(*) from reminder")) == 0
+    removed = seed.teardown(synced)
+    synced.commit()
+    assert removed["qa_news_requests"] == 1 and removed["qa_admin"] == 1
+    assert synced.scalar(text("select count(*) from news_run_request")) == 0
+    assert synced.scalar(text("select count(*) from users")) == users
+
+
 def _browser_qa() -> Any:
     import importlib.util
 
@@ -842,7 +919,7 @@ def test_every_api_call_of_the_browser_run_is_made_as_the_qa_user() -> None:
     handle(route, _Req("http://127.0.0.1:8090/api/seen"))
     assert route.verdict == ("continue", {**_Req("").headers, "x-saley-as": "qa"})
     route = _Route()
-    handle(route, _Req("http://localhost:8090/static/app.js"))
+    handle(route, _Req("http://localhost:8090/static/app/assets/index.js"))
     assert route.verdict == ("continue", None)  # static files are left alone
     route = _Route()
     handle(route, _Req("https://www.linkedin.com/in/x"))
@@ -1113,3 +1190,22 @@ def test_funnel_recount_is_cumulative() -> None:
         "met": 2,
         "won": 1,
     }
+
+
+def test_hide_other_news_refuses_a_database_that_is_not_test(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T16b review: only the gate's `_test` database; never the dev database."""
+
+    from saley.qa import seed
+
+    class FakeSession:
+        def execute(self, *_a: object, **_k: object) -> object:
+            class Answer:
+                def scalar_one(self) -> str:
+                    return "saley"
+
+            return Answer()
+
+    with pytest.raises(RuntimeError, match="_test"):
+        seed.hide_other_news(FakeSession())  # type: ignore[arg-type]

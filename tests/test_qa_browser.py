@@ -1,7 +1,7 @@
 """The pure rules of the R5 browser checks (R5 T12, scripts/qa_browser/r5_rules.py).
 
 Why: the browser checks run only in the gate, on a real page. These tests prove the rules they
-apply (legend, links, coming-soon badges, pagers, themes, the /next entry) without a browser.
+apply (legend, links, coming-soon badges, pagers, themes, the `/` entry) without a browser.
 """
 
 from __future__ import annotations
@@ -27,13 +27,11 @@ def rules() -> ModuleType:
 
 
 def test_entry_and_url_keep_the_legacy_form(rules: ModuleType) -> None:
-    """--app next checks /next (D147); the legacy entry gives the R1-R4 URL /#today."""
-    assert rules.entry_path("next") == "/next"
-    assert rules.entry_path("legacy") == "/"
-    assert rules.entry_path("other") == "/"
+    """The one entry `/` (D224) gives the R1-R4 URL form /#today; /next is gone."""
+    assert rules.ENTRY == "/" and not hasattr(rules, "entry_path")
     base = "http://localhost:8090"
-    assert rules.view_url(base, "/", "today") == f"{base}/#today"
-    assert rules.view_url(base, "/next", "people") == f"{base}/next#people"
+    assert rules.view_url(base, rules.ENTRY, "today") == f"{base}/#today"
+    assert rules.view_url(base, "/", "people") == f"{base}/#people"
 
 
 def test_legend_one_at_top_explains_every_tag(rules: ModuleType) -> None:
@@ -193,32 +191,52 @@ class FakePage:
         self.routed = pattern
 
 
-def test_browser_qa_cli_runs_the_r5_checks_on_next(
+R1_R4_GROUPS = [
+    "tiles",
+    "searches",
+    "drawers",
+    "signals_pages",
+    "weekly_pack_page",
+    "saley_card",
+    "confirm_dismiss",
+]
+
+
+def test_browser_qa_cli_runs_every_check_on_one_app(
     browser_qa: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """--app next runs sign-in, views and the R5 checks of the matrix on /next; the
-    --allow-no-pager flag reaches `pagers` only; the default app stays the legacy one."""
+    """Since the cut-over (D224) one run on `/` covers sign-in, the views, the R1-R4 groups and
+    the R5 checks of the matrix; `--app` is gone; --allow-no-pager reaches `pagers` only."""
     parser = browser_qa.build_parser()
     argv = ["--base", "http://localhost:8090", "--release", "R5"]
-    args = parser.parse_args([*argv, "--app", "next", "--allow-no-pager"])
-    assert (args.app, args.allow_no_pager) == ("next", True)
-    default = parser.parse_args(argv)
-    assert (default.app, default.allow_no_pager) == ("legacy", False)
+    args = parser.parse_args([*argv, "--allow-no-pager"])
+    assert args.allow_no_pager is True and parser.parse_args(argv).allow_no_pager is False
     with pytest.raises(SystemExit):
-        parser.parse_args([*argv, "--app", "other"])
+        parser.parse_args([*argv, "--app", "next"])
+    assert browser_qa.APP == "/" and browser_qa.ENTRY == "/"
+    assert not hasattr(browser_qa, "check_all_next")
 
     calls: list[tuple] = []
 
     def sign_in(page: object, base: str, run: object) -> None:
         calls.append(("sign_in",))
 
-    def views(page: object, base: str, run: object, shots: Path, width: int, entry: str) -> None:
-        calls.append(("views", width, entry))
+    def views(page: object, base: str, run: object, shots: Path, width: int) -> None:
+        calls.append(("views", width))
+
+    def legacy(name: str) -> object:
+        def check(*_args: object) -> None:
+            _args[2].checks += 1  # type: ignore[attr-defined]
+            calls.append((name,))
+
+        return check
 
     monkeypatch.setattr(browser_qa, "guard", lambda run: None)
     monkeypatch.setattr(browser_qa, "watch", lambda page, run: None)
     monkeypatch.setattr(browser_qa, "sign_in_page", sign_in)
     monkeypatch.setattr(browser_qa, "views", views)
+    for name in R1_R4_GROUPS:
+        monkeypatch.setattr(browser_qa, name, legacy(name))
 
     def fake(name: str) -> object:
         def check(page: object, base: str, run: object, entry: str, *extra: object) -> None:
@@ -230,36 +248,43 @@ def test_browser_qa_cli_runs_the_r5_checks_on_next(
     for name in browser_qa.R5_CHECKS:
         monkeypatch.setattr(browser_qa.checks_r5, name, fake(name))
     base = "http://localhost:8090"
-    browser_qa.check_all_next(
-        FakePage(), base, browser_qa.Run(), ROOT, (1440,), False, "/next", True
-    )
-    assert calls[:2] == [("sign_in",), ("views", 1440, "/next")]
-    assert calls[2:] == [
-        ("csp_clean", "/next"),
-        ("legend_every_page", "/next"),
-        ("no_underlined_links", "/next"),
-        ("coming_soon_badges", "/next"),
-        ("themes", "/next"),
-        ("pagers", "/next", True),
-        ("today_funnel", "/next"),
-        ("no_page_search", "/next"),
-        ("done_undo", "/next"),
-        ("needs_look_cards", "/next"),
-        ("add_email", "/next"),
-        ("goals_cards", "/next"),
-        ("accounts_page", "/next"),
-        ("people_drawer", "/next"),
-        ("seen_tabs", "/next"),
-        ("signals_categories", "/next"),
-        ("events_page", "/next"),
-        ("no_view_as", "/next"),
-        ("load_error_retry", "/next"),
+    run = browser_qa.Run()
+    browser_qa.check_all(FakePage(), base, run, ROOT, ["a"], (1440,), False, True)
+    assert calls[:2] == [("sign_in",), ("views", 1440)]
+    assert calls[2:9] == [(name,) for name in R1_R4_GROUPS]
+    assert calls[9:] == [
+        ("csp_clean", "/"),
+        ("legend_every_page", "/"),
+        ("no_underlined_links", "/"),
+        ("coming_soon_badges", "/"),
+        ("themes", "/"),
+        ("pagers", "/", True),
+        ("today_funnel", "/"),
+        ("no_page_search", "/"),
+        ("done_undo", "/"),
+        ("needs_look_cards", "/"),
+        ("add_email", "/"),
+        ("goals_cards", "/"),
+        ("accounts_page", "/"),
+        ("people_drawer", "/"),
+        ("seen_tabs", "/"),
+        ("signals_categories", "/"),
+        ("events_page", "/"),
+        ("commitment_owner_toast", "/"),
+        ("run_news_now", "/"),
+        ("click_path", "/"),
+        ("no_view_as", "/"),
+        ("load_error_retry", "/"),
     ]
-    matrix = (ROOT / "tests" / "matrix" / "R5.yaml").read_text(encoding="utf-8")
-    for name in browser_qa.R5_CHECKS:
-        assert f"browser {name}" in matrix, name
+    # Every named browser check of the R2-R5 matrices runs in this one call.
+    named = set(run.named)
+    for release in ("R2", "R3", "R4", "R5"):
+        matrix = (ROOT / "tests" / "matrix" / f"{release}.yaml").read_text(encoding="utf-8")
+        for line in matrix.splitlines():
+            if line.strip().startswith("command: browser "):
+                assert line.split("browser ", 1)[1].strip() in named, (release, line)
     calls.clear()
-    browser_qa.check_all_next(FakePage(), base, browser_qa.Run(), ROOT, (390,), True, "/next")
+    browser_qa.check_all(FakePage(), base, browser_qa.Run(), ROOT, ["a"], (390,), True)
     assert [c[0] for c in calls] == ["sign_in", "views"]  # views-only: the extra widths (D112)
 
 
@@ -771,3 +796,120 @@ def test_seeded_events_keep_city_venue_and_order(rules: ModuleType) -> None:
     assert rules.seeded_event_problems(EVENT_ROWS[1:], seeded) == [
         "the seeded event 'QA Seed Summit' is not on the page"
     ]
+
+
+# ---------------------------------------------------------------- T16a: team pages
+
+
+@pytest.fixture(scope="module")
+def team_rules() -> ModuleType:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        return importlib.import_module("qa_browser.r5_team_rules")
+    finally:
+        sys.path.remove(str(ROOT / "scripts"))
+
+
+def test_refusal_noise_drops_one_expected_pair_only(team_rules: ModuleType) -> None:
+    url = "http://localhost:8090/api/commitment/6/done"
+    console = (
+        "console: Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    )
+    findings = [f"HTTP 403 {url}", console, f"HTTP 403 {url}", "page error: boom"]
+    kept = team_rules.drop_refusal_noise(findings, 403, url)
+    assert kept == [f"HTTP 403 {url}", "page error: boom"]  # a second refusal still fails
+    assert team_rules.drop_refusal_noise([f"HTTP 500 {url}"], 403, url) == [f"HTTP 500 {url}"]
+    other = "console: Failed to load resource: the server responded with a status of 429 (x)"
+    assert team_rules.drop_refusal_noise([other], 403, url) == [other]
+
+
+def test_press_is_one_post_to_its_path_with_the_header(team_rules: ModuleType) -> None:
+    good = {"sent": 1, "path": "/api/commitment/6/done", "header": "1", "status": 403}
+    want = {**good, "want_path": team_rules.COMMIT_DONE_PATH}
+    assert team_rules.press_problems("x", want, (403,)) == []
+    assert team_rules.press_problems("x", {**want, "sent": 2}, (403,))
+    assert team_rules.press_problems("x", {**want, "header": None}, (403,))
+    assert team_rules.press_problems("x", {**want, "status": 200}, (403,))
+    assert team_rules.press_problems("x", {**want, "path": "/api/commitment/x/done"}, (403,))
+    run_path = "/api/admin/news/run"
+    news = {**good, "path": run_path, "status": 429, "want_path": run_path}
+    assert team_rules.press_problems("x", news, (200, 409, 429)) == []
+    assert team_rules.press_problems("x", {**news, "path": "/api/admin/news"}, (429,))
+
+
+def test_owner_toast_names_the_owner_and_nothing_changes(team_rules: ModuleType) -> None:
+    line = team_rules.owner_line("Kushal")
+    assert line == "This is Kushal's commitment. Only they can mark it done."
+    good = {
+        "toasts": [line],
+        "done_buttons": 1,
+        "undo_buttons": 0,
+        "row_state": "open",
+        "row_lines": 0,
+        "api_state": "open",
+        "decisions_before": 2,
+        "decisions_after": 2,
+    }
+    assert team_rules.owner_toast_problems(good, line) == []
+    for change, word in (
+        ({"toasts": []}, "no toast"),
+        ({"toasts": ["You cannot do this."]}, "no toast"),
+        ({"done_buttons": 0}, "lost"),
+        ({"undo_buttons": 1}, "Undo"),
+        ({"row_state": "done"}, "row state"),
+        ({"row_lines": 1}, "toast only"),
+        ({"api_state": "done"}, "API"),
+        ({"decisions_after": 3}, "written"),
+    ):
+        problems = team_rules.owner_toast_problems({**good, **change}, line)
+        assert problems and word in problems[0], change
+
+
+def test_news_run_queued_or_a_calm_server_line(team_rules: ModuleType) -> None:
+    queued = {
+        "status": 200,
+        "line": "News run queued.",
+        "state": "queued",
+        "disabled": True,
+        "api_open": True,
+        "line_bad": False,
+    }
+    assert team_rules.news_run_problems(queued) == []
+    assert team_rules.news_run_problems({**queued, "disabled": False})
+    assert team_rules.news_run_problems({**queued, "state": "done"})
+    assert team_rules.news_run_problems({**queued, "api_open": False})
+    assert team_rules.news_run_problems({**queued, "line": "That did not work. Try again."})
+    wait = "Wait 7 min before the next news run."
+    cool = {"status": 429, "detail": wait, "line": wait, "state": "done", "disabled": False}
+    assert team_rules.news_run_problems(cool) == []
+    assert team_rules.news_run_problems({**cool, "line": ""})
+    assert team_rules.news_run_problems({**cool, "line_bad": True})
+    assert team_rules.news_run_problems({**cool, "status": 403})
+
+
+def test_commitment_done_turns_into_undo_and_back(team_rules: ModuleType) -> None:
+    done = {"done_buttons": 0, "undo_buttons": 1, "row_state": "done"}
+    back = {"done_buttons": 1, "undo_buttons": 0, "row_state": "open"}
+    assert team_rules.commit_undo_problems(done, "done") == []
+    assert team_rules.commit_undo_problems(back, "undo") == []
+    assert team_rules.commit_undo_problems(back, "done")
+    assert team_rules.commit_undo_problems({**done, "row_state": "open"}, "done")
+    assert team_rules.commit_undo_problems(done, "undo")
+    assert team_rules.missing_kinds(["done", "undo", "commitment-done", "run-news", "x"]) == []
+    assert team_rules.missing_kinds(["done", "commitment-refused"]) == [
+        "commitment-done",
+        "run-news",
+        "undo",
+    ]
+
+
+def test_open_request_waives_the_press_only_with_the_button_off(team_rules: ModuleType) -> None:
+    """T16a review: a request already open turns the Button off by design; the check checks
+    that state and the press is waived (with a note), never silently."""
+    assert team_rules.open_request_problems({"disabled": True, "state": "running"}) == []
+    assert team_rules.open_request_problems({"disabled": False, "state": "queued"})
+    assert team_rules.open_request_problems({"disabled": True, "state": "done"})
+    pressed = ["done", "undo", "commitment-done"]
+    assert team_rules.missing_kinds(pressed) == ["run-news"]
+    waived = {"run-news": team_rules.OPEN_REQUEST_NOTE}
+    assert team_rules.missing_kinds(pressed, waived) == []

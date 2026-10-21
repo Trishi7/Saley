@@ -875,9 +875,11 @@ def test_task_dates_cut_a_datetime_down_to_the_day() -> None:
 
 
 def test_act_js_shows_the_server_line_and_undone() -> None:
-    """M3: the page uses the fixed server text for refusals and says "Undone" after an Undo."""
+    """M3: the page uses the fixed server text for refusals and says "Undone" after an Undo.
+    Since the cut-over (D224) the page is the app in web/: api.ts reads the server's `detail`."""
     from pathlib import Path
 
-    source = (Path(act_module.__file__).parent / "static" / "act.js").read_text(encoding="utf-8")
-    assert "answer.detail" in source and "SERVER_LINE" in source
-    assert "UNDO_PATH.test(path)" in source and "W.undone" in source
+    root = Path(act_module.__file__).parents[3] / "web" / "src"
+    api = (root / "api.ts").read_text(encoding="utf-8")
+    assert ".detail" in api and "MAX_LINE" in api
+    assert 'undoneLine: "Undone."' in (root / "words.ts").read_text(encoding="utf-8")

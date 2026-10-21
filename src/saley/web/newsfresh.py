@@ -192,7 +192,7 @@ def funnel_numbers(conn: Connection, day: date) -> dict[str, int]:
 
 
 def _signals_href(day: date, **extra: str) -> str:
-    query = {"tab": "all", "day": day.isoformat(), "include_seen": "true", **extra}
+    query = {"tab": "all", "day": day.isoformat(), **extra}
     return "#signals?" + urlencode(query)
 
 

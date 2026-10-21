@@ -129,6 +129,8 @@ def test_search_too_long_is_422(client: TestClient) -> None:
         "/static/%2e%2e/%2e%2e/pyproject.toml",
         "/static/../app.py",
         "/static/..\\..\\pyproject.toml",
+        "/static/app/..%2f..%2f..%2fpyproject.toml",  # the built app mount (D145)
+        "/static/app/%2e%2e/%2e%2e/app.py",
         "/api/people/..%2F1",
         "/api/people/1%2F..%2F2",
         "/api/accounts/-1",
@@ -248,7 +250,7 @@ def test_methods_other_than_get_are_refused(client: TestClient) -> None:
 
 def test_security_headers_on_every_response(client: TestClient) -> None:
     """Security headers on API, page and error responses; no CORS header anywhere."""
-    for path in ("/", "/api/today", "/api/nope", "/static/app.js"):
+    for path in ("/", "/api/today", "/api/nope", "/static/signin.css", "/static/app.js"):
         r = client.get(path)
         assert "default-src 'self'" in r.headers["content-security-policy"]
         assert r.headers["x-frame-options"] == "DENY"

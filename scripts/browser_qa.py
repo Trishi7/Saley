@@ -7,17 +7,19 @@ installed Edge through Playwright on the local dashboard only:
 - the search terms in tests/fixtures/search-terms.txt: grouped results or a "0 results" card;
 - 3 People drawers;
 - zero console errors, zero failed requests, no horizontal scroll;
-- R2 named checks `done_undo` and `confirm_dismiss`, and step 9 (click-path audit): the only
-  requests that are not GET are the five allowed POSTs, each made by one press of a
-  `[data-act]` control, and every press changes the page. Any other non-GET, form or submit
+- R2 named checks `done_undo` (Undo in place, D204) and `confirm_dismiss`, and step 9
+  (click-path audit): the only requests that are not GET are the allowed POSTs, each made by
+  one press of a `[data-act]` control, and every press changes the page. Any other non-GET, form or submit
   button fails. The one known exception (R3, D75) is `POST /api/seen`: a list tells Saley which
   items it showed. It has no button, so it is recorded apart (`seen_posts`), never in `non_get`.
   The second (R4, D131) is `POST /api/ask`: the Ask card sends a typed question. It is recorded
   apart too (`ask_posts`); it changes only `user_seen` and `bot_exchange`.
-- R3 named check `signals_pages`: Signals (range, sort, filters, Linked, the funnel links),
-  Events, the four Suggestions tabs, Today "needs a look" and "Saley suggests", "left out N"
-  after a reload, and Add to pipeline -> one POST -> toast -> Undo, on the seeded "QA Seed Co".
-- D207 named checks on both apps: `no_view_as` (no View as, no person tabs, Today without
+- R3 named check `signals_pages`: Signals (range, rank, filters, Linked, the funnel links),
+  Events, the four Suggestions kinds, Today "needs a look" and "Saley suggests", the seen
+  signal in Seen earlier after a reload (D157), and Add to pipeline -> one POST -> Undo in
+  place, on the seeded "QA Seed Co".
+- The R5 checks of tests/matrix/R5.yaml (R5_CHECKS), on the same page.
+- D207 named checks: `no_view_as` (no View as, no person tabs, Today without
   `user=`) and `load_error_retry` (/api/status aborted once: a named error and Retry, never
   "Failed to fetch"; Retry brings the Updated line back). A check that needs another person's
   task list adds `?user=` to /api/today in a route (`today_list_of`); there is no UI for it.
@@ -33,10 +35,9 @@ and the teardown runs last, in `finally`. A control outside those rows is checke
 held (run `saley dev` with SHEET_WRITE_ENABLED=false, as scripts/verify.py does) and the check
 undoes it; the worker also refuses any append for a "QA Seed" company.
 
-Run:  uv run python scripts/browser_qa.py --base http://localhost:8090 --release R1.1
-      (scripts/verify.py passes the WEB_PORT base itself)
-R5 app during the strangler (D147), one width (D142):
-      uv run python scripts/browser_qa.py --base http://localhost:8090 --release R5           --app next --widths 1440
+Run:  uv run python scripts/browser_qa.py --base http://localhost:8090 --release R5 --widths 1440
+      (scripts/verify.py passes the WEB_PORT base itself; one width per process, D142)
+Since the cut-over (R5 T16b, D224) there is one app, at `/`, and one run covers R1.1 to R5.
 Prints one JSON line with the verdict (SHIP or BLOCK) and the findings.
 """
 
@@ -55,7 +56,9 @@ from playwright.sync_api import Page, sync_playwright
 from qa_browser import checks_r5
 from qa_browser.checks_r1_r4 import *
 from qa_browser.core import *
-from qa_browser.r5_rules import entry_path
+from qa_browser.r5_rules import ENTRY
+
+APP = "/"  # the one app since the cut-over (D224): the `app` field of the JSON line
 
 
 def check_all(
@@ -66,9 +69,12 @@ def check_all(
     terms: list[str],
     widths: tuple[int, ...] = WIDTHS,
     views_only: bool = False,
+    allow_no_pager: bool = False,
 ) -> None:
-    """All groups. Low memory (D112): the gate runs one width per process; the extra widths
-    run the views group only, the rest runs once at the first width."""
+    """All groups on the one app at `/` (the cut-over, T16b, D224): sign in, the views at each
+    width, the R1-R4 groups, then the R5 checks. Low memory (D112): the gate runs one width per
+    process; the extra widths run the views group only, the rest runs once at the first width.
+    R2-B01 `done_undo` and the step 9 `click_path` are the R5 checks of the same names."""
     page.set_default_timeout(TIMEOUT_MS)
     page.route("**/*", guard(run))
     watch(page, run)
@@ -82,39 +88,13 @@ def check_all(
     run.group("signals_pages", lambda: signals_pages(page, base, run, shots))
     run.group("weekly_pack_page", lambda: weekly_pack_page(page, base, run, shots))
     run.group("saley_card", lambda: saley_card(page, base, run, shots))
-    run.group("done_undo", lambda: done_undo(page, base, run))
     run.group("confirm_dismiss", lambda: confirm_dismiss(page, base, run))
-    run.group("click_path", lambda: click_path(page, base, run))
-    # D207 (R5-V01, R5-V02): the same named checks run on both apps; the gate ANDs them.
-    run.group("no_view_as", lambda: checks_r5.no_view_as(page, base, run, "/"))
-    run.group("load_error_retry", lambda: checks_r5.load_error_retry(page, base, run, "/"))
-
-
-def check_all_next(
-    page: Page,
-    base: str,
-    run: Run,
-    shots: Path,
-    widths: tuple[int, ...] = WIDTHS,
-    views_only: bool = False,
-    entry: str = "/next",
-    allow_no_pager: bool = False,
-) -> None:
-    """The R5 app (`--app next`, plan 3.5): sign in, the views at each width, then the R5
-    checks once. The R1-R4 groups need the legacy page, so they do not run here (D147)."""
-    page.set_default_timeout(TIMEOUT_MS)
-    page.route("**/*", guard(run))
-    watch(page, run)
-    run.group("sign_in_page", lambda: sign_in_page(page, base, run))
-    run.group("views", lambda: [views(page, base, run, shots, w, entry) for w in widths])
-    if views_only:
-        return
     for name in R5_CHECKS:
         check = getattr(checks_r5, name)
         if name == "pagers":
-            run.group(name, lambda: checks_r5.pagers(page, base, run, entry, allow_no_pager))
+            run.group(name, lambda: checks_r5.pagers(page, base, run, ENTRY, allow_no_pager))
         else:
-            run.group(name, lambda check=check: check(page, base, run, entry))
+            run.group(name, lambda check=check: check(page, base, run, ENTRY))
 
 
 # The named R5 checks of the matrix (tests/matrix/R5.yaml, tool browser), in run order.
@@ -136,6 +116,10 @@ R5_CHECKS = (
     "seen_tabs",
     "signals_categories",
     "events_page",
+    # T16a: after done_undo and add_email, so click_path finds Done and Undo already pressed.
+    "commitment_owner_toast",
+    "run_news_now",
+    "click_path",
     "no_view_as",
     "load_error_retry",
 )
@@ -148,12 +132,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--terms", default=str(ROOT / "tests" / "fixtures" / "search-terms.txt"))
     parser.add_argument("--widths", default=",".join(map(str, WIDTHS)), help="e.g. 1024")
     parser.add_argument("--views-only", action="store_true", help="only the views group (D112)")
-    parser.add_argument(
-        "--app",
-        choices=("legacy", "next"),
-        default="legacy",
-        help="legacy: the R1-R4 checks on /; next: the R5 checks on /next (D147)",
-    )
     parser.add_argument(
         "--allow-no-pager",
         action="store_true",
@@ -182,19 +160,17 @@ def main(argv: list[str] | None = None) -> int:
     with seeded(run) as ready, sync_playwright() as pw:
         browser = pw.chromium.launch(channel="msedge")
         try:
-            if ready and args.app == "next":
-                check_all_next(
+            if ready:
+                check_all(
                     browser.new_page(),
                     args.base,
                     run,
                     shots,
+                    terms,
                     widths,
                     args.views_only,
-                    entry_path(args.app),
                     args.allow_no_pager,
                 )
-            elif ready:
-                check_all(browser.new_page(), args.base, run, shots, terms, widths, args.views_only)
         finally:
             browser.close()
         if ready:
@@ -213,9 +189,11 @@ def main(argv: list[str] | None = None) -> int:
                 "ask_posts": run.ask_posts,
                 "sign_ins": len(run.sign_ins),
                 "act_posts": run.act_clicks,
+                "act_kinds": sorted(run.act_kinds),  # R5 T16a: step 9 checks the R5 presses
+                "waived": run.waived,  # R5 T16a review: presses off by design, with the reason
                 "named": run.named,
                 "notes": run.notes,
-                "app": args.app,
+                "app": APP,  # the one app at / (D224); verify.py step 9 reads it
                 "screens": len(run.screens),
                 "dir": str(shots.relative_to(ROOT)).replace("\\", "/"),
             }

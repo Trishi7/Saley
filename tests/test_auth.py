@@ -198,7 +198,7 @@ def test_no_api_without_session(client: TestClient) -> None:
 
     home = client.get("/", follow_redirects=False)
     assert home.status_code == 303 and home.headers["location"] == "/signin"
-    assert client.get("/static/app.css").status_code == 200  # assets stay public
+    assert client.get("/static/signin.css").status_code == 200  # the sign-in style stays public
     assert client.get("/healthz").status_code == 200
 
     client.cookies.set("saley_session", "x" * 43)

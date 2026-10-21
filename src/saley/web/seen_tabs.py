@@ -5,9 +5,9 @@ lists work like a mailbox. The New tab holds what this person has not seen. The 
 holds the rest. Both counts ride on every answer, so the tab labels show them. No answer in
 this mode carries a "left out" line. Seen is per person (`user_seen`), never per channel.
 
-The legacy page still sends `include_seen` and reads `left_out_note`. When `view` is absent, the
-answer is what it was (new items only, or all with `include_seen`), plus the new count fields.
-Both go away at the cut-over (T16).
+`include_seen` and `left_out_note` went away at the cut-over (T16b, D224). Without `view` a list
+shows the new items (any `limit`), and `left_out_seen` still counts the seen ones it left out
+(the count, never a line); with `view` it is 0, because the Seen earlier tab holds them.
 
 Also here: the `cat=` check (D156). The value is one of the topic names, any case. A source
 letter (A-L) or any other text is a 422.
@@ -34,10 +34,10 @@ CatParam = Annotated[str | None, Query(max_length=40)]
 
 @dataclass(frozen=True)
 class SeenPlan:
-    """Which items a request shows: `new`, `seen` or `all` (legacy `include_seen`)."""
+    """Which items a request shows: `new` or `seen`."""
 
-    mode: Literal["new", "seen", "all"]
-    tabbed: bool  # the caller sent `view`: pages of 10, no "left out" line
+    mode: Literal["new", "seen"]
+    tabbed: bool  # the caller sent `view`: pages of 10, `left_out_seen` 0
 
     def page(self, limit: int, offset: int) -> tuple[int, int]:
         """(limit, offset) of the page. A tabbed list is 10 a page and offset 0 to 1000."""
@@ -49,21 +49,17 @@ class SeenPlan:
 
     def clause(self, seen_sql: str) -> str:
         """The SQL condition that keeps the shown side, to append to a where clause."""
-        if self.mode == "all":
-            return ""
         return f" and {seen_sql}" if self.mode == "seen" else f" and not {seen_sql}"
 
     def pick[T](self, items: Sequence[T], is_seen: Callable[[T], bool]) -> list[T]:
         """The same choice for a list built in Python (Suggestions are ranked by plain code)."""
-        if self.mode == "all":
-            return list(items)
         return [i for i in items if is_seen(i) == (self.mode == "seen")]
 
     def total(self, new_total: int, seen_total: int) -> int:
-        return {"new": new_total, "seen": seen_total, "all": new_total + seen_total}[self.mode]
+        return seen_total if self.mode == "seen" else new_total
 
     def left_out(self, seen_total: int) -> int:
-        """Legacy count of hidden seen items. Always 0 for a tabbed list (D157)."""
+        """Seen items a list without `view` left out. Always 0 for a tabbed list (D157)."""
         return seen_total if self.mode == "new" and not self.tabbed else 0
 
     def fields(self, new_total: int, seen_total: int) -> dict[str, Any]:
@@ -77,12 +73,10 @@ class SeenPlan:
         }
 
 
-def plan(view: str | None, include_seen: bool = False) -> SeenPlan:
+def plan(view: str | None) -> SeenPlan:
     if view == "seen":
         return SeenPlan("seen", True)
-    if view == "new":
-        return SeenPlan("new", True)
-    return SeenPlan("all" if include_seen else "new", False)
+    return SeenPlan("new", view == "new")
 
 
 def counts(

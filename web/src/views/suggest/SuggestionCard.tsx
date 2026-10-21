@@ -4,7 +4,8 @@
 // company, Find people and the search hits with "Add to pipeline". Find people is off (D164):
 // its place shows `[data-soon="find_people"]` and the button is inert. When it is on, it is the
 // legacy POST /api/act {action: "find_people", target_ids: [account]} from `[data-act="find"]`.
-// Hooks: `[data-row][data-suggestion]` with `data-kind`, `[data-line]`, `[data-open-subject]`.
+// Hooks: `[data-row][data-suggestion]` with `data-kind`, `[data-line]`, `[data-open-subject]`,
+// `[data-field="search"]` (the search state of a new company, legacy hook, T16b).
 import { ArrowRightIcon, SearchIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { ApiError, postJson } from "@/api";
@@ -60,7 +61,11 @@ function FindPeople({ item }: { item: Suggestion }) {
           <SearchIcon aria-hidden />
           {W.featFindPeople}
         </Button>
-        {state && <span className="text-muted-foreground text-xs" role="status">{state}</span>}
+        {state && (
+          <span className="text-muted-foreground text-xs" role="status" data-field="search">
+            {state}
+          </span>
+        )}
       </span>
     </FeatureGate>
   );

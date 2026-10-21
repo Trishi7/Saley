@@ -1,7 +1,9 @@
 """Browser QA core: the run record, the request guard and watcher, and shared page helpers.
 
-Why a package: one file held 1100 lines. Core has no check. The checks of R1-R4 and R5 live in
-`checks_r1_r4.py` and `checks_r5.py`; `scripts/browser_qa.py` is the CLI.
+Why a package: one file held 1100 lines. Core has no check (only the one-press helper
+`click_act` that every group uses). The checks of R1-R4 and R5 live in `checks_r1_r4.py` and
+`checks_r5*.py`; `scripts/browser_qa.py` is the CLI. Since the cut-over (T16b, D224) every check
+runs on the one app at `/`.
 """
 
 from __future__ import annotations
@@ -12,7 +14,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
-from playwright.sync_api import Page, Request, Route
+from playwright.sync_api import Locator, Page, Request, Response, Route
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from qa_browser.r5_rules import with_query
 
@@ -30,9 +33,7 @@ SEEN_PATH = "/api/seen"
 SIGN_IN_PATH = "/auth/mock"  # R4, D116: the gate signs in first; it is set-up, not a control
 ASK_PATH = "/api/ask"  # R4, D131: the Ask card sends a typed question; no [data-act] control
 QA_USER = "qa"  # saley.qa.seed.QA_USER: every API call of this run is made as this person
-LEFT_OUT = re.compile(r"^(\d+) you saw (?:are|is) left out")
 QA_MARKS = ("qa seed", "qa:")  # a control is pressed only inside a row that shows one of these
-SAVED_TOAST = re.compile(r"Saved\s*\u00b7\s*Undo \(\d+:\d{2}\)")
 CONTROL_KINDS = {"done", "undo", "confirm", "primary", "dismiss", "commitment-done", "add"}
 NARROW = 390
 WIDE = 1440
@@ -55,6 +56,9 @@ class Run:
         self.act_clicks = 0  # presses of a [data-act] control; each must send exactly one POST
         self.act_kinds: set[str] = set()
         self.notes: dict[str, list[str]] = {}  # check name -> what it verified (R5 T12)
+        # R5 T16a review: a press a check could not make by design (kind -> why). Step 9 names
+        # it in its note and does not demand that press; it never passes silently.
+        self.waived: dict[str, str] = {}
 
     def group(self, name: str, fn: Callable[[], None]) -> None:
         """Run one named check: it passes when it adds no finding AND at least one check ran.
@@ -209,6 +213,61 @@ def api_items(page: Page, base: str, path: str) -> list[dict]:
     """A GET through the browser's own request context (same localhost, no route needed)."""
     response = page.request.get(f"{base}{path}")
     return response.json().get("items", []) if response.ok else []
+
+
+def click_act(
+    page: Page, run: Run, control: Locator, kind: str, *, scoped: bool = True
+) -> Response | None:
+    """Press one control: exactly one allowed POST that works, and the page changes.
+
+    A control outside the seeded rows is never pressed (it could write for a real person).
+    """
+    if scoped:
+        row = control.locator(ROW_OF).inner_text().lower()
+        if not any(mark in row for mark in QA_MARKS):
+            run.findings.append(
+                f"click-path: refused to press a {kind} control outside the QA rows"
+            )
+            return None
+    posts, seen = len(run.non_get), fingerprint(page)
+    try:
+        with page.expect_response(lambda r: r.request.method == "POST", timeout=TIMEOUT_MS) as hit:
+            control.click()
+    except PlaywrightTimeout:
+        run.findings.append(f"click-path: a {kind} control sent no POST")
+        return None
+    response = hit.value
+    settle(page)
+    run.act_clicks += 1
+    run.act_kinds.add(kind)
+    path = urlparse(response.url).path
+    sent = len(run.non_get) - posts
+    run.expect(sent == 1, f"click-path: a {kind} press sent {sent} POSTs, want 1")
+    run.expect(bool(ALLOWED_POST.match(path)), f"click-path: {kind} posted to {path}")
+    run.expect(response.status == 200, f"click-path: {kind} answered {response.status}")
+    run.expect(
+        response.request.headers.get("x-saley-act") == "1", f"click-path: {kind} had no X-Saley-Act"
+    )
+    run.expect(fingerprint(page) != seen, f"click-path: a {kind} press changed nothing on the page")
+    return response
+
+
+def hide_other_news(run: Run, where: str) -> bool:
+    """Only the seeded stories and signal are new for the QA user (seed.hide_other_news, D226).
+
+    The seed refuses any database that is not a `_test` one (RuntimeError). That is a finding
+    (the run BLOCKs with its JSON line), never a crash (T16b review L3). True when it ran.
+    """
+    from saley.core.db import session_scope
+    from saley.qa import seed
+
+    try:
+        with session_scope() as session:
+            seed.hide_other_news(session)
+    except RuntimeError as err:
+        run.findings.append(f"{where}: the seen set-up refused: {err}")
+        return False
+    return True
 
 
 def forget_seen() -> None:

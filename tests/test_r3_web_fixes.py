@@ -293,7 +293,7 @@ def test_needs_look_total_is_the_true_count(client: TestClient, synced: Session)
     assert block["total"] == 205 and len(block["items"]) == web_signals.LOOK_SHOWN
     assert block["window"]["label"] == "Stories of 7 days. Events in 3 days."
     assert block["window"]["from"] < block["window"]["to"]
-    assert block["left_out_seen"] == 0 and block["left_out_note"] is None
+    assert block["left_out_seen"] == 0 and "left_out_note" not in block  # no line (D157, D224)
 
 
 def test_saley_suggests_hides_what_this_person_saw(
@@ -314,7 +314,7 @@ def test_saley_suggests_hides_what_this_person_saw(
     mine = client.get("/api/today?user=sid", headers=SID).json()["saley_suggests"]
     assert newco["id"] not in [i["id"] for i in mine["items"] if i["kind"] == "newco"]
     assert mine["left_out_seen"] == 1
-    assert mine["left_out_note"] == "1 you saw is left out. Show it."
+    assert "left_out_note" not in mine  # the count stays; the line went (D157, D224)
     other = client.get("/api/today?user=sid", headers=VAISHNAVI).json()["saley_suggests"]
     assert newco["id"] in [i["id"] for i in other["items"]] and other["left_out_seen"] == 0
 
@@ -352,9 +352,10 @@ def test_events_page_and_seen_filter_run_in_sql(
     assert [e["name"] for e in page["items"]] == ["Summit 3", "Summit 4"]
     assert page["total"] == 3 and page["left_out_seen"] == 2
     assert max(sizes) <= 2  # the page, never the whole table
-    everything = client.get("/api/events?include_seen=true&limit=50", headers=SID).json()
-    assert everything["total"] == 5 and everything["left_out_seen"] == 0
-    assert [e["seen"] for e in everything["items"]] == [True, True, False, False, False]
+    # D224: no `include_seen`; the Seen earlier tab holds the two seen ones, in SQL too.
+    earlier = client.get("/api/events?view=seen", headers=SID).json()
+    assert earlier["total"] == 2 and (earlier["new_total"], earlier["seen_total"]) == (3, 2)
+    assert [e["seen"] for e in earlier["items"]] == [True, True]
     past = client.get("/api/events?when=past", headers=SID).json()
     assert past["total"] == 0 and past["window"]["label"] == "Before today"
 
@@ -490,17 +491,9 @@ def test_part_labels_read_right_for_one() -> None:
     assert label(suggest.Part("connections", 1, 1)) == "1 connected at the company"
 
 
-def test_left_out_reads_right_for_one() -> None:
-    assert web_signals.left_out(0) is None
-    assert web_signals.left_out(1) == "1 you saw is left out. Show it."
-    assert web_signals.left_out(2) == "2 you saw are left out. Show them."
-
-
 def test_the_page_words_have_a_singular_for_stories() -> None:
     from pathlib import Path
 
-    words = Path("src/saley/web/static/words.js").read_text(encoding="utf-8")
-    assert 'storiesCountOne: "1 story"' in words and 'storiesCount: "{n} stories"' in words
-    assert "window.fmtCount = function (one, many, n, values)" in words
-    signals_js = Path("src/saley/web/static/signals.js").read_text(encoding="utf-8")
-    assert "fmtCount(W.storiesCountOne, W.storiesCount, d.total)" in signals_js
+    # D224: the legacy page went at the cut-over. The API's part labels keep the singular
+    # (test_part_labels_read_right_for_one); the new page counts with tab numbers, no words.
+    assert not Path("web/src/words.ts").read_text(encoding="utf-8").count("1 stories")

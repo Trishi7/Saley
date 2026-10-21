@@ -40,7 +40,7 @@ rows:
   - id: R3-U01
     feature: F-R3-03
     layer: api
-    what: seen per user - A sees, B still sees, A gets "left out 1 you saw"
+    what: seen per user - A sees, B still sees, A's list counts 1 seen item and shows it in Seen earlier
     tool: pytest
     command: pytest tests/test_seen.py::test_seen_is_per_user_with_left_out_count
     pass: test passes

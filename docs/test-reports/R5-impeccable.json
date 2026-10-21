@@ -272,6 +272,193 @@
           "Money dark: same structure; stage dots use the D201 stage tokens with ink text."
         ]
       }
+    },
+    "inbox": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape (numbers first): one count per kind (action cards, decisions to confirm, questions, reminders), then the kind filter with counts, then the items 10 a page. The Ask card stays on Today only (D131).",
+          "Controls keep the legacy POSTs and data-act names: primary (Do it / Confirm), edit-save (one-cell drafts only, D186), dismiss (Skip). A card write turns into Undo in place until undo_until, as Today's tasks; the first saver's line ('Already done by X at HH:MM') shows calmly in the card (D137).",
+          "A11y: each control names its item ('Do it: <title>', 'Skip: <title>'); the editor textarea is labelled; refusals are role=status lines; buttons stay focusable while busy (aria-disabled).",
+          "P2 performance: five GETs on load (four counts with limit=1, one list); each is small.",
+          "Responsive: card actions stack under the text below 640 px; 40 px hit areas on phone."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the same tokens switch with the theme; tags use ink text on a soft wash, never a series colour on text; no page-local colour (D201, D203).",
+          "The primary button keeps --primary contrast in dark; Skip is a ghost button, so one primary action per card."
+        ]
+      }
+    },
+    "commitments": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape: open, done and dropped counts for the owner picked; state filter (default open) and owner filter as toggle Buttons with counts; then promise, owner, due tag (late / due today / due later / no due date), source, state, reminders sent, 10 a page.",
+          "D155: Mark done is the owner's only. The page does not guess the owner: a non-owner press gets the server's 403 line as a toast ('This is <name>'s commitment. Only they can mark it done.') and the row does not change. For the owner the same place turns into Undo in place until undo_until, signed.",
+          "A11y: 'Mark done: <promise>' and 'Undo: <promise>' names; long text cut to one line with the full text in a tooltip on focus.",
+          "Responsive: the table scrolls inside its own box at 390 px; filters wrap."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the same tokens switch with the theme; tags use ink text on a soft wash, never a series colour on text; no page-local colour (D201, D203).",
+          "The error toast uses the bad tokens of the dark theme."
+        ]
+      }
+    },
+    "decisions": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape: decisions that match, wait for a confirm and can undo now; four native selects (person, where, undo, state; legacy ids #dec-person, #dec-surface, #dec-undo plus #dec-state); then the log 10 a page: id, when (IST day and time, surface under it), who, what and what it applies to, state tags (state, undo, sheet sync with the fixed reason), Confirm / Undo.",
+          "Every tag has a legend entry; the failed-sync reason is the server's fixed line (H5), never the stored error text.",
+          "P3: twelve legend entries make a long legend; each is one short line and wraps at 390 px."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the same tokens switch with the theme; tags use ink text on a soft wash, never a series colour on text; no page-local colour (D201, D203)."
+        ]
+      }
+    },
+    "pack": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape (numbers first): team numbers as tiles with 'last week N' (the server's note or '—' when no snapshot, never 0) and an Up/Down tag; then late items, reminders moved to the pack ('Showing n of total', D186), next tasks per person and the Scorecard rows; long lists 10 a page in place.",
+          "Week picker: Week before / Week after / Newest pack Buttons move by Mondays (#pack?week=YYYY-MM-DD); a Monday with no pack shows the server's own line calmly with the picker still there.",
+          "Legacy hooks kept for the R4 check: #pack-week, #pack-tiles .tile .v/.d, #pack-late, #pack-reminders, #pack-tasks, #pack-score."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the same tokens switch with the theme; tags use ink text on a soft wash, never a series colour on text; no page-local colour (D201, D203)."
+        ]
+      }
+    },
+    "scorecard": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape: people, contacted, meetings and deals over all industries, each with 'last week N'; a total with one unknown part is '—' (never a made-up sum, D118). Then the table 10 industries a page with the 7-day delta as Up/Down tags and a 'Last week' line or '—' with the server's note.",
+          "P2 performance: one GET of all industries (limit 1000) and paging in the page; the list is short.",
+          "Responsive: the table scrolls inside its own box at 390 px."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the same tokens switch with the theme; tags use ink text on a soft wash, never a series colour on text; no page-local colour (D201, D203)."
+        ]
+      }
+    },
+    "health": {
+      "light": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Shape (numbers first): jobs that failed, calls out today, LLM calls against the daily cap, news sources with a problem; then Run news now, news today, jobs, calls out, sheet tabs, the parity check, data to fix and the connection lines.",
+          "Run news now (D150, D178): one Button (data-act=run-news); off while a run is queued or running, with the state tag and 'Asked at HH:MM by <who>'; the server's line ('News run queued.', cooldown, busy) shows calmly, never in red.",
+          "Dataviz: the news funnel uses the vendored Funnel on the item steps only (pulled, stored, scored, scored 4-5, about us), one hue because it is one series; sources tried/answered, the drops and 'sent' count other things, so they are a list beside it, not bars.",
+          "P2: the bklit funnel draws nothing when 'Items pulled' is 0 (only the labelled links show)."
+        ]
+      },
+      "dark": {
+        "scores": {
+          "accessibility": 3,
+          "performance": 3,
+          "theming": 3,
+          "responsive": 3,
+          "integrity": 3
+        },
+        "critical_open": 0,
+        "notes": [
+          "Dark: the same tokens switch with the theme; tags use ink text on a soft wash, never a series colour on text; no page-local colour (D201, D203).",
+          "The funnel uses --primary in both themes; labels sit beside or under the shape, never on it."
+        ]
+      }
     }
   }
 }
