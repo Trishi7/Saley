@@ -80,8 +80,10 @@ def run(base: str) -> list[str]:
         button.click()
         page.wait_for_url(lambda url: urlparse(url).path == "/")
         signed_in["yes"] = True
-        home = page.goto(f"{base}/#today")
-        found += headers_problems(dict(home.headers) if home else {})
+        # A hash change on the same page has no response (the fifth compose run): read the
+        # headers from a real request of the signed-in page instead.
+        found += headers_problems(dict(page.request.get(f"{base}/").headers))
+        page.goto(f"{base}/#today")
         if first is None:
             found.append("no answer for /")
         settle(page)

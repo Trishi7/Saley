@@ -156,7 +156,7 @@ jobs:
           curl -sk -D - -o /dev/null "$BASE/healthz" | grep -i '^strict-transport-security: max-age='
 
       - name: R6-G02 browser smoke through caddy
-        run: uv run python scripts/ci/browser_smoke.py "$BASE"
+        run: uv run python scripts/ci/browser_smoke.py "$BASE" 2>&1 | tee "$RUNNER_TEMP/browser.log"
 
       - name: R6-B02 backup then restore passes sheet verify
         run: |
@@ -167,7 +167,7 @@ jobs:
           grep -q "restore ok: sheet verify PASS" "$RUNNER_TEMP/restore.log"
 
       - name: R6-M01 memory under limits for 10 min of load
-        run: uv run python scripts/ci/load_memory.py "$BASE" --minutes 10
+        run: uv run python scripts/ci/load_memory.py "$BASE" --minutes 10 2>&1 | tee "$RUNNER_TEMP/memory.log"
 
       - name: R6-D04 rollback works
         run: |
@@ -196,8 +196,8 @@ jobs:
             echo "::error title=$1::$body"
           }
           dc ps -a || true
-          dc ps -a 2>&1 | note "compose ps" || true
-          for f in deploy1 deploy2 backup restore rollback; do
+          # GitHub keeps 10 error annotations per step: the script logs first (they say why).
+          for f in browser memory rollback restore backup deploy2 deploy1; do
             [ -f "$RUNNER_TEMP/$f.log" ] && note "$f.log" < "$RUNNER_TEMP/$f.log"
           done
           for svc in migrate web worker bot news caddy; do
