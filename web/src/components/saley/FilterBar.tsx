@@ -35,7 +35,7 @@ export function FilterBar({
             variant={on ? "secondary" : "ghost"}
             aria-pressed={on}
             data-filter={option.id}
-            className={cn("tabular", on && "ring-border ring-1")}
+            className={cn("nums", on && "ring-border ring-1")}
             onClick={() => onPick(option.id)}
           >
             {option.label}

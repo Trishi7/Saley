@@ -27,7 +27,7 @@ export function Ring({ progress, className }: { progress: Progress; className?: 
       className={cn("flex flex-col items-center gap-1", className)}
     >
       <RingChart value={progress.pct} label={label} center={center} className="size-24" />
-      <figcaption aria-hidden className="text-muted-foreground tabular text-xs">
+      <figcaption aria-hidden className="text-muted-foreground nums text-xs">
         {label}
       </figcaption>
     </figure>

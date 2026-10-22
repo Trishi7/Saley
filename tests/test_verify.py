@@ -78,7 +78,29 @@ def test_run_matrix_writes_rows(verify: ModuleType, monkeypatch: pytest.MonkeyPa
     assert verify.load_matrix("R1.1") == rows
 
 
+def write_env_rows(verify: ModuleType, release: str, kinds: tuple[str, ...] | None = None) -> None:
+    """A STATUS.md with the release's env rows (all three kinds unless `kinds` names fewer)."""
+    status = verify.REPORTS / "STATUS.md"
+    rows = [f"| {release} | {k} | none |" for k in (kinds or verify.ENV_KINDS)]
+    status.write_text("\n".join(["# Status", "", *rows, ""]), encoding="utf-8")
+    verify.STATUS_FILE = status
+
+
+def impeccable_data(verify: ModuleType, critical: int = 0) -> dict:
+    module = verify.impeccable_module()
+    scores = dict.fromkeys(module.DIMENSIONS, 4)
+    entry = {"scores": scores, "critical_open": critical}
+    return {"pages": {p: dict.fromkeys(module.THEMES, entry) for p in module.PAGES}}
+
+
+def write_impeccable(verify: ModuleType, release: str, data: object) -> None:
+    path = verify.REPORTS / f"{release}-impeccable.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
 def test_record_and_finalize(verify: ModuleType) -> None:
+    write_env_rows(verify, "R9")
+    write_impeccable(verify, "R9", impeccable_data(verify))
     state = {
         str(n): {"step": n, "status": "PASS", "note": "ok", "seconds": 1.0} for n in range(1, 10)
     }
@@ -103,9 +125,19 @@ def test_record_and_finalize(verify: ModuleType) -> None:
     assert verify.main(["--release", "R9", "--record", "10", "PASS", "reviewers clean"]) == 0
     assert verify.main(["--release", "R9", "--record", "11", "pass", "docs updated"]) == 0
     assert verify.main(["--release", "R9", "--finalize"]) == 0
-    report = next(verify.REPORTS.glob("R9-2*.md")).read_text(encoding="utf-8")
+    # D236: the failed finalize and the records wrote the dated report (the records overwrite
+    # it with "not final"); only the PASS writes <release>-final.md.
+    dated = next(verify.REPORTS.glob("R9-2*.md")).read_text(encoding="utf-8")
+    assert dated.startswith("GATE: not final")
+    report = (verify.REPORTS / "R9-final.md").read_text(encoding="utf-8")
     assert report.splitlines()[0] == "GATE: PASS"
     assert "Env changes:" in report and "- NEW:" in report
+    assert report.rstrip().splitlines()[-3:] == [
+        "- NEW: none",
+        "- CHANGED-default: none",
+        "- RETIRED: none",
+    ]  # the summary ends with the env list
+    assert "## Impeccable audit" in report and "| today | light |" in report
     assert "| R9-A01 | R9 | api | a row | PASS | passed |" in report
     assert (verify.REPORTS / "R9-files.txt").exists()
     with pytest.raises(SystemExit):
@@ -125,6 +157,108 @@ def test_finalize_refuses_results_from_older_code(verify: ModuleType) -> None:
     report = next(verify.REPORTS.glob("R8-2*.md")).read_text(encoding="utf-8")
     assert report.splitlines()[0].startswith("GATE: FAIL — step 1")
     assert "code changed after this step ran" in report
+    assert not (verify.REPORTS / "R8-final.md").exists()  # D236: only a PASS is final
+
+
+def _pass_state(verify: ModuleType, release: str) -> None:
+    """Steps 1-11 PASS on this code, one passing matrix row: only the docs check can fail."""
+    state = {
+        str(n): {"step": n, "status": "PASS", "note": "ok", "seconds": 1.0} for n in range(1, 12)
+    }
+    verify.state_path(release).write_text(json.dumps(state), encoding="utf-8")
+    verify.fingerprint_path(release).write_text(verify.code_fingerprint(), encoding="utf-8")
+    row = {"id": "X", "release": release, "layer": "api", "what": "w", "ok": True, "note": "n"}
+    verify.matrix_path(release).write_text(json.dumps([row]), encoding="utf-8")
+
+
+def test_finalize_fails_step_11_without_env_rows_in_status(verify: ModuleType) -> None:
+    write_env_rows(verify, "R4", kinds=("NEW", "RETIRED"))  # no CHANGED-default row
+    _pass_state(verify, "R4")
+    assert verify.main(["--release", "R4", "--finalize"]) == 1
+    report = next(verify.REPORTS.glob("R4-2*.md")).read_text(encoding="utf-8")
+    assert report.splitlines()[0] == "GATE: FAIL — step 11"
+    assert "env log has no R4 CHANGED-default row (recorded: ok)" in report
+    assert "## Impeccable audit" not in report  # before R5 no scores are needed
+    # The saved state keeps the human's record: a fixed STATUS passes with no new --record.
+    assert verify.load("R4")[11].status == "PASS"
+    write_env_rows(verify, "R4")
+    assert verify.main(["--release", "R4", "--finalize"]) == 0
+    assert (verify.REPORTS / "R4-final.md").exists()
+
+
+@pytest.mark.parametrize(
+    ("data", "gap"),
+    [
+        (None, "R5-impeccable.json is missing"),
+        ("not json", "R5-impeccable.json is not JSON"),
+        ({"pages": {}}, "today: no scores"),
+        ("critical", "1 critical finding(s) still open"),
+    ],
+)
+def test_finalize_fails_step_11_on_an_incomplete_impeccable_audit(
+    verify: ModuleType, data: object, gap: str
+) -> None:
+    write_env_rows(verify, "R5")
+    _pass_state(verify, "R5")
+    path = verify.REPORTS / "R5-impeccable.json"
+    if data == "not json":
+        path.write_text("{", encoding="utf-8")
+    elif data == "critical":
+        write_impeccable(verify, "R5", impeccable_data(verify, critical=1))
+    elif data is not None:
+        write_impeccable(verify, "R5", data)
+    assert verify.main(["--release", "R5", "--finalize"]) == 1
+    report = next(verify.REPORTS.glob("R5-2*.md")).read_text(encoding="utf-8")
+    assert report.splitlines()[0] == "GATE: FAIL — step 11"
+    assert "docs check: Impeccable: " in report and gap in report
+    assert "## Impeccable audit" in report and "FAIL: " in report
+    assert not (verify.REPORTS / "R5-final.md").exists()
+
+
+def test_report_records_the_impeccable_table_from_r5_on(verify: ModuleType) -> None:
+    write_impeccable(verify, "R5", impeccable_data(verify))
+    lines = verify.impeccable_lines("R5")
+    assert lines[:3] == ["", "## Impeccable audit", ""]
+    assert "| Page | Theme | Accessibility" in lines[3] and "| health | dark |" in lines[3]
+    assert "20/20 | Excellent |" in lines[3]
+    assert verify.impeccable_lines("R4") == []
+    assert verify.impeccable_needed("R5.1") and not verify.impeccable_needed("R4")
+
+
+def test_finalize_reads_step_11_matrix_rows_from_the_final_results(verify: ModuleType) -> None:
+    """R5-D01 runs `step 11`. The matrix runs after step 9, before step 11 is recorded, so the
+    finalize must read it again (D236), or the gate can never pass."""
+    saved = [
+        {"id": "R5-D01", "release": "R5", "layer": "unit", "what": "docs", "ok": False,
+         "note": "step 11 not run"},
+        {"id": "R5-X99", "release": "R5", "layer": "api", "what": "x", "ok": False, "note": "no"},
+    ]  # fmt: skip
+    verify.matrix_path("R5").write_text(json.dumps(saved), encoding="utf-8")
+    verify.refresh_late_step_rows("R5", {11: verify.Result(11, "PASS", "docs")})
+    rows = {r["id"]: r for r in verify.load_matrix("R5")}
+    assert rows["R5-D01"]["ok"] is True and rows["R5-D01"]["note"] == "step 11 PASS"
+    assert rows["R5-X99"]["ok"] is False  # not a step-10/11 row: untouched
+    verify.refresh_late_step_rows("R5", {11: verify.Result(11, "FAIL", "docs check: x")})
+    assert verify.load_matrix("R5")[0]["note"] == "step 11 FAIL"
+
+
+def test_finalize_passes_r5_with_the_step_11_row(verify: ModuleType) -> None:
+    write_env_rows(verify, "R5")
+    write_impeccable(verify, "R5", impeccable_data(verify))
+    _pass_state(verify, "R5")
+    row = {"id": "R5-D01", "release": "R5", "layer": "unit", "what": "d", "ok": False,
+           "note": "step 11 not run"}  # fmt: skip
+    verify.matrix_path("R5").write_text(json.dumps([row]), encoding="utf-8")
+    assert verify.main(["--release", "R5", "--finalize"]) == 0
+    report = (verify.REPORTS / "R5-final.md").read_text(encoding="utf-8")
+    assert "| R5-D01 | R5 | unit | d | PASS | step 11 PASS |" in report
+
+
+def test_report_path_is_final_only_on_pass(verify: ModuleType) -> None:
+    assert verify.report_path("R5", "GATE: PASS").name == "R5-final.md"
+    failed = verify.report_path("R5", "GATE: FAIL — step 8").name
+    assert failed.startswith("R5-2") and failed.endswith(".md")
+    assert verify.report_path("R5", "GATE: not final (steps 10-12 open)").name == failed
 
 
 def test_skipped_tests_do_not_pass(verify: ModuleType, tmp_path: Path) -> None:
@@ -442,6 +576,9 @@ def test_env_changes_read_from_status(verify: ModuleType, tmp_path: Path) -> Non
     )
     lines = verify.env_changes("R7", status)
     assert lines == ["- NEW: `A_KEY`", "- CHANGED-default: none", "- RETIRED: `OLD_KEY`"]
+    # docs/STATUS.md has CRLF line ends on Windows: the rows still count.
+    status.write_bytes(b"| R7 | NEW | `A_KEY` |\r\n| R7 | CHANGED-default | none |\r\n")
+    assert verify.env_changes("R7", status)[:2] == ["- NEW: `A_KEY`", "- CHANGED-default: none"]
 
 
 # ------------------------------------------------------------------ M10 polling
@@ -961,7 +1098,11 @@ def test_step_1_runs_eslint_tsc_and_passes_on_a_fresh_stamp(
     result = verify.step_static(SimpleNamespace())
     assert result.status == "PASS", result.note
     npm = [c[1:] for c in calls if c[0] == "/bin/npm"]
-    assert npm == [["--prefix", "web", "run", "lint"], ["--prefix", "web", "run", "typecheck"]]
+    assert npm == [
+        ["--prefix", "web", "run", "lint"],
+        ["--prefix", "web", "run", "typecheck"],
+        ["--prefix", "web", "run", "test"],  # the web unit tests (T18)
+    ]
     assert "build stamp" in result.note
 
 
@@ -984,6 +1125,9 @@ def test_step_1_fails_on_eslint_or_tsc_or_no_npm_or_no_install(
     assert verify.step_static(SimpleNamespace()).note.startswith("eslint:")
     _web_run(verify, monkeypatch, {"typecheck": 2})
     assert verify.step_static(SimpleNamespace()).note.startswith("tsc:")
+    _web_run(verify, monkeypatch, {"test": 1})
+    result = verify.step_static(SimpleNamespace())
+    assert result.status == "FAIL" and result.note.startswith("web tests:")
     _web_run(verify, monkeypatch, {})
     monkeypatch.setattr(verify, "web_deps_installed", lambda: False)
     result = verify.step_static(SimpleNamespace())

@@ -133,7 +133,7 @@ export function TouchTimeline({
             data-month={month.month}
             className="grid grid-cols-[4.5rem_1fr] items-center gap-2 border-b border-dashed py-1 last:border-b-0"
           >
-            <span className="text-muted-foreground tabular text-xs">{month.label}</span>
+            <span className="text-muted-foreground nums text-xs">{month.label}</span>
             <div className="grid grid-cols-[repeat(31,minmax(0,1fr))] gap-px">
               {[...byDay(month.touches)].map(([day, touches]) => (
                 <DayCell key={day} day={day} touches={touches} />

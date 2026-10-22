@@ -2,7 +2,8 @@
 // the design system; T13–T16a ported every page into it. The DOM hooks follow docs/08
 // Appendix B (plan §3.4): `.rail a[data-v]`, `section.view.on#v-<name>`, `#toast`, `#gsearch`,
 // `#search-results`.
-import { useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
+import { ChunkBoundary } from "@/components/saley/ChunkBoundary";
 import { Shell } from "@/components/saley/Shell";
 import { SearchView } from "@/components/saley/SearchView";
 import { Toaster } from "@/components/saley/Toaster";
@@ -11,40 +12,35 @@ import { resolveView, VIEWS, type ViewDef } from "@/components/saley/views";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { isAdmin, MeProvider, useMe } from "@/hooks/use-me";
 import { useRoute } from "@/hooks/use-route";
-import { AccountsPage } from "@/views/accounts/AccountsPage";
-import { BlockersPage } from "@/views/blockers/BlockersPage";
-import { CommitmentsPage } from "@/views/commitments/CommitmentsPage";
-import { DecisionsPage } from "@/views/decisions/DecisionsPage";
-import { EventsPage } from "@/views/events/EventsPage";
-import { GoalsPage } from "@/views/goals/GoalsPage";
-import { InboxPage } from "@/views/inbox/InboxPage";
-import { MoneyPage } from "@/views/money/MoneyPage";
-import { PackPage } from "@/views/pack/PackPage";
-import { PeoplePage } from "@/views/people/PeoplePage";
-import { ScorecardPage } from "@/views/scorecard/ScorecardPage";
-import { SignalsPage } from "@/views/signals/SignalsPage";
-import { SourcesPage } from "@/views/sources/SourcesPage";
-import { SuggestPage } from "@/views/suggest/SuggestPage";
-import { TodayPage } from "@/views/today/TodayPage";
 import { W } from "@/words";
 
+type PageProps = { view: ViewDef };
+type PageModule = Record<string, ComponentType<PageProps>>;
+
+/** One chunk per page (R5 T17): the first load fetches the shell and the page it opens, not
+ *  all 15 pages (the single chunk was 684 kB). Vite emits each chunk as an external module
+ *  file, so the CSP stays `script-src 'self'` (D146). */
+function page(load: () => Promise<PageModule>, name: string) {
+  return lazy(() => load().then((m) => ({ default: m[name] })));
+}
+
 // Every page of the rail, plus Money blocked (Search has its own view below).
-const PAGES: Record<string, (props: { view: ViewDef }) => ReactNode> = {
-  today: TodayPage,
-  goals: GoalsPage,
-  accounts: AccountsPage,
-  people: PeoplePage,
-  suggest: SuggestPage,
-  signals: SignalsPage,
-  events: EventsPage,
-  blockers: BlockersPage,
-  money: MoneyPage,
-  asks: InboxPage,
-  commit: CommitmentsPage,
-  decisions: DecisionsPage,
-  pack: PackPage,
-  scorecard: ScorecardPage,
-  sources: SourcesPage,
+const PAGES: Record<string, ComponentType<PageProps>> = {
+  today: page(() => import("@/views/today/TodayPage"), "TodayPage"),
+  goals: page(() => import("@/views/goals/GoalsPage"), "GoalsPage"),
+  accounts: page(() => import("@/views/accounts/AccountsPage"), "AccountsPage"),
+  people: page(() => import("@/views/people/PeoplePage"), "PeoplePage"),
+  suggest: page(() => import("@/views/suggest/SuggestPage"), "SuggestPage"),
+  signals: page(() => import("@/views/signals/SignalsPage"), "SignalsPage"),
+  events: page(() => import("@/views/events/EventsPage"), "EventsPage"),
+  blockers: page(() => import("@/views/blockers/BlockersPage"), "BlockersPage"),
+  money: page(() => import("@/views/money/MoneyPage"), "MoneyPage"),
+  asks: page(() => import("@/views/inbox/InboxPage"), "InboxPage"),
+  commit: page(() => import("@/views/commitments/CommitmentsPage"), "CommitmentsPage"),
+  decisions: page(() => import("@/views/decisions/DecisionsPage"), "DecisionsPage"),
+  pack: page(() => import("@/views/pack/PackPage"), "PackPage"),
+  scorecard: page(() => import("@/views/scorecard/ScorecardPage"), "ScorecardPage"),
+  sources: page(() => import("@/views/sources/SourcesPage"), "SourcesPage"),
 };
 
 function CurrentView() {
@@ -64,7 +60,13 @@ function CurrentView() {
       {error !== null && <ErrorLine what={W.whatMe} error={error} onRetry={reload} />}
       {waitsForRole && <LoadingLine />}
       {!waitsForRole && view.id === "search" && <SearchView view={view} q={route.params.q ?? ""} />}
-      {!waitsForRole && Page && <Page view={view} />}
+      {!waitsForRole && Page && (
+        <ChunkBoundary key={view.id} what={view.nav}>
+          <Suspense fallback={<LoadingLine />}>
+            <Page view={view} />
+          </Suspense>
+        </ChunkBoundary>
+      )}
     </Shell>
   );
 }

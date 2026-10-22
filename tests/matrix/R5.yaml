@@ -609,3 +609,10 @@ rows:
     tool: pytest
     command: pytest tests/test_ci.py::test_ci_has_node_and_the_web_checks_before_pytest tests/test_verify.py::test_step_1_fails_on_eslint_or_tsc_or_no_npm_or_no_install
     pass: tests pass
+  - id: R5-S09
+    feature: F-R5-02
+    layer: guardrails
+    what: "no internal id in any UI string - the STE lint refuses R<n>, Q-, D<n> and tab:row: text; exemptions are named with a reason (the human, 21 Oct)"
+    tool: pytest
+    command: pytest tests/test_qa.py::test_ste_lint_refuses_internal_ids_in_ui_text tests/test_qa.py::test_ste_lint_keeps_plain_words_with_letters_and_digits tests/test_qa.py::test_ste_lint_id_exemption_is_named_and_explained
+    pass: tests pass

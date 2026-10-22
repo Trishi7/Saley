@@ -595,13 +595,13 @@ def _link(text: str, href: str, **extra: str) -> dict:
 
 
 def test_person_drawer_follow_up_papers_and_source(rules: ModuleType) -> None:
-    """R5-P03: "Follow-up by" with a D31 tooltip, the papers Button reads `papers_label`, its
+    """R5-P03: "Follow-up by" with the rule tooltip, the papers Button reads `papers_label`, its
     popover lists the API links (plain, new tab, rel noopener), and the source shows."""
     links = [_link(p["text"], p["href"]) for p in PERSON["papers"]]
     facts = {
         "label": "Follow-up by",
-        "tip": "from rule D31",
-        "tooltip": "from rule D31",
+        "tip": "from the follow-up rule",
+        "tooltip": "from the follow-up rule",
         "papers_text": "2 papers",
         "links": links,
         "working_source": "Source: note Tue 20 Oct",
@@ -617,14 +617,19 @@ def test_person_drawer_follow_up_papers_and_source(rules: ModuleType) -> None:
     }
     found = rules.person_drawer_problems(PERSON, bad)
     assert found[0] == "no 'Follow-up by' label ('Owner')"
-    assert "the Follow-up by tooltip does not say D31" in found
+    assert "the Follow-up by tooltip does not say from the follow-up rule" in found
     assert "papers reads 'Papers', API '2 papers'" in found
     assert any(f.startswith("popover links") for f in found)
     assert "paper link 'https://qa.invalid/papers/a' has no rel noopener" in found
     assert "paper link 'https://qa.invalid/papers/a' is underlined" in found
     assert found[-1] == "working_on source 'note Tue 20 Oct' not shown"
     none = {"papers_label": "0 papers", "papers": [], "working_on": {"found": False}}
-    plain = {"label": "Follow-up by", "tip": "D31", "tooltip": "D31", "papers_text": "0 papers"}
+    plain = {
+        "label": "Follow-up by",
+        "tip": "from the follow-up rule",
+        "tooltip": "from the follow-up rule",
+        "papers_text": "0 papers",
+    }
     assert rules.person_drawer_problems(none, plain) == []
 
 

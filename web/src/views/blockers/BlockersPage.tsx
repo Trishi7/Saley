@@ -52,9 +52,9 @@ function LateTable({ items }: { items: LateItem[] }) {
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>{W.colItem}</TableHead>
+          <TableHead className="w-[14%]">{W.colLateBy}</TableHead>
           <TableHead className="w-[14%]">{W.colOwner}</TableHead>
           <TableHead className="w-[13%]">{W.colDue}</TableHead>
-          <TableHead className="w-[14%]">{W.colLateBy}</TableHead>
           <TableHead className="w-[17%]">{W.colBlocks}</TableHead>
           <TableHead className="w-[14%]">{W.colStatus}</TableHead>
         </TableRow>
@@ -67,19 +67,21 @@ function LateTable({ items }: { items: LateItem[] }) {
               <TableCell className="py-2.5 font-medium">
                 <OneLine text={b.item} />
               </TableCell>
-              <TableCell className="py-2.5">
-                <OneLine text={b.owner} />
-              </TableCell>
-              <TableCell className="tabular py-2.5 text-xs">{b.due_label}</TableCell>
+              {/* Late by sits next to the item: on a phone the table scrolls, and the number
+                  that matters stays in view (R5 T17). */}
               <TableCell className="py-2.5">
                 {late ? (
-                  <Tag tag={late.tag} tone={late.tone} className="tabular">
+                  <Tag tag={late.tag} tone={late.tone} className="nums">
                     {late.text}
                   </Tag>
                 ) : (
                   "—"
                 )}
               </TableCell>
+              <TableCell className="py-2.5">
+                <OneLine text={b.owner} />
+              </TableCell>
+              <TableCell className="nums py-2.5 text-xs">{b.due_label}</TableCell>
               <TableCell className="text-muted-foreground py-2.5">
                 <OneLine text={blocksText(b)} />
               </TableCell>
@@ -106,7 +108,7 @@ function Complete({ pct }: { pct: number | null }) {
       >
         <span className="bg-primary block h-full rounded-full" style={{ width: `${width}%` }} />
       </span>
-      <span className="tabular text-xs">{fmt(W.pctValue, { n: pct })}</span>
+      <span className="nums text-xs">{fmt(W.pctValue, { n: pct })}</span>
     </span>
   );
 }
@@ -117,8 +119,8 @@ function PackageTable({ items }: { items: PackageItem[] }) {
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead className="w-[28%]">{W.colPackage}</TableHead>
-          <TableHead>{W.colPurpose}</TableHead>
           <TableHead className="w-[20%]">{W.lgComplete}</TableHead>
+          <TableHead>{W.colPurpose}</TableHead>
           <TableHead className="w-[16%]">{W.colStatus}</TableHead>
         </TableRow>
       </TableHeader>
@@ -128,11 +130,11 @@ function PackageTable({ items }: { items: PackageItem[] }) {
             <TableCell className="py-2.5 font-medium">
               <OneLine text={p.name} />
             </TableCell>
-            <TableCell className="text-muted-foreground py-2.5">
-              <OneLine text={p.purpose} />
-            </TableCell>
             <TableCell className="py-2.5">
               <Complete pct={p.pct} />
+            </TableCell>
+            <TableCell className="text-muted-foreground py-2.5">
+              <OneLine text={p.purpose} />
             </TableCell>
             <TableCell className="text-muted-foreground py-2.5">
               <OneLine text={p.status} />
@@ -165,7 +167,7 @@ export function BlockersPage({ view }: { view: ViewDef }) {
       {!late && main.loading && <LoadingLine />}
       {late && (
         <div data-content className="flex flex-col gap-6">
-          <div id="tiles" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div id="tiles" className="grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
             <Stat id="late" label={W.blkLate} value={late.late_total} />
             <Stat id="packages" label={W.blkPackages} value={late.packages_total} />
             <Tile tile={late.money_tile} />

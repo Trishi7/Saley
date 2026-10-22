@@ -168,7 +168,7 @@ def accounts_page(page: Page, base: str, run: Run, entry: str) -> None:
 
 def people_drawer(page: Page, base: str, run: Run, entry: str) -> None:
     """R5-P03: open the seeded "QA Seed Research" drawer (never another row: a broken seed
-    must fail, not compare [] with []): "Follow-up by" with a tooltip that says D31, the
+    must fail, not compare [] with []): "Follow-up by" with the tooltip "from the follow-up rule", the
     papers Button text equals `papers_label` and its popover lists `papers[]` as plain links,
     a `[data-timeline]` strip, and the working_on source when the API has one."""
     open_view(page, base, entry, "people?filter=all")

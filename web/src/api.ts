@@ -88,7 +88,13 @@ export async function getJson<T>(path: string): Promise<T> {
   }
   handleSession(response, true);
   if (!response.ok) throw new ApiError(response.status, await lineFor(response));
-  const body = (await response.json()) as T & { sync_id?: number | null };
+  let body: T & { sync_id?: number | null };
+  try {
+    body = (await response.json()) as T & { sync_id?: number | null };
+  } catch {
+    // A 2xx that is not JSON (a proxy page, a cut body): an error, never an empty page.
+    throw new ApiError(response.status, W.errGeneric);
+  }
   if (syncId === null && body.sync_id != null && !path.startsWith(STATUS_PATH)) {
     syncId = body.sync_id;
   }
@@ -117,5 +123,11 @@ export async function postJson<T>(path: string, body?: unknown): Promise<T> {
   }
   handleSession(response, false);
   if (!response.ok) throw new ApiError(response.status, await lineFor(response));
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    // The write is done (2xx) but the answer is not readable: never say "failed" (step 10
+    // review); say it is saved and the page must reload to show it.
+    throw new ApiError(response.status, W.savedReload);
+  }
 }

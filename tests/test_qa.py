@@ -288,7 +288,7 @@ def test_seed_gives_the_research_person_papers_and_a_working_on_source(synced: S
     assert [p["href"] for p in item["papers"]] == list(seed.PAPER_URLS)
     assert all(p["text"].startswith("qa.invalid/qa-seed-") for p in item["papers"])
     assert item["working_on"]["found"] and item["working_on"]["source"].startswith("note ")
-    assert item["follow_up_by"]["rule"] == "D31"
+    assert item["follow_up_by"]["rule"] == "the follow-up rule"
     seed.teardown(synced)
     synced.commit()
     left = synced.execute(
@@ -1209,3 +1209,38 @@ def test_hide_other_news_refuses_a_database_that_is_not_test(
 
     with pytest.raises(RuntimeError, match="_test"):
         seed.hide_other_news(FakeSession())  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "No source until R2",
+        "sheet writes off: Q-R2-1",
+        "stage rules (D29)",
+        "R1.1 gate",
+        "Outreach PoCs:412:Priya Rao",
+    ],
+)
+def test_ste_lint_refuses_internal_ids_in_ui_text(text: str) -> None:
+    """The human, 21 Oct (Q-R5-14): no R<n>, Q-, D<n> or tab:row: text in any UI string."""
+    from saley.qa import ste_lint
+
+    found = ste_lint.check("words.py:X", text, [])
+    assert any("internal id" in f.problem for f in found), text
+
+
+@pytest.mark.parametrize(
+    "text", ["Q4 goals", "P1 waiting on LinkedIn", "Run news now", "Due 14:00", "R&D lead"]
+)
+def test_ste_lint_keeps_plain_words_with_letters_and_digits(text: str) -> None:
+    from saley.qa import ste_lint
+
+    assert not [f for f in ste_lint.check("words.py:X", text, []) if "internal id" in f.problem]
+
+
+def test_ste_lint_id_exemption_is_named_and_explained() -> None:
+    from saley.qa import ste_lint
+
+    # Q-R5-16: no exceptions; the old tooltip text is flagged like any other id.
+    assert ste_lint.check("words.py:FOLLOW_UP_RULE", "from rule D31", [])
+    assert not hasattr(ste_lint, "ID_ALLOWED")

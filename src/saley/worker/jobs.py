@@ -122,7 +122,7 @@ def sheet_push() -> str:
     with session_scope() as session:
         if not settings.sheet_write_enabled:
             held = hold_pending(session)
-            return f"sheet writes off: Q-R2-1 · {held} held" if held else QUIET_NOTE
+            return f"Sheet writes are off · {held} held" if held else QUIET_NOTE
         if count_due(session, moment) == 0:
             return QUIET_NOTE
     sheet = build_write_sheet()

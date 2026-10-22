@@ -89,7 +89,7 @@ export function DecisionsPage({ view }: { view: ViewDef }) {
       {!page && list.loading && <LoadingLine />}
       {page && (
         <div data-content className="flex flex-col gap-5" aria-busy={list.loading || undefined}>
-          <div id="tiles" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div id="tiles" className="grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
             <Stat id="decisions" label={W.decTotal} value={page.total} />
             <Stat id="proposed" label={W.decProposed} value={proposed.data?.total ?? null} />
             <Stat id="can-undo" label={W.decCanUndo} value={canUndo.data?.total ?? null} />
@@ -136,7 +136,7 @@ export function DecisionsPage({ view }: { view: ViewDef }) {
               )}
             </Pager>
           </section>
-          <p className="text-muted-foreground tabular text-xs">
+          <p className="text-muted-foreground nums text-xs">
             {fmt(W.lastComputed, { t: page.last_computed_label })}
           </p>
         </div>

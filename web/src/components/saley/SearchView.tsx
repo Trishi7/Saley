@@ -159,7 +159,7 @@ export function SearchView({ view, q }: { view: ViewDef; q: string }) {
               return (
                 <section key={key} data-group={key} className="flex flex-col gap-2">
                   <h2 className="text-sm font-medium">
-                    {label} <span className="text-muted-foreground tabular">{group.total}</span>
+                    {label} <span className="text-muted-foreground nums">{group.total}</span>
                   </h2>
                   {group.items.map((hit) => (
                     <HitCard

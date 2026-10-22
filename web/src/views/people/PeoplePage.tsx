@@ -47,7 +47,7 @@ export function PeoplePage({ view }: { view: ViewDef }) {
       {!shown && loading && <LoadingLine />}
       {shown && c && (
         <div data-content className="flex flex-col gap-5" aria-busy={loading || undefined}>
-          <p className="text-muted-foreground tabular text-sm" data-stamp>
+          <p className="text-muted-foreground nums text-sm" data-stamp>
             {fmt(W.pplStamp, { n: c.people, m: c.with_notes, p: c.with_paper })}
           </p>
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">

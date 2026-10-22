@@ -470,6 +470,21 @@ def weekly_pack(conn: Connection, week: Any | None) -> dict[str, Any] | None:
     return found[0] if found else None
 
 
+def pack_neighbours(conn: Connection, week: Any) -> dict[str, Any]:
+    """The Mondays of the packs just before and just after `week` (None when there is none).
+
+    Why: the week picker moves only to a week that has a pack, so a normal click never asks
+    for a missing week and never logs a 404 in the browser (R5 T17, D229).
+    """
+    found = rows(
+        conn,
+        "select (select max(week_start) from v_weekly_pack where week_start < :w) as prev_week, "
+        "(select min(week_start) from v_weekly_pack where week_start > :w) as next_week",
+        w=week,
+    )
+    return found[0]
+
+
 def health(conn: Connection) -> dict[str, Any]:
     jobs = rows(
         conn,

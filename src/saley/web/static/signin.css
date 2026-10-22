@@ -1,22 +1,148 @@
 /* Saley sign-in and message pages (auth.py `page`). R5 T16b: the only file left of the R4 static
-   app; the dashboard is the built app under /static/app/. System fonts only (CSP D146). */
-:root{
-  --bg:#f5f4ef; --fg:#1b1a17; --mute:#605d55; --line:#dad6cb; --panel:#ffffff; --accent:#0d5c63;
-  --display:Georgia,"Times New Roman",serif; --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+   app; the dashboard is the built app under /static/app/.
+   R5 T17: the page now looks like the dashboard. The colour tokens below copy the values of
+   web/src/index.css (light :root, dark .dark) one to one; change both together. The font is the
+   app's Geist when the system has it, else the system sans: the bundled Geist file has a hashed
+   name under /static/app/assets/, and this page must not depend on a build (CSP D146, no CDN,
+   no inline style). Links are Buttons, never underlined text (R5 brief). */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.982 0.004 85);
+  --foreground: oklch(0.23 0.014 250);
+  --card: oklch(0.998 0.002 85);
+  --primary: oklch(0.46 0.085 200);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --muted-foreground: oklch(0.47 0.014 250);
+  --border: oklch(0.9 0.008 85);
+  --ring: oklch(0.58 0.1 200);
+  --card-shadow: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+  --font-sans: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  color-scheme: light;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#151613; --fg:#ecebe5; --mute:#a9a69b; --line:#33342f; --panel:#1e1f1b; --accent:#6fc3c9; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#151613; --fg:#ecebe5; --mute:#a9a69b; --line:#33342f; --panel:#1e1f1b; --accent:#6fc3c9; color-scheme:dark}
-*{box-sizing:border-box}
-body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.45;margin:0;padding:0 16px}
-h1{font-family:var(--display);font-weight:600;font-size:22px;margin:0 0 16px;text-wrap:balance}
-a{color:var(--accent)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
-.signin-card{max-width:360px;margin:15vh auto 0;text-align:center}
-.btn{font:inherit;font-size:12.5px;font-weight:500;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:5px;padding:5px 10px;cursor:pointer;min-height:32px;transition-property:transform,background-color,border-color;transition-duration:150ms;transition-timing-function:ease-out}
-.btn:hover{border-color:var(--accent)}
-.btn:active{transform:scale(.97)}
-.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-a.btn{display:inline-block;text-decoration:none}
-@media (prefers-reduced-motion: reduce){.btn{transition:none}.btn:active{transform:none}}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: oklch(0.17 0.01 250);
+    --foreground: oklch(0.95 0.006 85);
+    --card: oklch(0.205 0.012 250);
+    --primary: oklch(0.76 0.09 195);
+    --primary-foreground: oklch(0.2 0.03 205);
+    --muted-foreground: oklch(0.73 0.012 250);
+    --border: oklch(0.31 0.012 250);
+    --ring: oklch(0.7 0.09 195);
+    --card-shadow: 0 1px 2px 0 oklch(0 0 0 / 0.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --background: oklch(0.17 0.01 250);
+  --foreground: oklch(0.95 0.006 85);
+  --card: oklch(0.205 0.012 250);
+  --primary: oklch(0.76 0.09 195);
+  --primary-foreground: oklch(0.2 0.03 205);
+  --muted-foreground: oklch(0.73 0.012 250);
+  --border: oklch(0.31 0.012 250);
+  --ring: oklch(0.7 0.09 195);
+  --card-shadow: 0 1px 2px 0 oklch(0 0 0 / 0.3);
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0 16px;
+  -webkit-font-smoothing: antialiased;
+}
+h1 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 0 0 20px;
+  text-wrap: balance;
+}
+p {
+  color: var(--muted-foreground);
+  margin: 0 0 16px;
+  text-wrap: pretty;
+}
+a,
+a:hover {
+  text-decoration: none;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  padding: 28px 24px;
+  min-width: 0;
+}
+.signin-card {
+  max-width: 380px;
+  margin: 18vh auto 0;
+  text-align: center;
+}
+.signin-card form {
+  margin: 0;
+}
+/* The primary action, as the app's default Button. 44 px high: a touch target (WCAG 2.5.5). */
+.btn,
+.signin-card p > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition-property: transform, background-color, border-color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.btn:hover,
+.signin-card p > a:hover {
+  background: color-mix(in oklch, var(--primary) 90%, var(--foreground));
+}
+/* The way back from a message page is a quiet outline Button. */
+.signin-card p > a {
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+.signin-card p > a:hover {
+  background: var(--background);
+}
+.btn:active,
+.signin-card p > a:active {
+  transform: scale(0.98);
+}
+.btn:focus-visible,
+.signin-card p > a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .signin-card p > a {
+    transition: none;
+  }
+  .btn:active,
+  .signin-card p > a:active {
+    transform: none;
+  }
+}

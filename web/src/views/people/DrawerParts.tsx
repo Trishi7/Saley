@@ -46,7 +46,7 @@ export function History({
     <ol className="flex flex-col gap-1.5 text-sm" data-history>
       {entries.map((e, i) => (
         <li key={`${e.stage}-${e.from_at}-${i}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-muted-foreground tabular w-24 shrink-0 text-xs">
+          <span className="text-muted-foreground nums w-24 shrink-0 text-xs">
             {dayLabel(e.from_at)}
           </span>
           {e.name && <span className="font-medium">{e.name}</span>}

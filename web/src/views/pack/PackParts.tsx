@@ -43,7 +43,7 @@ function Empty({ text }: { text: string }) {
 }
 
 function Shown({ text }: { text: string }) {
-  return <p className="text-muted-foreground tabular px-4 pb-3 text-xs">{text}</p>;
+  return <p className="text-muted-foreground nums px-4 pb-3 text-xs">{text}</p>;
 }
 
 /** A person's name from the team list; the short name when it is not there. */
@@ -110,7 +110,7 @@ export function LateBlock({ body }: { body: PackBody }) {
                   <TableCell className="py-2.5">
                     <OneLine text={owner(l.owner)} />
                   </TableCell>
-                  <TableCell className="tabular py-2.5 text-xs">{dayLabel(l.due)}</TableCell>
+                  <TableCell className="nums py-2.5 text-xs">{dayLabel(l.due)}</TableCell>
                   <TableCell className="tabular py-2.5 text-right">
                     {l.late_by_days === 1 ? W.packLateByOne : fmt(W.packLateBy, { n: l.late_by_days })}
                   </TableCell>
@@ -158,7 +158,7 @@ export function RemindBlock({ body }: { body: PackBody }) {
                   <TableCell className="py-2.5">
                     <OneLine text={owner(r.owner)} />
                   </TableCell>
-                  <TableCell className="tabular py-2.5 text-xs">{dayLabel(r.due)}</TableCell>
+                  <TableCell className="nums py-2.5 text-xs">{dayLabel(r.due)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -179,7 +179,7 @@ export function TasksBlock({ body }: { body: PackBody }) {
           <div key={p.person} className="flex min-w-0 flex-col gap-1.5">
             <p className="text-sm">
               <span className="font-medium">{owner(p.person)}</span>
-              <span className="text-muted-foreground tabular">
+              <span className="text-muted-foreground nums">
                 {" · "}
                 {p.total === 1 ? W.packTasksOne : fmt(W.packTasksCount, { n: p.total })}
               </span>
@@ -191,7 +191,7 @@ export function TasksBlock({ body }: { body: PackBody }) {
                   <span className="min-w-0 flex-1">
                     <OneLine text={t.title} />
                   </span>
-                  {t.due_label && <span className="text-muted-foreground tabular shrink-0 text-xs">{t.due_label}</span>}
+                  {t.due_label && <span className="text-muted-foreground nums shrink-0 text-xs">{t.due_label}</span>}
                 </li>
               ))}
             </ul>

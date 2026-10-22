@@ -62,7 +62,7 @@ function StatusLine({
         id="updated"
         role="status"
         data-state={error !== null ? "error" : (status?.state ?? "loading")}
-        className={cn("status tabular flex min-w-0 items-center gap-1.5", bad ? "bad text-bad" : "ok text-muted-foreground")}
+        className={cn("status nums flex min-w-0 items-center gap-1.5", bad ? "bad text-bad" : "ok text-muted-foreground")}
       >
         <span
           aria-hidden

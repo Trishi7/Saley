@@ -47,6 +47,11 @@ FEATURE_RE = re.compile(r"^\|\s*(F-R[\d.]+-\d+)\s*\|", re.MULTILINE)
 SHELL_TIMEOUT = 900
 # A live shell check whose human-only need is missing exits 3 and names its question.
 PENDING_EXIT = 3
+# A failing shell row names its telling line, never a log line (R5 gate: four live rows failed
+# with only "egress_call ..." in the note). The whole output goes to SHELL_LOGS/<row id>.log.
+TELLING = re.compile(r"\bDIFF\b|Refused|NOT CONFIGURED|Error|error:|FAIL|Traceback")
+LOG_LINE = re.compile(r"^\d{4}-\d{2}-\d{2}T\S+ \[")
+SHELL_LOGS = ROOT / ".scratch" / "gate" / "shell"
 PENDING_RE = re.compile(r"NOT CONFIGURED: (Q-[\w.-]+)")
 
 
@@ -257,7 +262,29 @@ def _shell(row: Row, env: dict[str, str] | None = None) -> tuple[bool, str]:
         if q not in open_questions():
             return False, f"exit 3 names {q}, which is not an open question"
         return True, f"PENDING: not configured ({q})"
-    return proc.returncode == 0, f"exit {proc.returncode} {last[0][:120]}".strip()
+    if proc.returncode == 0:
+        return True, f"exit 0 {last[0][:120]}".strip()
+    _save_log(row, text)
+    return False, f"exit {proc.returncode} {telling_line(text)[:160]}".strip()
+
+
+def telling_line(text: str) -> str:
+    """The line that says why a shell row failed: the last DIFF/Refused/error line, else the
+    last line that is not a log line, else the last line."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for line in reversed(lines):
+        if TELLING.search(line) and not LOG_LINE.match(line):
+            return line
+    plain = [line for line in lines if not LOG_LINE.match(line)]
+    return (plain or lines or [""])[-1]
+
+
+def _save_log(row: Row, text: str) -> None:
+    try:
+        SHELL_LOGS.mkdir(parents=True, exist_ok=True)
+        (SHELL_LOGS / f"{row.id}.log").write_text(text, encoding="utf-8")
+    except OSError:
+        pass  # the note still names the telling line
 
 
 def evaluate(

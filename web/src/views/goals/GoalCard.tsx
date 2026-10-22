@@ -42,7 +42,7 @@ export function GoalCard({ goal }: { goal: Goal }) {
     >
       <header className="flex items-start justify-between gap-4 border-b p-4">
         <div className="flex min-w-0 flex-col gap-2">
-          <p className="text-muted-foreground tabular text-xs">
+          <p className="text-muted-foreground nums text-xs">
             {goal.code} · {goal.value_text || "—"} · {fmt(W.goalDue, { d: goal.due_label })}
           </p>
           <h2 id={`goal-${goal.id}`} className="text-base leading-snug font-semibold text-pretty">
@@ -52,7 +52,7 @@ export function GoalCard({ goal }: { goal: Goal }) {
             <Tag tag={rag.tag} tone={rag.tone}>
               {rag.text}
             </Tag>
-            <span className="text-muted-foreground tabular text-xs" data-days-left>
+            <span className="text-muted-foreground nums text-xs" data-days-left>
               {daysLeftText(goal.days_left)}
             </span>
           </div>
@@ -82,10 +82,10 @@ function GoalPeople({ goal }: { goal: Goal }) {
         <Table id={listId} className="table-fixed">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="h-8 w-[30%] px-2">{W.colName}</TableHead>
-              <TableHead className="h-8 w-[24%] px-2">{W.colCompany}</TableHead>
-              <TableHead className="h-8 w-[22%] px-2">{W.colStage}</TableHead>
-              <TableHead className="h-8 px-2">{W.colNote}</TableHead>
+              <TableHead className="h-8 w-[36%] px-2 sm:w-[30%]">{W.colName}</TableHead>
+              <TableHead className="h-8 w-[30%] px-2 sm:w-[24%]">{W.colCompany}</TableHead>
+              <TableHead className="h-8 px-2 sm:w-[22%]">{W.colStage}</TableHead>
+              <TableHead className="h-8 px-2 max-sm:hidden">{W.colNote}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -93,6 +93,10 @@ function GoalPeople({ goal }: { goal: Goal }) {
               <TableRow key={p.id} data-person={p.id}>
                 <TableCell className="px-2 py-1.5 font-medium">
                   <OneLine text={p.name} />
+                  {/* Phone: the note goes under the name, so the stage badge keeps its width. */}
+                  <span className="text-muted-foreground block text-xs font-normal sm:hidden">
+                    <OneLine text={p.note} />
+                  </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground px-2 py-1.5">
                   <OneLine text={p.company} />
@@ -100,7 +104,7 @@ function GoalPeople({ goal }: { goal: Goal }) {
                 <TableCell className="px-2 py-1.5">
                   <StageTag stage={p.stage} className="max-w-full" />
                 </TableCell>
-                <TableCell className="text-muted-foreground px-2 py-1.5">
+                <TableCell className="text-muted-foreground px-2 py-1.5 max-sm:hidden">
                   <OneLine text={p.note} />
                 </TableCell>
               </TableRow>
@@ -110,7 +114,7 @@ function GoalPeople({ goal }: { goal: Goal }) {
       )}
       <MoreButton hidden={hidden} open={open} onToggle={() => setOpen(!open)} controls={listId} />
       {open && notListed > 0 && (
-        <p className="text-muted-foreground tabular text-xs">
+        <p className="text-muted-foreground nums text-xs">
           {fmt(W.goalMorePeople, { n: notListed })}
         </p>
       )}

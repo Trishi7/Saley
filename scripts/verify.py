@@ -2,8 +2,9 @@
 
 Why: a release is done only when every step has a result and the report says GATE: PASS.
 Each step runs even when an earlier one fails, so one run shows every problem.
-State lives in docs/test-reports/<release>-gate.json; the report is
-docs/test-reports/<release>-<date>.md with the GATE line at the top.
+State lives in docs/test-reports/<release>-gate.json. The report has the GATE line at the top.
+Its name (D236): a finalize with GATE: PASS writes docs/test-reports/<release>-final.md; every
+other run (steps 1-9, a failed finalize) writes docs/test-reports/<release>-<date>.md.
 
 Run:
   uv run python scripts/verify.py --release R1.1                 # steps 1-9
@@ -16,6 +17,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import http.cookiejar
+import importlib.util
 import json
 import os
 import re
@@ -32,12 +34,19 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import ModuleType
 from urllib.parse import urlsplit
 
 from saley.qa import build_stamp, gate, matrix
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "docs" / "test-reports"
+STATUS_FILE = ROOT / "docs" / "STATUS.md"
+ENV_KINDS = ("NEW", "CHANGED-default", "RETIRED")
+# R5 brief, Gate: the Impeccable audit score goes into the test report. From R5 on the scores
+# file must be complete (scripts/impeccable_report.py --check), or step 11 fails (D236).
+IMPECCABLE_FROM = "R5"
+IMPECCABLE_SCRIPT = ROOT / "scripts" / "impeccable_report.py"
 GATE_TMP = ROOT / ".scratch" / "gate"  # junit and browser results of the current run
 IST = timezone(timedelta(hours=5, minutes=30))
 COVERAGE_MIN = 80.0
@@ -81,9 +90,10 @@ CODE_SUFFIXES = {
 FINGERPRINT_SKIP_DIRS = {"__pycache__", "node_modules", "dist"}
 KEY_FILE_NAMES = ("*-write.json", "*service-account*", "*credentials*.json", "*-key.json")
 PY_DIRS = ("src", "tests", "scripts", "migrations")
+RECORDED_STEPS = (10, 11)  # reviewers and docs: recorded with --record, not run by this script
 STEPS = {
     1: (
-        "Static: tidy --check, py_compile, ruff, eslint, tsc, build stamp",
+        "Static: tidy --check, py_compile, ruff, eslint, tsc, web tests, build stamp",
         "verification-loop",
     ),
     2: ("Tests, coverage, new files >= 80 %, a matrix row per feature", "pytest, tdd-guide"),
@@ -95,7 +105,10 @@ STEPS = {
     8: ("Browser QA, read-only", "browser-qa"),
     9: ("Click-path audit: no non-GET request", "click-path-audit"),
     10: ("Reviewers on the release diff", "code, python, database, security, silent-failure"),
-    11: ("Docs: README, .env.example, docs/08 appendix, STATUS", "doc-updater"),
+    11: (
+        "Docs: README, .env.example, docs/08, STATUS env rows, Impeccable scores",
+        "doc-updater",
+    ),
 }
 
 
@@ -152,7 +165,7 @@ def step_static(_: argparse.Namespace) -> Result:
         1,
         "PASS",
         f"no stray file; {len(files)} files compile; ruff check and format clean; "
-        "eslint and tsc clean; build stamp matches web/",
+        "eslint and tsc clean; web unit tests pass; build stamp matches web/",
     )
 
 
@@ -162,7 +175,8 @@ def web_deps_installed() -> bool:
 
 
 def web_checks() -> str | None:
-    """The dashboard v2 part of step 1 (R5, D144, D145): eslint, tsc, then the build stamp.
+    """The dashboard v2 part of step 1 (R5, D144, D145): eslint, tsc, the web unit tests
+    (`npm --prefix web test`, node --test; CI runs them too), then the build stamp.
 
     Why the stamp and not a build: a build here would race the human's `--watch` and costs
     RAM (D142). The stamp proves dist was built from these exact sources; when it differs the
@@ -173,7 +187,7 @@ def web_checks() -> str | None:
         return "npm not found: install Node 24 (web/.nvmrc), then npm --prefix web ci"
     if not web_deps_installed():
         return "web/node_modules is missing: run npm --prefix web ci"
-    for name, script in (("eslint", "lint"), ("tsc", "typecheck")):
+    for name, script in (("eslint", "lint"), ("tsc", "typecheck"), ("web tests", "test")):
         code, out = run([npm, "--prefix", "web", "run", script])
         if code:
             return f"{name}: {tail(out)}"
@@ -971,6 +985,30 @@ def run_matrix(release: str, results: dict[int, Result]) -> list[dict]:
     return out
 
 
+def refresh_late_step_rows(release: str, results: dict[int, Result]) -> None:
+    """Re-read the matrix rows that run `step 10` or `step 11` (R5-D01) from the final results.
+
+    Why (D236): the matrix is evaluated after step 9, before the human records steps 10 and 11,
+    so such a row always read "not run" and the gate could never pass. The finalize knows them.
+    """
+    saved = load_matrix(release)
+    if saved is None:
+        return
+    rows, _errors = matrix.load(release)
+    late = {}
+    for row in rows:
+        if row.tool == "gate" and int(row.command.split()[1]) >= min(RECORDED_STEPS):
+            late[row.id] = int(row.command.split()[1])
+    for entry in saved:
+        n = late.get(entry["id"])
+        if n is None:
+            continue
+        r = results.get(n)
+        entry["ok"] = r is not None and r.status == "PASS"
+        entry["note"] = f"step {n} {r.status if r else 'not run'}"
+    matrix_path(release).write_text(json.dumps(saved, indent=1), encoding="utf-8")
+
+
 def load_matrix(release: str) -> list[dict] | None:
     path = matrix_path(release)
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
@@ -978,7 +1016,7 @@ def load_matrix(release: str) -> list[dict] | None:
 
 def current_release(status_file: Path | None = None) -> str | None:
     """STATUS.md line 'Current release: R2' (the chain's default)."""
-    text = (status_file or ROOT / "docs" / "STATUS.md").read_text(encoding="utf-8")
+    text = (status_file or STATUS_FILE).read_text(encoding="utf-8")
     found = re.search(r"^Current release: (R[\d.]+)", text, re.MULTILINE)
     return found.group(1) if found else None
 
@@ -1024,13 +1062,91 @@ def fingerprint_path(release: str) -> Path:
     return REPORTS / f"{release}-gate.tree"
 
 
+def env_rows(release: str, status_file: Path | None = None) -> dict[str, list[str]]:
+    """The release's rows in the STATUS.md env log, per kind (a kind with no row maps to [])."""
+    status = (status_file or STATUS_FILE).read_text(encoding="utf-8")
+    return {
+        kind: re.findall(
+            rf"^\| {re.escape(release)} \| {kind} \| (.*?) \|\r?$", status, re.MULTILINE
+        )
+        for kind in ENV_KINDS
+    }
+
+
 def env_changes(release: str, status_file: Path | None = None) -> list[str]:
-    status = (status_file or ROOT / "docs" / "STATUS.md").read_text(encoding="utf-8")
-    out = []
-    for kind in ("NEW", "CHANGED-default", "RETIRED"):
-        rows = re.findall(rf"^\| {re.escape(release)} \| {kind} \| (.*?) \|$", status, re.MULTILINE)
-        out.append(f"- {kind}: {'; '.join(rows) if rows else 'none'}")
-    return out
+    rows = env_rows(release, status_file)
+    return [f"- {kind}: {'; '.join(rows[kind]) if rows[kind] else 'none'}" for kind in ENV_KINDS]
+
+
+def impeccable_module() -> ModuleType:
+    """scripts/impeccable_report.py, loaded by path: scripts/ is not a package."""
+    spec = importlib.util.spec_from_file_location("impeccable_report", IMPECCABLE_SCRIPT)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {IMPECCABLE_SCRIPT}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def impeccable_needed(release: str) -> bool:
+    return release_key(release) >= release_key(IMPECCABLE_FROM)
+
+
+def impeccable_scores(release: str) -> tuple[str | None, list[str]]:
+    """(the score table, gaps) from docs/test-reports/<release>-impeccable.json.
+
+    Why: the same rules as `impeccable_report.py --check` (every page, both themes, every
+    dimension, no open critical finding), so the gate cannot pass on a partial audit.
+    """
+    path = REPORTS / f"{release}-impeccable.json"
+    if not path.is_file():
+        return None, [f"{path.name} is missing"]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return None, [f"{path.name} is not JSON"]
+    module = impeccable_module()
+    gaps = module.problems(data)
+    return (None if gaps else module.table(data)), gaps
+
+
+def docs_problems(release: str) -> list[str]:
+    """What the step-11 docs check proves by itself (D236): the STATUS.md env log has a NEW,
+    a CHANGED-default and a RETIRED row for the release (the report summary ends with them),
+    and, from R5 on, the Impeccable scores file is complete."""
+    rows = env_rows(release)
+    found = [f"docs/STATUS.md env log has no {release} {k} row" for k in ENV_KINDS if not rows[k]]
+    if impeccable_needed(release):
+        found += [f"Impeccable: {gap}" for gap in impeccable_scores(release)[1][:5]]
+    return found
+
+
+def with_docs_check(release: str, results: dict[int, Result]) -> dict[int, Result]:
+    """A copy of the results in which a recorded step-11 PASS turns FAIL when docs_problems
+    finds a gap. The saved state keeps the human's record, so a fix needs no new --record."""
+    r11 = results.get(11)
+    if r11 is None or r11.status != "PASS":
+        return dict(results)
+    found = docs_problems(release)
+    if not found:
+        return dict(results)
+    note = f"docs check: {'; '.join(found)} (recorded: {r11.note})"
+    return {**results, 11: Result(11, "FAIL", note, r11.seconds)}
+
+
+def report_path(release: str, gate_text: str) -> Path:
+    """D236: <release>-final.md on GATE: PASS, else <release>-<date>.md (one per day)."""
+    if gate_text == "GATE: PASS":
+        return REPORTS / f"{release}-final.md"
+    return REPORTS / f"{release}-{datetime.now(IST):%Y-%m-%d}.md"
+
+
+def impeccable_lines(release: str) -> list[str]:
+    if not impeccable_needed(release):
+        return []
+    table, gaps = impeccable_scores(release)
+    body = [table] if table else [f"FAIL: {'; '.join(gaps[:20])}"]
+    return ["", "## Impeccable audit", "", *body]
 
 
 def gate_line(results: dict[int, Result], rows: list[dict] | None = None) -> str:
@@ -1081,11 +1197,13 @@ def write_report(release: str, results: dict[int, Result], final: bool) -> Path:
                 f"| {r['id']} | {r['release']} | {r['layer']} | {what} | {result} | {note} |"
             )
     pending = [f"{r['id']} ({r['pending']})" for r in rows or [] if r.get("pending")]
+    lines += impeccable_lines(release)
     lines += ["", "## Summary", "", gate, ""]
     if pending:
         lines += [f"PENDING live rows (open questions): {', '.join(pending)}", ""]
+    # The summary ends with the env list (R5 brief, Gate; CLAUDE.md release rule).
     lines += ["Env changes:", *env_changes(release), ""]
-    path = REPORTS / f"{release}-{datetime.now(IST):%Y-%m-%d}.md"
+    path = report_path(release, gate)
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
@@ -1131,7 +1249,7 @@ def main(argv: list[str] | None = None) -> int:
     bad: list[str] = []
     if args.record:
         step, status, note = int(args.record[0]), args.record[1].upper(), args.record[2]
-        if step not in (10, 11) or status not in ("PASS", "FAIL"):
+        if step not in RECORDED_STEPS or status not in ("PASS", "FAIL"):
             parser.error("--record takes step 10 or 11 and PASS or FAIL")
         results[step] = Result(step, status, note)
     elif args.finalize:
@@ -1141,8 +1259,10 @@ def main(argv: list[str] | None = None) -> int:
             for n in range(1, 10):
                 results[n] = Result(n, "FAIL", "code changed after this step ran: run /verify")
             matrix_path(args.release).unlink(missing_ok=True)
+        save(args.release, results)  # the step 10 and 11 records stay as recorded
+        results = with_docs_check(args.release, results)
+        refresh_late_step_rows(args.release, results)
         report = write_report(args.release, results, final=True)
-        save(args.release, results)
         gate = gate_line(results, load_matrix(args.release))
         if gate == "GATE: PASS":
             write_manifest(args.release)

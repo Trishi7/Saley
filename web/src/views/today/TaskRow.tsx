@@ -106,7 +106,7 @@ export function TaskRow({
           <Tag tag={kind.tag} tone={kind.tone}>
             {kind.name}
           </Tag>
-          <Tag tag={due.tag} tone={due.tone} className="t-due tabular">
+          <Tag tag={due.tag} tone={due.tone} className="t-due nums">
             {task.due_label ?? W.noDate}
           </Tag>
         </div>

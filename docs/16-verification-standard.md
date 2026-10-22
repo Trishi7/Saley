@@ -15,16 +15,24 @@ earlier ones. Every release ends with `/verify`, then `/tidy`.
 | 1 Plan | agent `planner` | docs/plans/<release>.md | scope, matrix rows to add, decisions needed, needs from the human |
 | 2 Build | agent `tdd-guide`; skills python-patterns, fastapi-patterns, postgres-patterns, database-migrations; UI: make-interfaces-feel-better, frontend-design-direction | code + tests + matrix rows | every feature has a tests/matrix/<release>.yaml row |
 | 3 Review | agents code-reviewer, python-reviewer, fastapi-reviewer, database-reviewer, security-reviewer, silent-failure-hunter | review notes in the test report | zero open "must fix" |
-| 4 Verify | agent `saley-tester` runs `scripts/verify.py --release <id>` (the 12 gate steps + the matrices up to this release) | docs/test-reports/<release>-<date>.md | GATE: PASS |
+| 4 Verify | agent `saley-tester` runs `scripts/verify.py --release <id>` (the 12 gate steps + the matrices up to this release) | docs/test-reports/<release>-final.md on GATE: PASS, else <release>-<date>.md (D236) | GATE: PASS |
 | 5 Fix | agent `build-error-resolver` | regression test per fix | back to stage 3, then 4 from step 1 |
 | 6 Tidy-out | `/tidy` (report-only refactor-cleaner) | tidy-<date>.md | "tidy: nothing broke" |
 | 7 Docs | agent `doc-updater`; skill living-docs-governance | README, .env.example, docs/08 appendix, DECISIONS, STATUS, QUESTIONS | all current |
 | 8 Ping | `python .claude/hooks/notify.py --release <id> "<line>"` | one Discord line | only after GATE: PASS and tidy clean |
 | 9 Next | — | STATUS.md "current" = next release | start at stage 0 |
 
+Report names (D236): a finalize with GATE: PASS writes `docs/test-reports/<release>-final.md`.
+Every other run (steps 1–9, or a finalize that fails) writes `docs/test-reports/<release>-<date>.md`.
+The dated reports are run records. At a tidy stop, after a human yes, they move to `.scratch/`
+(as on 21 Oct). The final report stays.
+
 ## 2 · The gate (scripts/verify.py, 12 steps, the same for every release)
 
 1. Static: `scripts/tidy.py --check`, py_compile all files, `ruff check`, `ruff format --check`.
+   From R5 also the web app (D144, D145): `npm --prefix web run lint` (eslint),
+   `npm --prefix web run typecheck` (tsc), `npm --prefix web test` (web unit tests), and the
+   build stamp (a stale `dist` fails with "Run npm --prefix web run build").
 2. `pytest -q` on saley_test: 100 % pass (a skipped test does not pass); no new source file
    under 80 % coverage; the matrices load with no schema error; every feature in
    docs/plans/<release>.md (`| F-<release>-NN |` rows) has a matrix row, else FAIL.
@@ -45,9 +53,16 @@ earlier ones. Every release ends with `/verify`, then `/tidy`.
 9. Click-path audit on every state-changing control (none in R1; live from R2).
 10. Reviewers on the full diff since the last release: no open "must fix".
 11. Docs current (stage 7 list). .env.example: every variable uncommented with its default;
-    human-only values as `<REQUIRED: …>`; one RETIRED block.
+    human-only values as `<REQUIRED: …>`; one RETIRED block. The human or the tester records
+    step 11; the finalize then checks two things itself (D236) and turns a recorded PASS into
+    FAIL when one is missing: the docs/STATUS.md env log has a NEW, a CHANGED-default and a
+    RETIRED row for the release, and, from R5 on, `docs/test-reports/<release>-impeccable.json`
+    passes `scripts/impeccable_report.py --check` (every page, both themes, no open critical).
+    A matrix row that runs `step 10` or `step 11` (R5-D01) is read again at the finalize, from
+    the final step results (D236).
 12. Finalize: `GATE: PASS`, or `GATE: FAIL — step <n> · first failing matrix row <id>` at the
-    top. The summary ends with NEW / CHANGED-default / RETIRED env variables.
+    top. From R5 the report has the Impeccable score table (`impeccable_report.py --table`).
+    The summary ends with NEW / CHANGED-default / RETIRED env variables.
 
 After step 9 the gate evaluates every matrix row (§3). A failing row fails the gate.
 

@@ -55,7 +55,7 @@ export function RailNav({
                   {v.id === "blockers" && blockers !== null && blockers > 0 && (
                     <span
                       data-count="blockers"
-                      className="tabular bg-bad-soft text-bad ml-auto rounded-full px-1.5 text-xs"
+                      className="nums bg-bad-soft text-bad ml-auto rounded-full px-1.5 text-xs"
                     >
                       {blockers}
                     </span>

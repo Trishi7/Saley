@@ -1142,7 +1142,8 @@ def test_funnel_is_monotone_and_clickable(synced: Session, set_env: Callable[...
             n["dropped_seen"] + n["dropped_copy"] + n["dropped_gate"] + n["deduped"]
             == (n["fetched"])
         )
-        assert steps["sent"]["n"] is None and steps["sent"]["note"] == "—, no digest until R4"
+        assert steps["sent"]["n"] is None
+        assert steps["sent"]["note"] == "Digest not started yet"
         again = {s["key"]: s["n"] for s in client.get("/api/news/funnel").json()["steps"]}
         assert again == n
         opened = 0

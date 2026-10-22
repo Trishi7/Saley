@@ -394,7 +394,7 @@ GOAL_PEOPLE_SHOWN = 4  # web/src/views/goals/goal-rules.ts PEOPLE_SHOWN
 GOAL_BLOCKERS_SHOWN = 3  # BLOCKERS_SHOWN
 TIMELINE_MONTHS = 12  # saley.web.timeline.MONTHS
 FOLLOW_UP_LABEL = "Follow-up by"
-FOLLOW_UP_RULE = "D31"
+FOLLOW_UP_RULE = "from the follow-up rule"  # Q-R5-16
 EVIDENCE = re.compile(r"(?i)\bevidence\b")
 
 
@@ -523,7 +523,7 @@ def company_drawer_problems(facts: Mapping) -> list[str]:
 
 
 def person_drawer_problems(item: Mapping, facts: Mapping) -> list[str]:
-    """R5-P03: "Follow-up by" with a tooltip that names rule D31; the papers Button reads
+    """R5-P03: "Follow-up by" with the tooltip "from the follow-up rule" (Q-R5-16); the papers Button reads
     `papers_label` and its popover lists `papers[]` as plain links (no underline, rel
     noopener, a new tab); the working_on source shows when the API has one.
 

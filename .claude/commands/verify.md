@@ -1,5 +1,5 @@
 ---
-description: Standing release gate. Runs the 12 steps in order and writes docs/test-reports/<release>-<date>.md. GATE PASS is required before the release ping.
+description: Standing release gate. Runs the 12 steps in order and writes docs/test-reports/<release>-final.md on GATE PASS (else <release>-<date>.md). GATE PASS is required before the release ping.
 argument-hint: <release id, e.g. R1.1>
 ---
 
@@ -39,7 +39,7 @@ The agent that runs this command is `saley-tester` (`.claude/agents/saley-tester
 | 1 Plan | agent `planner` | docs/plans/<release>.md | scope, matrix rows to add, decisions needed, needs from the human |
 | 2 Build | agent `tdd-guide`; skills python-patterns, fastapi-patterns, postgres-patterns, database-migrations; UI: make-interfaces-feel-better, frontend-design-direction | code + tests + matrix rows | every feature has a tests/matrix/<release>.yaml row |
 | 3 Review | agents code-reviewer, python-reviewer, fastapi-reviewer, database-reviewer, security-reviewer, silent-failure-hunter | review notes in the test report | zero open "must fix" |
-| 4 Verify | agent `saley-tester` runs `scripts/verify.py --release <id>` (the 12 gate steps + the matrices up to this release) | docs/test-reports/<release>-<date>.md | GATE: PASS |
+| 4 Verify | agent `saley-tester` runs `scripts/verify.py --release <id>` (the 12 gate steps + the matrices up to this release) | docs/test-reports/<release>-final.md on GATE: PASS, else <release>-<date>.md (D236) | GATE: PASS |
 | 5 Fix | agent `build-error-resolver` | regression test per fix | back to stage 3, then 4 from step 1 |
 | 6 Tidy-out | `/tidy` (report-only refactor-cleaner) | tidy-<date>.md | "tidy: nothing broke" |
 | 7 Docs | agent `doc-updater`; skill living-docs-governance | README, .env.example, docs/08 appendix, DECISIONS, STATUS, QUESTIONS | all current |
@@ -77,7 +77,9 @@ The report names the skill or agent used for each step.
    It runs, in order, and stops nothing on the first failure (every step gets a result):
    1. Static: first `python scripts/tidy.py --check` (a stray untracked file fails the gate
       and the list is in the note; see `/tidy`), then `python -m py_compile` on every Python
-      file, `ruff check`, `ruff format --check`.
+      file, `ruff check`, `ruff format --check`. From R5 also the web app: eslint
+      (`npm --prefix web run lint`), tsc (`npm --prefix web run typecheck`), the web unit
+      tests (`npm --prefix web test`) and the build stamp ("Run npm --prefix web run build").
    2. Tests on `saley_test`: `pytest`, 100 % pass, coverage report; no new source file under 80 %.
       The matrices load with no error and every plan feature (`| F-<release>-NN |`) has a row.
       After step 9 every matrix row of this release and the earlier ones is evaluated
@@ -113,7 +115,9 @@ The report names the skill or agent used for each step.
    If you changed code, run `/verify` again from step 1.
 3. Step 11: agent `doc-updater` with skill `living-docs-governance`: README, `.env.example`
    (every variable uncommented with its default; human-only as `<REQUIRED: …>`; retired ones
-   in one commented RETIRED block), docs/08 appendix (endpoint list), `docs/STATUS.md`. Record:
+   in one commented RETIRED block), docs/08 appendix (endpoint list), `docs/STATUS.md` (with a
+   NEW, a CHANGED-default and a RETIRED row for the release in the env log). From R5 on,
+   `uv run python scripts/impeccable_report.py --check --release $ARGUMENTS` must pass. Record:
    ```
    uv run python scripts/verify.py --release $ARGUMENTS --record 11 PASS "docs: ..."
    ```
@@ -121,6 +125,11 @@ The report names the skill or agent used for each step.
    ```
    uv run python scripts/verify.py --release $ARGUMENTS --finalize
    ```
-   It writes `GATE: PASS` or `GATE: FAIL — step N` at the top of the report. The summary
-   ends with NEW / CHANGED-default / RETIRED env variables (from `docs/STATUS.md`).
+   It writes `GATE: PASS` or `GATE: FAIL — step N` at the top of the report. On PASS the
+   report is `docs/test-reports/<release>-final.md`; else `<release>-<date>.md` (D236).
+   The finalize checks step 11 itself (D236): no env rows for the release in `docs/STATUS.md`,
+   or (from R5) an incomplete Impeccable scores file, turns step 11 into FAIL. Matrix rows that
+   run `step 10` or `step 11` (R5-D01) are read again from these final results. From R5 the
+   report has the Impeccable score table. The summary ends with NEW / CHANGED-default /
+   RETIRED env variables (from `docs/STATUS.md`).
 5. Only on GATE: PASS: `python .claude/hooks/notify.py --release $ARGUMENTS "<one line>"`.

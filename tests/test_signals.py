@@ -682,7 +682,8 @@ def test_health_news_block_search_block_and_apollo(
     body = client.get("/api/health/full").json()
     news = body["news"]
     assert [s["key"] for s in news["steps"]][:3] == ["tried", "answered", "fetched"]
-    assert news["steps"][-1]["key"] == "sent" and news["steps"][-1]["note"].startswith("—")
+    assert news["steps"][-1]["key"] == "sent"
+    assert news["steps"][-1]["note"] == "Digest not started yet"  # D237
     assert all(s["href"].startswith("#") for s in news["steps"])
     assert [f["name"] for f in news["failed_sources"]] == ["Broken lane"]
     assert "token=abc" not in news["failed_sources"][0]["problem"]

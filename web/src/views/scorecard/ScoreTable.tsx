@@ -51,7 +51,7 @@ function LastWeek({ row }: { row: ScoreRow }) {
     );
   }
   return (
-    <span className="text-muted-foreground tabular text-xs">
+    <span className="text-muted-foreground nums text-xs">
       {fmt(W.scLastWeekLine, { c: num(lw.contacted), m: num(lw.meetings), d: num(lw.deals) })}
     </span>
   );

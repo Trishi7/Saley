@@ -250,6 +250,26 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
   }
+  /* Words with numbers in them (filters, stamps, "N more", dates, tags): the sans face with
+     tabular figures. Mono stays for a number that stands alone (tiles, number columns), so a
+     filter or a sentence never looks like code (R5 T17 audit). */
+  .nums {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Touch targets (WCAG 2.5.5, Impeccable audit): on the phone layout every Button, field and
+     select is at least 44 px high, and an icon Button is 44 x 44 px. min-height / min-width win
+     over the h-8 / size-9 utilities without a per-component class; the desktop sizes stay. Text
+     Buttons (chips, pager) keep their width, so dense rows do not grow (R5 T17 review). */
+  @media (max-width: 639.98px) {
+    [data-slot="button"],
+    select,
+    input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="range"], [type="file"]) {
+      min-height: 2.75rem;
+    }
+    [data-slot="button"][data-size^="icon"] {
+      min-width: 2.75rem;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

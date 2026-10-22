@@ -2,6 +2,30 @@
 
 (newest first)
 
+## Q-R5-17 · 2026-10-21 · R5 gate · Discord test channel equals the sales channel (resolved)
+- **Answer (Trishi, 21 Oct, chat):** `DISCORD_SALES_CHANNEL_ID` is empty in the laptop `.env` again; rerun the gate (D238). **Resolved.**
+- Gate rows R4-P03 and R4-Q02 (live Discord round trips in the test channel) now stop with "Refused: DISCORD_TEST_CHANNEL_ID equals the live sales channel." They passed in the R4 gate, so a value in `.env` changed since 21 Oct morning. The guard is right (CLAUDE.md: never post to a live channel from a laptop); Claude Code never reads `.env`.
+- Same case as Q-R1-4 (18 Oct): the guard is from R1.1 and both rows passed in the R4 gate on 20 Oct, so `DISCORD_SALES_CHANNEL_ID` in `.env` again equals the test channel id. Needed from the human: set `DISCORD_SALES_CHANNEL_ID=` (empty) again, as answered in Q-R1-4, or to the real API Sales channel id (never the test id). Then say "rerun the gate".
+
+## Q-R5-16 · 2026-10-21 · R5 T17 · The "Follow-up by" tooltip and the new id rule (resolved)
+- **Answer (Trishi, 21 Oct, chat):** new text "from the follow-up rule"; the exemption is removed; D237 holds with no exceptions (D238). **Resolved.**
+- decision needed: the R5 brief words the People tooltip "from rule D31", and D237 bans "D<n>" in UI text; took: kept the brief's text, exempted by name in `saley.qa.ste_lint.ID_ALLOWED`; why: the brief is the human's own wording. Say a new text (e.g. "from the follow-up rule") and the exemption goes.
+
+## Q-R5-15 · 2026-10-21 · R5 T18 · Gate report name (resolved)
+- **Answer (Trishi, 21 Oct, chat):** D236 confirmed. **Resolved.**
+- decision needed: the name of a failed gate report; took: `<release>-final.md` only on GATE: PASS, every other run keeps `<release>-<date>.md` (D236); why: one final record per release, and the date already marks a run record. The finalize now also fails step 11 when STATUS has no env rows for the release or the Impeccable scores are incomplete. It also reads the step-11 matrix row (R5-D01) again from the final results; before, that row could never pass.
+
+## Q-R5-14 · 2026-10-21 · R5 T17 · Impeccable final audit and polish (resolved)
+- **Answer (Trishi, 21 Oct, chat):** D229–D235 confirmed; legend stays open; the P2 words changed now and the STE lint refuses internal ids in UI text (D237). **Resolved.**
+- decision needed: what `/api/pack` answers on a fresh server with no pack; took: 200 with `empty: true` and null pack fields, plus `prev_week` / `next_week` for the week picker; a typed Monday with no pack keeps 404 (D229); why: the 404 was a console error on every fresh server, and the gate needs zero. The R4 test for "no pack is 404" now checks the new contract (the matrix row text is not changed).
+- decision needed: fold the long legend on the phone; took: no, it stays open at the top (D230); why: the brief asks a legend at the top of each page. Say "fold it" and it becomes a disclosure on narrow screens.
+- decision needed: when to use the mono face; took: lone numbers only; words with numbers use the sans face with tabular figures (D231); why: filters and stamps in mono read as code in the screenshots.
+- decision needed: how to reach 44 px touch targets; took: one CSS floor for Buttons, fields and selects below 640 px (D232); why: one rule, no per-component drift; desktop sizes stay.
+- decision needed: how to split the 684 kB bundle; took: one lazy chunk per page (D233); why: the first load gets the shell and one page; the CSP does not change.
+- decision needed: how the sign-in page gets the new look under the CSP; took: CSS only, a copy of the app tokens, Geist when installed else the system sans (D234); why: the bundled font has a hashed name, and this page must work without a build.
+- decision needed: wide tables on the phone; took: the key number moves next to the name; goals put the note under the name on the phone; tiles two per row (D235); why: the number that matters showed only after a sideways scroll.
+- open (P2, not changed in T17; words.py and a pinned news test): Sources and health shows "no digest until R4" and "sheet writes off: Q-R2-1" (a release id and a question id on the page); the Suggestions evidence line shows a raw sheet key ("Sheet row Outreach PoCs:634:..."). Change these words?
+
 ## Q-R5-13 · 2026-10-21 · R5 T16b · The cut-over (resolved)
 - **Answer (Trishi, 21 Oct, chat):** D224–D226 confirmed; /next as 404 is right (D228). **Resolved.**
 - decision needed: what `/next` does after the cut-over, and what is left of `static/`; took: `/` serves the app, `/next` is a 404, only `/static/signin.css` is served by name; `include_seen` and `left_out_note` leave the API, `left_out_seen` stays as a count (D224); why: the plan deletes `/next` and the legacy static app; a redirect would keep a dead path alive; the count is still true and costs nothing.

@@ -82,7 +82,7 @@ export function JobsTable({ jobs }: { jobs: HealthData["jobs"] }) {
                   <TableCell className="py-2.5 font-medium">
                     <OneLine text={j.job} />
                   </TableCell>
-                  <TableCell className="tabular py-2.5 text-xs">{when(j.finished_at ?? j.started_at)}</TableCell>
+                  <TableCell className="nums py-2.5 text-xs">{when(j.finished_at ?? j.started_at)}</TableCell>
                   <TableCell className="py-2.5">
                     <StatusTag status={j.status} />
                   </TableCell>

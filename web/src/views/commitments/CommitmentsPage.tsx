@@ -89,7 +89,7 @@ export function CommitmentsPage({ view }: { view: ViewDef }) {
       {!page && list.loading && <LoadingLine />}
       {page && (
         <div data-content className="flex flex-col gap-5" aria-busy={list.loading || undefined}>
-          <div id="tiles" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div id="tiles" className="grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
             {STATES.map((s) => (
               <Stat key={s} id={s} label={STATE_TAG[s].name} value={n(s)} />
             ))}
@@ -159,7 +159,7 @@ export function CommitmentsPage({ view }: { view: ViewDef }) {
               )}
             </Pager>
           </section>
-          <p className="text-muted-foreground tabular text-xs">
+          <p className="text-muted-foreground nums text-xs">
             {fmt(W.lastComputed, { t: page.last_computed_label })}
           </p>
         </div>

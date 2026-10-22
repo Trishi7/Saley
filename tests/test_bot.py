@@ -841,8 +841,13 @@ UNKNOWN_LINE = "I do not have that. I can search the web, or ask the team. Which
 
 
 @pytest.fixture
-def answers(synced: Session) -> Session:
-    """The default sheet plus stories, a working_on note, a task and a meeting this week."""
+def answers(synced: Session, monkeypatch: pytest.MonkeyPatch) -> Session:
+    """The default sheet plus stories, a working_on note, a task and a meeting this week.
+
+    The dates below are fixed around Wed 21 Oct 2026, so the clock is pinned there: "news since
+    Wednesday" read on a real Thursday found nothing (an R5 gate run after midnight). A test
+    that sets its own time (`at_time`) still wins: its patch comes later."""
+    monkeypatch.setattr(clock, "now_ist", lambda: datetime(2026, 10, 21, 12, 0, tzinfo=clock.tz()))
     bot_answer.forget_last()
     synced.execute(
         text(

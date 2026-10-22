@@ -43,8 +43,8 @@ export function DecisionRow({ d, onChanged }: { d: Decision; onChanged: () => vo
 
   return (
     <TableRow data-row data-id={d.id} data-kind={d.kind}>
-      <TableCell className="tabular text-muted-foreground py-2.5 text-xs">{d.id}</TableCell>
-      <TableCell className="tabular py-2.5 text-xs">
+      <TableCell className="nums text-muted-foreground py-2.5 text-xs">{d.id}</TableCell>
+      <TableCell className="nums py-2.5 text-xs">
         <span className="block">{fmt(W.dateTime, { d: dayLabel(d.at), t: istTime(d.at) })}</span>
         <span className="text-muted-foreground block">{surface ?? "—"}</span>
       </TableCell>

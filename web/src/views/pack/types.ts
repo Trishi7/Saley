@@ -37,9 +37,14 @@ export type PackBody = {
   tasks: PackTasks[];
 };
 
+// `empty` is true only when no pack exists at all; then the pack fields are null (D229).
+// `prev_week` / `next_week` are the Mondays of the neighbour packs (null when there is none).
 export type PackData = {
-  week_start: string;
-  built_at: string;
-  body: PackBody;
+  week_start: string | null;
+  built_at: string | null;
+  body: PackBody | null;
+  prev_week: string | null;
+  next_week: string | null;
+  empty: boolean;
   last_computed_label: string;
 };

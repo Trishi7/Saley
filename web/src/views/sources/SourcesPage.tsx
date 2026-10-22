@@ -68,7 +68,7 @@ export function SourcesPage({ view }: { view: ViewDef }) {
             <QualityTable data={data} />
             <Connections data={data} />
           </div>
-          <p className="text-muted-foreground tabular text-xs">
+          <p className="text-muted-foreground nums text-xs">
             {fmt(W.lastComputed, { t: data.last_computed_label })}
           </p>
         </div>

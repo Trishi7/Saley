@@ -424,7 +424,9 @@ def events(
 
 
 def part_label(part: rules.Part) -> str:
-    n = part.n if part.n is not None else 0
+    if part.n is None:  # an unknown count is "—", never 0 (CLAUDE.md; step 10 review)
+        return w.fill(PART_WORDS.get(part.code, w.PART_OTHER), n="—")
+    n = part.n
     if part.code in PART_ONE:  # A12: "1 story", not "1 stories"
         return w.fill_count(PART_ONE[part.code], PART_WORDS[part.code], n)
     return w.fill(PART_WORDS.get(part.code, w.PART_OTHER), n=n)
@@ -435,7 +437,8 @@ def search_state(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "state": state,
         "message": SEARCH_WORDS.get(state or "", w.SEARCH_NONE),
-        "hits": int(row.get("hits") or 0),
+        # No search yet: the count is unknown (None, shown as "—"), never 0 (step 10 review).
+        "hits": None if row.get("hits") is None else int(row["hits"]),
     }
 
 

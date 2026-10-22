@@ -37,7 +37,7 @@ export function IndustryBars({
                 title={fmt(W.industryRow, { i: row.industry, n: row.people, pct })}
                 onClick={() => onPick(filter)}
                 className={cn(
-                  "hover:bg-accent/60 focus-visible:ring-ring/50 grid w-full grid-cols-[minmax(0,9rem)_1fr_3rem] items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm outline-none focus-visible:ring-[3px]",
+                  "hover:bg-accent/60 focus-visible:ring-ring/50 grid w-full grid-cols-[minmax(0,9rem)_1fr_3rem] items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm outline-none max-sm:min-h-11 focus-visible:ring-[3px]",
                   current === filter && "bg-accent",
                 )}
               >
@@ -48,7 +48,7 @@ export function IndustryBars({
                     style={{ width: `${Math.min(100, Math.max(0, row.pct ?? 0))}%` }}
                   />
                 </span>
-                <span className="text-muted-foreground tabular text-right text-xs">
+                <span className="text-muted-foreground nums text-right text-xs">
                   {pct}
                 </span>
               </button>

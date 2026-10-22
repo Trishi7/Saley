@@ -587,9 +587,16 @@ class PackBody(Out):
 
 
 class PackOut(Meta):
-    week_start: date
-    built_at: datetime
-    body: PackBody
+    """One stored pack. `empty` is true only when no pack exists at all (then the three pack
+    fields are null): a fresh server answers 200, not 404, so the page logs no error (D229).
+    `prev_week` / `next_week` are the Mondays of the neighbour packs, for the week picker."""
+
+    week_start: date | None
+    built_at: datetime | None
+    body: PackBody | None
+    prev_week: date | None
+    next_week: date | None
+    empty: bool
 
 
 # ------------------------------------------------------------------ health
@@ -1103,7 +1110,7 @@ class HitItem(Out):
 class SearchState(Out):
     state: str | None
     message: str | None
-    hits: int
+    hits: int | None  # None: no search yet (unknown, never 0)
 
 
 class SuggestionItem(Out):

@@ -96,7 +96,7 @@ export function CommitmentRow({
         <OneLine text={item.owner_name} />
       </TableCell>
       <TableCell className="py-2.5">
-        <Tag tag={due.tag} tone={due.tone} className="tabular">
+        <Tag tag={due.tag} tone={due.tone} className="nums">
           {item.due_label ?? W.cNoDue}
         </Tag>
       </TableCell>

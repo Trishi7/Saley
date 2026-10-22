@@ -26,7 +26,7 @@ export type Suggestion = {
   via: string | null;
   evidence: Record<string, unknown>;
   can_find_people: boolean;
-  search: { state: string | null; message: string | null; hits: number } | null;
+  search: { state: string | null; message: string | null; hits: number | null } | null;
   hits: SearchHit[];
   seen: boolean;
   /** "Add Priya Rao (Sarvam) to pipeline — hiring for evals", checked on the server; null when

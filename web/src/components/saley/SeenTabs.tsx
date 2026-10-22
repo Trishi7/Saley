@@ -55,7 +55,7 @@ export function SeenTabs({
             {label}
             <span
               className={cn(
-                "tabular rounded-full px-1.5 text-xs",
+                "nums rounded-full px-1.5 text-xs",
                 on && id === "new" && n ? "bg-primary text-primary-foreground" : "bg-background/70",
               )}
             >

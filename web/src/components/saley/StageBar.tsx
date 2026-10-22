@@ -27,7 +27,7 @@ export function StageBar({
   const total = parts.reduce((sum, [, n]) => sum + n, 0);
   if (total === 0) {
     return (
-      <span data-stagebar className="text-muted-foreground tabular text-sm">
+      <span data-stagebar className="text-muted-foreground nums text-sm">
         —
       </span>
     );

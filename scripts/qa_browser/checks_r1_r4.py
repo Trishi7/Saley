@@ -584,6 +584,9 @@ PACK_FIXTURE = {
     "stale": False,
     "week_start": "2026-10-19",
     "built_at": "2026-10-19T08:30:00Z",
+    "prev_week": None,
+    "next_week": None,
+    "empty": False,
     "body": {
         "week_start": "2026-10-19",
         "last_week_day": "2026-10-12",
@@ -700,14 +703,17 @@ def weekly_pack_page(page: Page, base: str, run: Run, shots: Path) -> None:
     link = page.locator('.rail a[data-v="pack"]')
     run.expect(link.count() == 1 and "R4" not in link.inner_text(), "weekly_pack_page: rail link")
     real = page.request.get(f"{base}/api/pack", headers={"x-saley-as": QA_USER})
-    if real.status == 200:  # a real pack exists: the page shows its numbers
-        link.click()
-        settle(page)
+    # No pack yet is 200 with `empty` (D229): a 404 was a console error on a fresh server.
+    run.expect(real.status == 200, f"weekly_pack_page: /api/pack gave {real.status}")
+    link.click()
+    settle(page)
+    if real.status == 200 and not real.json().get("empty"):  # a real pack: its numbers
         want = len(real.json()["body"]["team"])
         got = page.locator("#pack-tiles .tile").count()
         run.expect(got == want, f"weekly_pack_page: {got} tiles for {want} numbers")
-    else:  # no pack yet: the page must not be asked (a 404 is a console error)
-        run.expect(real.status == 404, f"weekly_pack_page: /api/pack gave {real.status}")
+    elif real.status == 200:  # no pack yet: the calm empty line
+        empty = page.locator("#v-pack [data-pack-empty]").count()
+        run.expect(empty == 1, "weekly_pack_page: no empty line for a fresh server")
     pack_fixture_checks(page, base, run, shots)
     run.expect(urlparse(page.url).fragment == "pack", "weekly_pack_page: not on #pack")
     run.expect(page.locator("#v-pack.on").count() == 1, "weekly_pack_page: pack view not shown")

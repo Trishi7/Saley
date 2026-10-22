@@ -61,7 +61,7 @@ export function AccountTable({
             </TableCell>
             <TableCell className="py-2.5">
               <div className="flex flex-col gap-1.5">
-                <span data-people-label className="tabular text-sm">
+                <span data-people-label className="nums text-sm">
                   {a.people_label}
                 </span>
                 <StageBar counts={a.stage_counts} className="max-w-56" />
@@ -81,7 +81,7 @@ export function AccountTable({
               </span>
             </TableCell>
             <TableCell className="text-muted-foreground py-2.5">{a.industry || "—"}</TableCell>
-            <TableCell className="text-muted-foreground tabular py-2.5">
+            <TableCell className="text-muted-foreground nums py-2.5">
               {a.goal_codes.length ? a.goal_codes.join(", ") : "—"}
             </TableCell>
           </TableRow>

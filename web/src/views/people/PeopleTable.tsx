@@ -75,7 +75,7 @@ export function PeopleTable({
             <TableCell className="py-2.5">
               <OneLine text={p.next_step} />
             </TableCell>
-            <TableCell className="text-muted-foreground tabular py-2.5 text-xs">
+            <TableCell className="text-muted-foreground nums py-2.5 text-xs">
               <OneLine text={lastTouch(p.last_touches)} />
             </TableCell>
           </TableRow>

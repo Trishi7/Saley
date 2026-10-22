@@ -303,3 +303,20 @@ def test_repo_test_tab_shell_rows_declare_writes() -> None:
     rows, _ = matrix.load("R99")
     tab_rows = [r for r in rows if r.tool == "shell" and "--test-tab" in r.command.split()]
     assert tab_rows and all(r.writes == "test_tab" for r in tab_rows)
+
+
+def test_a_failing_shell_row_names_its_telling_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R5 gate: four live rows failed with only an egress log line in the note. The note now
+    names the DIFF/Refused/error line, and the whole output is saved per row."""
+    log = "2026-10-21T17:44:50Z [info     ] egress_call host=sheets"
+    text = "\n".join([log, "undo restores the cell · old · new · DIFF", log])
+    assert matrix.telling_line(text) == "undo restores the cell · old · new · DIFF"
+    assert matrix.telling_line("\n".join(["plain end", log])) == "plain end"
+    monkeypatch.setattr(matrix, "SHELL_LOGS", tmp_path)
+    code = "import sys; print('step 1 2 DIFF'); print('" + log + "'); sys.exit(1)"
+    row = matrix.Row("R5", "R5-W09", "F", "sheet", "w", "shell", f'python -c "{code}"', "p")
+    ok, note = matrix._shell(row)
+    assert ok is False and note == "exit 1 step 1 2 DIFF"
+    assert "egress_call" in (tmp_path / "R5-W09.log").read_text(encoding="utf-8")

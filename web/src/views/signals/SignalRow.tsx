@@ -13,7 +13,7 @@ function isLinked(item: SignalItem): item is LinkedItem {
 }
 
 function Score({ label, n }: { label: string; n: number | null }) {
-  return <span className="tabular">{fmt(label, { n: n ?? "—" })}</span>;
+  return <span className="nums">{fmt(label, { n: n ?? "—" })}</span>;
 }
 
 export function SignalRow({ item }: { item: SignalItem }) {
@@ -50,7 +50,7 @@ export function SignalRow({ item }: { item: SignalItem }) {
             {W.lgVerify}
           </Tag>
         )}
-        <span className="text-muted-foreground tabular ml-auto text-xs">{item.published_label}</span>
+        <span className="text-muted-foreground nums ml-auto text-xs">{item.published_label}</span>
       </div>
       <p className="text-sm leading-snug font-medium text-pretty">{item.title}</p>
       {linked && (

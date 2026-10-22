@@ -102,7 +102,7 @@ function CompanyDetail({
             })}
           </span>
         )}
-        <span data-people-label className="tabular text-sm font-medium">
+        <span data-people-label className="nums text-sm font-medium">
           {item.people_label}
         </span>
         <StageBar counts={item.stage_counts} />

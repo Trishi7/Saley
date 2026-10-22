@@ -21,7 +21,6 @@ const PARTS_SHOWN = 4;
 
 function evidenceLine(evidence: Record<string, unknown>): string {
   const bits: string[] = [];
-  if (typeof evidence.row === "string" && evidence.row) bits.push(fmt(W.sheetRow, { r: evidence.row }));
   if (typeof evidence.industry === "string" && evidence.industry) bits.push(evidence.industry);
   if (typeof evidence.geo === "string" && evidence.geo) bits.push(evidence.geo);
   return bits.join(" · ");
@@ -91,7 +90,7 @@ export function SuggestionCard({
           </p>
           {sub && <p className="text-muted-foreground text-xs text-pretty">{sub}</p>}
         </div>
-        <span className="tabular bg-muted shrink-0 rounded-full px-2 py-0.5 text-xs">
+        <span className="nums bg-muted shrink-0 rounded-full px-2 py-0.5 text-xs">
           {fmt(W.sgScore, { n: item.score })}
         </span>
       </div>
@@ -107,6 +106,17 @@ export function SuggestionCard({
       {(item.via || evidence) && (
         <p className="text-muted-foreground text-xs text-pretty">
           {[item.via, evidence].filter(Boolean).join(" · ")}
+        </p>
+      )}
+      {typeof item.evidence.row === "string" && item.evidence.row && (
+        // The human, 21 Oct (Q-R5-14): "<Name> · <Company> · sheet row"; the raw row key only
+        // on hover, never as page text.
+        <p data-evidence-row className="text-muted-foreground text-xs text-pretty">
+          {[item.subject, item.company].filter(Boolean).join(" · ")}
+          {" · "}
+          <span title={item.evidence.row} className="underline decoration-dotted">
+            {W.sheetRow}
+          </span>
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">

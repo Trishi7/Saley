@@ -64,7 +64,7 @@ export function ScorecardPage({ view }: { view: ViewDef }) {
               <h2 id="sc-title" className="text-base font-semibold">
                 {W.navScorecard}
               </h2>
-              <span className="text-muted-foreground tabular text-xs">
+              <span className="text-muted-foreground nums text-xs">
                 {fmt(W.scIndustries, { n: num(data.total) })}
               </span>
             </header>
@@ -85,7 +85,7 @@ export function ScorecardPage({ view }: { view: ViewDef }) {
               )}
             </Pager>
           </section>
-          <p className="text-muted-foreground tabular text-xs">
+          <p className="text-muted-foreground nums text-xs">
             {fmt(W.lastComputed, { t: data.last_computed_label })}
           </p>
         </div>

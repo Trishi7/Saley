@@ -491,6 +491,14 @@ def test_part_labels_read_right_for_one() -> None:
     assert label(suggest.Part("connections", 1, 1)) == "1 connected at the company"
 
 
+def test_an_unknown_count_is_a_dash_never_zero() -> None:
+    """CLAUDE.md: unknown is "—", never 0 (R5 gate step 10 review)."""
+    label = web_signals.part_label(suggest.Part("news", 1, None))
+    assert label.startswith("— ") and not label.startswith("0")
+    assert web_signals.search_state({"search_state": None, "hits": None})["hits"] is None
+    assert web_signals.search_state({"search_state": "done", "hits": 0})["hits"] == 0
+
+
 def test_the_page_words_have_a_singular_for_stories() -> None:
     from pathlib import Path
 

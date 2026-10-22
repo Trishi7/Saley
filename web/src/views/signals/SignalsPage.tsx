@@ -114,7 +114,7 @@ export function SignalsPage({ view }: { view: ViewDef }) {
         {list.markFailed && <SeenMarkFailed />}
         {data && (
           <>
-            <p className="text-muted-foreground tabular text-xs" data-stamp>
+            <p className="text-muted-foreground nums text-xs" data-stamp>
               {fmt(W.winLine, { w: data.window.label })}
               {" · "}
               {data.last_computed ? fmt(W.lastComputed, { t: data.last_computed_label }) : W.noNewsYet}

@@ -11,9 +11,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { fmt, W } from "@/words";
 import type { FollowUpBy, Paper, WorkingOn } from "./types";
 
-const RULE = "D31"; // the rule that names who follows up, if the API leaves it out
+const RULE = "the follow-up rule"; // if the API leaves it out (Q-R5-16: words, never an id)
 
-/** The label with its tooltip: "Follow-up by" (i) -> "from rule D31". */
+/** The label with its tooltip: "Follow-up by" (i) -> "from the follow-up rule". */
 export function FollowUpLabel({ rule }: { rule: string | undefined }) {
   const tip = fmt(W.followUpTip, { rule: rule || RULE });
   return (
@@ -25,7 +25,7 @@ export function FollowUpLabel({ rule }: { rule: string | undefined }) {
             type="button"
             data-follow-up-tip={tip}
             aria-label={tip}
-            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 inline-flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-2"
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 relative inline-flex size-6 items-center justify-center rounded-full outline-none after:absolute after:-inset-2.5 focus-visible:ring-2"
           >
             <InfoIcon aria-hidden className="size-3.5" />
           </button>
@@ -54,7 +54,7 @@ export function FollowUpValue({ value }: { value: FollowUpBy | null }) {
 export function Papers({ papers, label }: { papers: Paper[]; label: string }) {
   if (papers.length === 0) {
     return (
-      <span className="text-muted-foreground tabular" data-papers>
+      <span className="text-muted-foreground nums" data-papers>
         {label || "—"}
       </span>
     );
@@ -62,7 +62,7 @@ export function Papers({ papers, label }: { papers: Paper[]; label: string }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" data-papers className="tabular">
+        <Button type="button" variant="outline" size="sm" data-papers className="nums">
           <FileTextIcon aria-hidden />
           {label}
         </Button>
@@ -75,7 +75,7 @@ export function Papers({ papers, label }: { papers: Paper[]; label: string }) {
                 href={paper.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:bg-accent focus-visible:ring-ring/50 flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm no-underline outline-none focus-visible:ring-2"
+                className="hover:bg-accent focus-visible:ring-ring/50 flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm no-underline max-sm:min-h-11 outline-none focus-visible:ring-2"
               >
                 <span className="min-w-0 flex-1 truncate">{paper.text}</span>
                 <ArrowUpRightIcon aria-hidden className="text-muted-foreground size-3.5 shrink-0" />

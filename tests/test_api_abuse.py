@@ -387,6 +387,9 @@ PACK_KEYS = {
     "week_start",
     "built_at",
     "body",
+    "prev_week",
+    "next_week",
+    "empty",
 }
 PACK_BODY_KEYS = {
     "week_start",
@@ -449,10 +452,37 @@ def test_r4_pack_and_scorecard_contract(client: TestClient, synced: Session) -> 
             assert r.status_code == 401 and r.json() == {"detail": "Sign in to use Saley."}
 
 
-def test_r4_pack_with_no_pack_is_404(client: TestClient) -> None:
-    """With no pack built yet, /api/pack is a plain 404 with fixed text."""
+def test_r4_pack_with_no_pack_is_an_empty_answer(client: TestClient) -> None:
+    """With no pack built yet, /api/pack is 200 with `empty` and null pack fields (D229).
+
+    R5 T17 changed this from a 404: a fresh server is a normal state, and the browser logged
+    the 404 as a console error. A Monday with no pack keeps the 404 with fixed text.
+    """
     r = client.get("/api/pack")
-    assert r.status_code == 404 and r.json() == {"detail": "No pack for that week."}
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == PACK_KEYS and body["empty"] is True
+    nulls = ("week_start", "built_at", "body", "prev_week", "next_week")
+    assert all(body[k] is None for k in nulls)
+    missing = client.get("/api/pack?week=2020-01-06")
+    assert missing.status_code == 404 and missing.json() == {"detail": "No pack for that week."}
+
+
+def test_pack_neighbours_point_only_at_stored_packs(client: TestClient, synced: Session) -> None:
+    """The week picker moves only to a week with a pack: prev/next are stored Mondays (D229)."""
+    from datetime import date
+
+    from saley.intel import pack
+
+    for day in (12, 19):
+        pack.build_weekly_pack(synced, now=now_ist().replace(year=2026, month=10, day=day, hour=14))
+    synced.commit()
+    newest = client.get("/api/pack").json()
+    assert newest["week_start"] == str(date(2026, 10, 19)) and newest["empty"] is False
+    assert newest["prev_week"] == str(date(2026, 10, 12)) and newest["next_week"] is None
+    older = client.get(f"/api/pack?week={newest['prev_week']}").json()
+    assert older["week_start"] == newest["prev_week"]
+    assert older["next_week"] == newest["week_start"]
 
 
 @pytest.mark.parametrize(

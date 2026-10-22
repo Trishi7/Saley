@@ -393,7 +393,7 @@ def test_no_sync_yet_shows_no_data_not_zero(db: Session) -> None:
 
 def test_scorecard_reply_has_no_source(client: TestClient) -> None:
     row = client.get("/api/scorecard").json()["items"][0]
-    assert row["reply_pct"] is None and row["reply_note"] == "No source until R2"
+    assert row["reply_pct"] is None and row["reply_note"] == "No source yet"
 
 
 def test_money_blocked_total_equals_the_list(db: Session, raw_sheet: dict) -> None:
@@ -1665,7 +1665,7 @@ def test_person_follow_up_by_papers_source(client: TestClient, synced: Session) 
     )
     synced.commit()
     item = client.get(f"/api/people/{pid}").json()["item"]
-    assert item["follow_up_by"]["rule"] == "D31"
+    assert item["follow_up_by"]["rule"] == "the follow-up rule"
     assert item["follow_up_by"]["name"].lower().startswith(item["owner"])
     assert item["follow_up_by"]["source"] in {
         "First Contact",
@@ -1748,7 +1748,7 @@ def test_person_without_owner_or_paper_shows_no_guess(client: TestClient, synced
     )
     synced.commit()
     item = client.get(f"/api/people/{pid}").json()["item"]
-    assert item["follow_up_by"] == {"name": None, "source": None, "rule": "D31"}
+    assert item["follow_up_by"] == {"name": None, "source": None, "rule": "the follow-up rule"}
     assert item["papers"] == [] and item["papers_label"] == "0 papers"
 
 
@@ -1819,7 +1819,7 @@ def test_find_people_act_is_refused_while_the_feature_is_off(client: TestClient,
     body = {"action": "find_people", "target_ids": [1]}
     off = client.post("/api/act", json=body, headers=headers)
     assert off.status_code == 403
-    assert off.json()["detail"] == "Find people is off (FIND_PEOPLE_ENABLED)."
+    assert off.json()["detail"] == "Find people is off for now."
     set_env(FIND_PEOPLE_ENABLED="true")
     assert client.post("/api/act", json=body, headers=headers).status_code != 403
 
@@ -1884,8 +1884,11 @@ def test_no_left_out_line_nothing_new_text(client: TestClient, synced: Session) 
         body = client.get(path, headers=sid).json()
         assert "left_out_note" not in body and body["left_out_seen"] == 0, path
     listed = client.get("/api/events?view=new", headers=sid).json()["items"]
-    body = {"item_type": "event", "ids": [e["id"] for e in listed]}
-    assert client.post("/api/seen", json=body, headers=act).status_code == 200
+    # The fixture events are dated: after a day turns, New can already be empty, and an empty
+    # `ids` list is a 422 by design. Mark only when there is something to mark (no date flake).
+    if listed:
+        body = {"item_type": "event", "ids": [e["id"] for e in listed]}
+        assert client.post("/api/seen", json=body, headers=act).status_code == 200
     events = client.get("/api/events?view=new", headers=sid).json()
     assert events["new_total"] == 0 and events["new_empty"] == "Nothing new since your last visit"
 

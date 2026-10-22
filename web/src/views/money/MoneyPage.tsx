@@ -47,8 +47,8 @@ function MoneyTable({
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead className="w-[26%]">{W.colDeal}</TableHead>
-          <TableHead className="w-[16%]">{W.colCompany}</TableHead>
           <TableHead className="w-[16%] text-right">{W.colValue}</TableHead>
+          <TableHead className="w-[16%]">{W.colCompany}</TableHead>
           <TableHead>{W.colBlocking}</TableHead>
           <TableHead className="w-[12%]">{W.colOwner}</TableHead>
         </TableRow>
@@ -84,20 +84,20 @@ function MoneyTable({
                   <StageTag stage={m.stage} />
                 </span>
               </TableCell>
-              <TableCell className="text-muted-foreground py-2.5">
-                <OneLine text={m.company} />
-              </TableCell>
               <TableCell
                 className={cn("tabular py-2.5 text-right", m.size_usd === null && "text-muted-foreground")}
               >
                 {m.value_label}
+              </TableCell>
+              <TableCell className="text-muted-foreground py-2.5">
+                <OneLine text={m.company} />
               </TableCell>
               <TableCell className="py-2.5">
                 <span className="flex min-w-0 flex-col gap-1">
                   <OneLine text={m.deliverable} />
                   <span className="flex flex-wrap items-center gap-1.5">
                     {late && (
-                      <Tag tag={late.tag} tone={late.tone} className="tabular">
+                      <Tag tag={late.tag} tone={late.tone} className="nums">
                         {late.text}
                       </Tag>
                     )}
@@ -143,7 +143,7 @@ export function MoneyPage({ view }: { view: ViewDef }) {
       {!shown && loading && <LoadingLine />}
       {shown && (
         <div data-content className="flex flex-col gap-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
             <Stat id="value" label={W.moneyValue} value={totalValue(shown)} />
             <Stat id="deals" label={W.moneyDeals} value={shown.total} />
             <Stat id="no-value" label={W.moneyNoValue} value={shown.no_value} />

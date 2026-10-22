@@ -90,8 +90,9 @@ OTHER_OWNER = "kushal"
 # R5 T16a: the throwaway admin that signs "Run news now" in the browser check (D150).
 QA_ADMIN = "qaadmin"
 QA_ADMIN_NAME = "QA Seed Admin"
-# A Monday long ago: /api/pack shows the newest pack, so a real pack always wins. Without a
-# pack the page loads a 404, and the browser logs it as a console error (R4-B02).
+# A Monday long ago: /api/pack shows the newest pack, so a real pack always wins. The seed
+# pack lets browser QA draw a real body (R4-B02); with no pack at all the answer is 200 `empty`
+# (D229), never a 404.
 QA_PACK_WEEK = date(2000, 1, 3)
 # Both QA rows are due long ago: Today shows 10 tasks a page sorted by due day (D152), so a
 # recent QA row falls behind the real sheet rows and browser QA cannot find it.

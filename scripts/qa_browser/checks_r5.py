@@ -650,35 +650,38 @@ def no_view_as(page: Page, base: str, run: Run, entry: str) -> None:
 
 
 def load_error_retry(page: Page, base: str, run: Run, entry: str) -> None:
-    """R5-V01: /api/status aborted once -> the top bar names the data and the reason
-    ("The server did not answer."), with a Retry button and no "Failed to fetch"; the route
-    goes, Retry is pressed -> the Updated line is back."""
+    """R5-V01: /api/status fails -> the top bar names the data and the reason ("The server
+    did not answer."), with a Retry button and no "Failed to fetch"; the route goes, Retry is
+    pressed -> the Updated line is back.
+
+    Every /api/status is aborted while the route is set: aborting only the first one was
+    flaky, because the goto and the reload each ask once when the page was elsewhere, and the
+    second (successful) answer replaced the error before it was read (T17 browser QA)."""
     aborted: list[str] = []
 
-    def abort_once(route: Route, request: Request) -> None:
-        if aborted:
-            route.fallback()  # the guard sends it on as the QA user
-            return
+    def abort_all(route: Route, request: Request) -> None:
         aborted.append(request.url)
         route.abort()
 
     before = len(run.findings)
     page.set_viewport_size({"width": WIDE, "height": 900})
-    page.route(STATUS_API, abort_once)
+    page.route(STATUS_API, abort_all)
     try:
         page.goto(view_url(base, entry, "today"))
-        page.reload()  # a fresh page: its first /api/status is the aborted one
+        page.reload()  # a fresh page: every /api/status it sends fails
         settle(page)
+        problems = load_error_problems(page.evaluate(STATUS_FACTS))
     finally:
-        page.unroute(STATUS_API, abort_once)
+        page.unroute(STATUS_API, abort_all)
     run.findings[before:] = drop_abort_noise(run.findings[before:], len(aborted))
     if not run.expect(aborted, "load_error_retry: the page asked for no /api/status"):
         return
-    problems = load_error_problems(page.evaluate(STATUS_FACTS))
     if not run.expect(not problems, f"load_error_retry: {problems}"):
         return
     page.locator(TOP_RETRY).first.click()
     settle(page)
     problems = recovered_problems(page.evaluate(STATUS_FACTS))
     run.expect(not problems, f"load_error_retry: {problems}")
-    run.notes["load_error_retry"] = ["abort /api/status once -> named error + Retry -> Updated"]
+    run.notes["load_error_retry"] = [
+        f"abort /api/status ({len(aborted)}) -> named error + Retry -> Updated"
+    ]

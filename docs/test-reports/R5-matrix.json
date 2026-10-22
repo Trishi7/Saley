@@ -1,0 +1,1703 @@
+[
+ {
+  "id": "R1.1-U01",
+  "release": "R1.1",
+  "layer": "unit",
+  "what": "saley dev starts web and scheduler on WEB_PORT and refuses beside a live worker",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-A01",
+  "release": "R1.1",
+  "layer": "api",
+  "what": "Updated bar states ok / worker down / sync failing / stale tab",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-A02",
+  "release": "R1.1",
+  "layer": "api",
+  "what": "tile number equals its list; unknown is \"\u2014\", never 0",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-A03",
+  "release": "R1.1",
+  "layer": "api",
+  "what": "money total = sum of list; band counts its midpoint",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-A04",
+  "release": "R1.1",
+  "layer": "api",
+  "what": "person drawer shows real email and https links only",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-A05",
+  "release": "R1.1",
+  "layer": "api",
+  "what": "goal card blockers sorted by days late with a why line",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-A06",
+  "release": "R1.1",
+  "layer": "api",
+  "what": "global search groups results by type",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-B01",
+  "release": "R1.1",
+  "layer": "browser",
+  "what": "every view, tile clicks, 5 search terms, 3 drawers, 3 widths, zero console errors",
+  "ok": true,
+  "note": "step 8 PASS",
+  "pending": null
+ },
+ {
+  "id": "R1.1-B02",
+  "release": "R1.1",
+  "layer": "browser",
+  "what": "the page sends no request other than GET",
+  "ok": true,
+  "note": "step 9 PASS",
+  "pending": null
+ },
+ {
+  "id": "R1.1-G01",
+  "release": "R1.1",
+  "layer": "guardrails",
+  "what": "STE lint clean on the repo; long text and banned words are flagged",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-S01",
+  "release": "R1.1",
+  "layer": "sheet",
+  "what": "insert column, rename header, delete row, move row, value changed mid-sync",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-S02",
+  "release": "R1.1",
+  "layer": "sheet",
+  "what": "sheet copy = DB = dashboard (saley sheet verify)",
+  "ok": true,
+  "note": "step 6 PASS",
+  "pending": null
+ },
+ {
+  "id": "R1.1-A07",
+  "release": "R1.1",
+  "layer": "api",
+  "what": "one sync_id per request; a stale sync_id gets 409",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-A08",
+  "release": "R1.1",
+  "layer": "api",
+  "what": "API contract and abuse suite (fields, limits, bad input, no secrets)",
+  "ok": true,
+  "note": "step 5 PASS",
+  "pending": null
+ },
+ {
+  "id": "R1.1-G02",
+  "release": "R1.1",
+  "layer": "guardrails",
+  "what": "no secrets in any response or error; cross-site refused",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-G03",
+  "release": "R1.1",
+  "layer": "guardrails",
+  "what": "web role reads only views; every endpoint works as that role",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-G04",
+  "release": "R1.1",
+  "layer": "guardrails",
+  "what": "gate bookkeeping, tidy rules, matrix loader",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-G05",
+  "release": "R1.1",
+  "layer": "guardrails",
+  "what": "linkedin.com is blocked even when allowlisted",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R1.1-C01",
+  "release": "R1.1",
+  "layer": "guardrails",
+  "what": "CI run green on a fresh database (roles.sql, migrations, pytest)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-W01",
+  "release": "R2",
+  "layer": "sheet",
+  "what": "write round trip on a fake sheet - cell + decision row + Name note, read back equal",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-W02",
+  "release": "R2",
+  "layer": "sheet",
+  "what": "live round trip in SALEY_TEST - create tab, write, read back, undo, delete tab (always)",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:28:01.401786Z [info     ] egress_call                    host=sheets.googleapis.com method=GET status=200",
+  "pending": null
+ },
+ {
+  "id": "R2-W03",
+  "release": "R2",
+  "layer": "unit",
+  "what": "undo inside UNDO_MINUTES restores the old value; after the window it is refused",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-W04",
+  "release": "R2",
+  "layer": "guardrails",
+  "what": "a write to a locked column is refused with 403 and logged",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-W05",
+  "release": "R2",
+  "layer": "guardrails",
+  "what": "the Email column is refused while EMAIL_WRITE_ALLOWED=false",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-W06",
+  "release": "R2",
+  "layer": "api",
+  "what": "two users on one row within 2 s - the second gets \"already done by X at HH:MM\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-W07",
+  "release": "R2",
+  "layer": "api",
+  "what": "the same instruction twice (chat + dashboard) is one write (D24)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-G01",
+  "release": "R2",
+  "layer": "guardrails",
+  "what": "the web process has no write credential and no write scope",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-T01",
+  "release": "R2",
+  "layer": "api",
+  "what": "my tasks per person - Sid LinkedIn, Vaishnavi research, Kushal approvals (D31)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-T02",
+  "release": "R2",
+  "layer": "api",
+  "what": "Done writes at once with a signature and returns an undo id",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-I01",
+  "release": "R2",
+  "layer": "api",
+  "what": "an Inbox card shows once; a dismissed card never returns",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-C01",
+  "release": "R2",
+  "layer": "unit",
+  "what": "commitments from meeting notes; mail shows \"not configured\" without an IMAP login",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-C02",
+  "release": "R2",
+  "layer": "guardrails",
+  "what": "reminder politeness - one reminder, one on the due day, then the weekly pack; never \"overdue\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-D01",
+  "release": "R2",
+  "layer": "api",
+  "what": "Decisions view lists decision rows with filters person / surface / undo state",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-P01",
+  "release": "R2",
+  "layer": "api",
+  "what": "People drawer \"working on\" comes from facts with source and date",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-B01",
+  "release": "R2",
+  "layer": "browser",
+  "what": "click-path Done -> Undo in place -> Undo restores",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-B02",
+  "release": "R2",
+  "layer": "browser",
+  "what": "click-path Confirm on a decision and dismiss on an Inbox card",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-B03",
+  "release": "R2",
+  "layer": "browser",
+  "what": "click-path audit of every state-changing control (gate step 9)",
+  "ok": true,
+  "note": "step 9 PASS",
+  "pending": null
+ },
+ {
+  "id": "R2-S01",
+  "release": "R2",
+  "layer": "sheet",
+  "what": "parity holds after 10 random writes and 5 undos",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-G02",
+  "release": "R2",
+  "layer": "guardrails",
+  "what": "the web role has no table grants; it may only EXECUTE the saley_* act functions",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-N01",
+  "release": "R2",
+  "layer": "unit",
+  "what": "Drive notes folder read (fake Drive, subfolders, Docs/.md/.txt/.pdf/.docx) -> notes in the DB, one parser",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-N02",
+  "release": "R2",
+  "layer": "unit",
+  "what": "a changed Drive file (new modifiedTime) is parsed again exactly once; an unchanged file is not",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-N03",
+  "release": "R2",
+  "layer": "unit",
+  "what": "a removed Drive file is marked gone; its commitments stay with \"source removed\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-N04",
+  "release": "R2",
+  "layer": "guardrails",
+  "what": "a 403 on the folder gives the health line \"notes - folder not shared\" with the folder id, no crash",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R2-N05",
+  "release": "R2",
+  "layer": "sheet",
+  "what": "live read-only Drive sync of the notes folder through egress (never a write)",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:28:42.094360Z [info     ] team_aliases_loaded            aliases=7 users=4",
+  "pending": null
+ },
+ {
+  "id": "R3-N01",
+  "release": "R3",
+  "layer": "unit",
+  "what": "scoring is deterministic - the same story scores the same 3 times",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-N02",
+  "release": "R3",
+  "layer": "unit",
+  "what": "the same story from 2 sources becomes 1 signal",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-G01",
+  "release": "R3",
+  "layer": "guardrails",
+  "what": "the validator rejects a URL, name or number not in the input facts",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-G02",
+  "release": "R3",
+  "layer": "guardrails",
+  "what": "linkedin.com fetch is blocked in 3 URL shapes",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-G03",
+  "release": "R3",
+  "layer": "guardrails",
+  "what": "a host outside EGRESS_ALLOWLIST is blocked",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-U01",
+  "release": "R3",
+  "layer": "api",
+  "what": "seen per user - A sees, B still sees, A's list counts 1 seen item and shows it in Seen earlier",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-S01",
+  "release": "R3",
+  "layer": "sheet",
+  "what": "add-to-pipeline row_add lands with a signature (fake sheet) and shows after one sync",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-S02",
+  "release": "R3",
+  "layer": "sheet",
+  "what": "live row_add in SALEY_TEST with signature, then the tab is deleted",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:29:52.815299Z [info     ] egress_call                    host=sheets.googleapis.com method=GET status=200",
+  "pending": null
+ },
+ {
+  "id": "R3-A01",
+  "release": "R3",
+  "layer": "api",
+  "what": "news funnel fetched >= deduped >= scored >= linked, each number links to its list",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-L01",
+  "release": "R3",
+  "layer": "guardrails",
+  "what": "LLM calls stay <= LLM_DAILY_CALL_CAP and a repeat is a cache hit",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-A02",
+  "release": "R3",
+  "layer": "api",
+  "what": "Signals All by range and score, Linked, Events, Suggestions endpoints",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-B01",
+  "release": "R3",
+  "layer": "browser",
+  "what": "Signals, Events, Suggestions pages and Today \"needs a look\" / \"Saley suggests\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-G04",
+  "release": "R3",
+  "layer": "guardrails",
+  "what": "Apollo stays off and Sources and health says \"off\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-L02",
+  "release": "R3",
+  "layer": "guardrails",
+  "what": "one live LLM call scores one fixture story, logged in llm_calls, under the cap",
+  "ok": true,
+  "note": "exit 0 HTTP Request: POST https://api.anthropic.com/v1/messages \"HTTP/1.1 200 OK\"",
+  "pending": null
+ },
+ {
+  "id": "R3-G05",
+  "release": "R3",
+  "layer": "guardrails",
+  "what": "SearXNG then DuckDuckGo; only result URLs stored; a linkedin.com result is never fetched",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-N03",
+  "release": "R3",
+  "layer": "unit",
+  "what": "live fetch, 1 request per source kind, 3 items max, no scoring, through egress",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:30:09.536125Z [info     ] egress_call                    host=api.openalex.org method=GET ms=1375 status=2",
+  "pending": null
+ },
+ {
+  "id": "R3-C01",
+  "release": "R3",
+  "layer": "unit",
+  "what": "meeting-note Next steps lines \"[Name] action\" become that team member's commitments; non-team owners skipped and counted; alias only from TEAM_NAME_ALIASES, never a prefix guess (D92)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-C02",
+  "release": "R3",
+  "layer": "unit",
+  "what": "a name that only starts with a team short code does not match without an alias (D92, Q-R3-8)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-C03",
+  "release": "R3",
+  "layer": "unit",
+  "what": "in Drive and folder notes, a line by a person outside the team becomes a fact on that person (\"said they will ...\") with the note file + line as source, only when exactly one contact matches; never a commitment, never a new contact (D108)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-C04",
+  "release": "R3",
+  "layer": "unit",
+  "what": "an alias two people list in TEAM_NAME_ALIASES maps to nobody, in any order of the setting, with one team_alias_ignored warning (D102)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-S03",
+  "release": "R3",
+  "layer": "api",
+  "what": "a second add of the same person and company is a 409 \"Already added by <who>\"; the claim key (company, name) refuses the add even when the in-function check is passed, and rolls back the decision (D111)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-S04",
+  "release": "R3",
+  "layer": "api",
+  "what": "undo, a cancelled push and a push that failed before the write free the claim; a failed add with a saved plan keeps it until the undo (D111, D86)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-S05",
+  "release": "R3",
+  "layer": "api",
+  "what": "the web answer names who added the person; a person only in the sheet keeps the old text (D111)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-S06",
+  "release": "R3",
+  "layer": "unit",
+  "what": "the row-add advisory lock is on the name, not the company, so two adds of one person in two companies cannot both pass the duplicate check (D111)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-N04",
+  "release": "R3",
+  "layer": "unit",
+  "what": "news_seen has an index on story_id, so the nightly story cleanup does not scan news_seen per story (D111)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-Q01",
+  "release": "R3",
+  "layer": "unit",
+  "what": "low memory runs browser QA as one process per width (1440 all groups, 1024 and 390 views only); the merged result fails if any width fails or crashes (D112)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R3-Q02",
+  "release": "R3",
+  "layer": "unit",
+  "what": "step 6 first removes `qa:` seed rows that a stopped run left behind, names the count, and fails if the teardown fails (D112)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-P01",
+  "release": "R4",
+  "layer": "unit",
+  "what": "the weekly-pack cron fires once Mon 14:00 IST (mocked clock); pack = Scorecard",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-P02",
+  "release": "R4",
+  "layer": "unit",
+  "what": "\"last week N\" is the last Monday snapshot",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-P03",
+  "release": "R4",
+  "layer": "bot",
+  "what": "the pack posts in the test channel with [TEST]; read back, then delete",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:30:14.761056Z [info     ] egress_call                    host=discord.com method=DELETE ms=593 status=204",
+  "pending": null
+ },
+ {
+  "id": "R4-A01",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "sign-in - allowlisted in, others refused, no /api without a session",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-Q01",
+  "release": "R4",
+  "layer": "bot",
+  "what": "@Saley answers from the DB only, with per-user seen",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-Q02",
+  "release": "R4",
+  "layer": "bot",
+  "what": "live @Saley answer in the test channel; read back, then delete",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:30:19.648338Z [info     ] egress_call                    host=discord.com method=DELETE ms=1032 status=204",
+  "pending": null
+ },
+ {
+  "id": "R4-C01",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "caps per person (D132) - 20 queued for one person give <= 4 a day for that person (DMs and @mentions together), >= 2 h apart; a channel post with no mention counts for nobody; a meeting in < 24 h skips the gap; Saturday 0 except meeting / reconnect",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-C02",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "approver instruction writes with a signature; a non-approver gets a polite refusal, no write",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-C03",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "EMAIL_SEND_ENABLED=false sends to the sink file, never SMTP",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-B01",
+  "release": "R4",
+  "layer": "browser",
+  "what": "sign-in page",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-B02",
+  "release": "R4",
+  "layer": "browser",
+  "what": "weekly pack page",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-B03",
+  "release": "R4",
+  "layer": "browser",
+  "what": "@Saley card on the dashboard",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-H01",
+  "release": "R4",
+  "layer": "unit",
+  "what": "Sid's hours 14:00-24:00 IST bound his posts (D126); a post outside waits for the next start",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-S01",
+  "release": "R4",
+  "layer": "bot",
+  "what": "the docs/09 shapes are live in test mode; BOT_SHAPES_DRAFT is retired; on the laptop every shape goes to the test channel only (D127)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-G00",
+  "release": "R4",
+  "layer": "unit",
+  "what": "gate runs while a dev server is up on WEB_PORT - steps 7-9 use GATE_PORT, saley_test and worker slot worker:gate; the dev listener is never stopped (D113)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-G01",
+  "release": "R4",
+  "layer": "unit",
+  "what": "a worker reaps and counts only its own slot; lock names stay global, so two slots never run one job at once (D113)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-A02",
+  "release": "R4",
+  "layer": "api",
+  "what": "/api/pack and /api/scorecard return allowed fields only; a bad week gives 422; no session gives 401",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-P04",
+  "release": "R4",
+  "layer": "unit",
+  "what": "Scorecard shows \"last week N\" per industry from the snapshot 7 days back; no snapshot shows \"\u2014\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-A03",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "with Google configured, dev mode is off - mock sign-in 404, X-Saley-As refused, no loopback bypass",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-A04",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "the callback refuses a bad state, a wrong aud or iss, an unverified email; the cookie is HttpOnly and SameSite=Lax; expiry or removal from the allowlist ends the session",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-Q03",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "an unknown question gets the docs/09 unknown line; no answer holds a value that is not in the DB rows; every answer has citations and the window + seen footer",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-C04",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "per item, 1 reminder + 1 on the due day, then the weekly pack only; no bot, pack or word-file text contains \"overdue\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-C05",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "the same instruction in chat and on the dashboard gives one write; the second answer says \"already done\" (D24)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-S02",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "test and live use one render path; only the [TEST] tag and the channel differ; with SALEY_ENV=dev a channel other than the test channel is refused",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-D01",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "DM_ENABLED=false - no daily brief DM is sent and the health line says \"DMs off\" (D128)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-D02",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "DM_USERS leaves a person out - that person gets no DM; empty DM_USERS = nobody (D128)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-D03",
+  "release": "R4",
+  "layer": "unit",
+  "what": "the daily brief goes at 14:00 IST to two users in DM_USERS (mocked clock), not before (D128)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-E01",
+  "release": "R4",
+  "layer": "bot",
+  "what": "Edit in the Discord modal writes the edited text with a signature, surface=discord (D129)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-E02",
+  "release": "R4",
+  "layer": "api",
+  "what": "the same card edited on the dashboard after Discord - the second saver gets \"already done by X at HH:MM\", one write only (D129)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-P05",
+  "release": "R4",
+  "layer": "unit",
+  "what": "on a mocked Monday the pack posts at 14:00 IST and the blocker note at 16:00 (BLOCKER_NOTE_DELAY_MINUTES), at most 5 lines with owner and what it blocks (D130)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R4-Q04",
+  "release": "R4",
+  "layer": "guardrails",
+  "what": "answer citations are by name ([sheet - person], [note date, company], [news - title]); no citation is a digits-only reference (D131)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-S01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "/ serves index.html from src/saley/web/dist/; the built app is under /static/app/ (D145)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-S02",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "the built JS, CSS and fonts hold no external URL; no CDN at runtime (egress rule, D148)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-S03",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "CSP is script-src 'self' and style-src 'self' plus a new nonce per request; never unsafe-inline (D146)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-S04",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the build stamp of src/saley/web/dist/ matches web/ (gate step 1)",
+  "ok": true,
+  "note": "step 1 PASS",
+  "pending": null
+ },
+ {
+  "id": "R5-S05",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the Dockerfile builds web/ in a node stage; the runtime image has no node (D144)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-S06",
+  "release": "R5",
+  "layer": "browser",
+  "what": "zero console errors and zero CSP reports on every view, dark and light",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-S07",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the STE lint reads web/src/words.ts; no literal text in TSX",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-S08",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "STE lint on words.ts and index.html (gate step 3)",
+  "ok": true,
+  "note": "step 3 PASS",
+  "pending": null
+ },
+ {
+  "id": "R5-Q01",
+  "release": "R5",
+  "layer": "browser",
+  "what": "a legend at the top of every page explains every tag and colour",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-Q02",
+  "release": "R5",
+  "layer": "browser",
+  "what": "no underlined URL link anywhere; internal links are Buttons or clickable cards",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-Q03",
+  "release": "R5",
+  "layer": "browser",
+  "what": "every off feature shows a \"coming soon\" badge",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-Q04",
+  "release": "R5",
+  "layer": "browser",
+  "what": "dark and light themes; the top-bar toggle switches and the choice is kept (D163)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-Q05",
+  "release": "R5",
+  "layer": "browser",
+  "what": "every view at 1440, 1024 and 390, one width at a time",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-Q06",
+  "release": "R5",
+  "layer": "api",
+  "what": "/api/me features match the settings flags, FIND_PEOPLE_ENABLED included (D164)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-Q07",
+  "release": "R5",
+  "layer": "browser",
+  "what": "long lists show 10 per page with an \"N more\" count",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-I01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the Impeccable score of every page is recorded in the test report",
+  "ok": true,
+  "note": "exit 0 PASS: 28 page scores recorded (14 pages, both themes)",
+  "pending": null
+ },
+ {
+  "id": "R5-T01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the Today funnel counts equal the stage view, with the new labels",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T02",
+  "release": "R5",
+  "layer": "browser",
+  "what": "the Today funnel chart and the blockers line with a count and \"Open blockers\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T03",
+  "release": "R5",
+  "layer": "browser",
+  "what": "no page search on Today and Q4 goals; global search stays",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T04",
+  "release": "R5",
+  "layer": "sheet",
+  "what": "saley sheet verify checks the funnel counts against the sheet",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T05",
+  "release": "R5",
+  "layer": "unit",
+  "what": "task order - due day, then kind (meeting > reconnect > email > LI), then PoC Priority (D152)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T06",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the due-day rule reads the named sheet columns; no due day counts as today (D152)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T07",
+  "release": "R5",
+  "layer": "unit",
+  "what": "tasks come 10 per page with an \"N more\" count",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T08",
+  "release": "R5",
+  "layer": "unit",
+  "what": "UNDO_MINUTES defaults to 5 (D143)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T09",
+  "release": "R5",
+  "layer": "browser",
+  "what": "Done turns into Undo in place; no timer text, no bottom bar",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T10",
+  "release": "R5",
+  "layer": "unit",
+  "what": "Done writes a value the column already uses; none there gives 409 and no write (D153)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T11",
+  "release": "R5",
+  "layer": "unit",
+  "what": "needs a look holds only news, event, blocker and waiting kinds; no redirect-only card (D158)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T12",
+  "release": "R5",
+  "layer": "unit",
+  "what": "each Saley suggests line uses input facts only",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T13",
+  "release": "R5",
+  "layer": "browser",
+  "what": "needs a look cards are clickable as a whole and carry a type badge",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T14",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "Add email completes only when a valid email is written through email_write",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T15",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "Add email is refused for a bad value or with EMAIL_WRITE_ALLOWED=false; no write (D154)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-T16",
+  "release": "R5",
+  "layer": "browser",
+  "what": "Add email has no Done; the click opens the drawer email field",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-G01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the goal ring is won / need, or \"\u2014\" without a need (D159)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-G02",
+  "release": "R5",
+  "layer": "browser",
+  "what": "one card form per goal - ring, compact people table, blockers, \"+N more\" Button",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-A01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "account counts read \"13 people \u00b7 9 P1\" with a stage bar",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-A02",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the touch timeline has one row per month and dots per touch type",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-A03",
+  "release": "R5",
+  "layer": "browser",
+  "what": "Accounts page - legend, stage bar, drawer without Evidence, touch timeline",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-P01",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "the person drawer shows \"Follow-up by\" (D31), \"N papers\" and the working_on source",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-P02",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "paper link text comes from the input; never invented",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-P03",
+  "release": "R5",
+  "layer": "browser",
+  "what": "People drawer - Follow-up by tooltip, papers popover, timeline",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "Suggestions and Signals have a New tab and a Seen earlier tab, 10 per page (D157)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N02",
+  "release": "R5",
+  "layer": "unit",
+  "what": "no \"left out\" line; with nothing new the text is \"Nothing new since your last visit\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N03",
+  "release": "R5",
+  "layer": "browser",
+  "what": "New and Seen earlier tabs with counts",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N04",
+  "release": "R5",
+  "layer": "unit",
+  "what": "a story topic is one of the six names or Other; never a letter (D156)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N05",
+  "release": "R5",
+  "layer": "browser",
+  "what": "Signals categories show real names, never letters",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N06",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the dev worker runs news once at start, main slot only, when the last run is over 6 h old (D151)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N07",
+  "release": "R5",
+  "layer": "api",
+  "what": "\"Run news now\" is admin only, with one open request at a time (D150)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N08",
+  "release": "R5",
+  "layer": "unit",
+  "what": "a news request runs once under the lock",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-N09",
+  "release": "R5",
+  "layer": "browser",
+  "what": "\"Run news now\" on Sources and health for the admin",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-E01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "events have City (Bangalore / London / Other) and Venue; registered events first (D160)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-E02",
+  "release": "R5",
+  "layer": "browser",
+  "what": "Events page - City and Venue columns, registered badge, speaker matches \"coming soon\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-C01",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "Commitment Done by a non-owner gets a refusal and no write (D155)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-C02",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "the SQL function saley_commitment_done refuses a non-owner (D155)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-C03",
+  "release": "R5",
+  "layer": "browser",
+  "what": "a non-owner who presses Done gets the owner toast",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-W01",
+  "release": "R5",
+  "layer": "sheet",
+  "what": "live in SALEY_TEST - Done writes a value the column already uses, Undo restores the old value, both with a signature",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:35:14.842903Z [info     ] egress_call                    host=sheets.googleapis.com method=GET status=200",
+  "pending": null
+ },
+ {
+  "id": "R5-W02",
+  "release": "R5",
+  "layer": "sheet",
+  "what": "live in SALEY_TEST - Add email writes the email cell only after validation; the task goes (D165)",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:35:58.834733Z [info     ] egress_call                    host=sheets.googleapis.com method=GET status=200",
+  "pending": null
+ },
+ {
+  "id": "R5-W03",
+  "release": "R5",
+  "layer": "sheet",
+  "what": "live in SALEY_TEST - Commitment Done by a non-owner writes nothing",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:36:17.691737Z [info     ] egress_call                    host=sheets.googleapis.com method=GET status=200",
+  "pending": null
+ },
+ {
+  "id": "R5-W04",
+  "release": "R5",
+  "layer": "sheet",
+  "what": "live in SALEY_TEST - after 20 random Done/Undo, sheet = DB = dashboard",
+  "ok": true,
+  "note": "exit 0 2026-10-21T19:47:04.619985Z [info     ] egress_call                    host=sheets.googleapis.com method=GET status=200",
+  "pending": null
+ },
+ {
+  "id": "R5-W05",
+  "release": "R5",
+  "layer": "sheet",
+  "what": "sheet copy = DB = dashboard (saley sheet verify)",
+  "ok": true,
+  "note": "step 6 PASS",
+  "pending": null
+ },
+ {
+  "id": "R5-K01",
+  "release": "R5",
+  "layer": "browser",
+  "what": "click path on Done, Undo, Add email, Commitment Done and Run news now",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-K02",
+  "release": "R5",
+  "layer": "browser",
+  "what": "click-path audit of every state-changing control (gate step 9)",
+  "ok": true,
+  "note": "step 9 PASS",
+  "pending": null
+ },
+ {
+  "id": "R5-X01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "shell rows run with SHEET_WRITE_ENABLED=false unless they declare writes test_tab (D161)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-X02",
+  "release": "R5",
+  "layer": "unit",
+  "what": "browser QA uses mock sign-ins only before the first control press; the count is in the report (D162)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-X03",
+  "release": "R5",
+  "layer": "unit",
+  "what": "wait_fresh signs in once (D162)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-X04",
+  "release": "R5",
+  "layer": "api",
+  "what": "the R5 params and routes return allowed fields only; bad input gives 422; no session gives 401",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-X05",
+  "release": "R5",
+  "layer": "api",
+  "what": "API contract and abuse suite (gate step 5)",
+  "ok": true,
+  "note": "step 5 PASS",
+  "pending": null
+ },
+ {
+  "id": "R5-D01",
+  "release": "R5",
+  "layer": "unit",
+  "what": "docs, README and STATUS checks (gate step 11)",
+  "ok": true,
+  "note": "step 11 PASS",
+  "pending": null
+ },
+ {
+  "id": "R5-D02",
+  "release": "R5",
+  "layer": "unit",
+  "what": ".env.example lists every variable the code reads, NEWS_RUN_AT_START and FIND_PEOPLE_ENABLED included",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L01",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5 sign-in failure page says the reason: an email not on WEB_ALLOWED_EMAILS gets 403 and 'Your email is not on the list.'",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L02",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5 sign-in failure page says the reason: a wrong state or a lost state cookie gets 'Sign-in link expired, start again.' and the address to use; Google is not called",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L03",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5 sign-in failure page says the reason: Google refuses the code: 'Google did not accept the sign-in code'; Google down: 502 'Google did not answer'",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L04",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5 sign-in failure page says the reason: an error from Google (access_denied) gets 'Google stopped the sign-in. Start again.'",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L05",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5 sign-in failure page says the reason: an unverified email or a failed id_token check names the reason, never only 'Try again'",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L06",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5: state cookie survives the Google round trip: HttpOnly, SameSite=Lax, Path=/auth, no Domain, not Secure on http://localhost in dev; the callback passes the state check and clears the cookie",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L07",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5: state TTL 10 min (Max-Age=600)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L08",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5: saley dev and saley web refuse a port another server holds (Windows lets two servers share a port and split the sign-in)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L09",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5: Google error invalid_client: page \"Google refused the client id or secret. Tell the admin.\"; the log has google_error and google_error_description, never the code or secret",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L10",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5: Google error redirect_uri_mismatch: page \"The sign-in address and Google setup differ. Tell the admin.\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L11",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5: Google error invalid_grant: page \"The sign-in code expired or was used. Start again.\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L12",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5: any other Google token error: page \"Google did not accept the sign-in code. Start again.\"",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-L13",
+  "release": "R5",
+  "layer": "api",
+  "what": "Q-N5: at start-up the log shows the redirect URI Saley sends and the client id's last 6 characters, never the secret",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-V01",
+  "release": "R5",
+  "layer": "browser",
+  "what": "browser load_error_retry: a failed load names the data and offers Retry; never 'Failed to fetch' (both apps)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-V02",
+  "release": "R5",
+  "layer": "browser",
+  "what": "the top bar has no View as / Viewing as in any mode: no #act-as, #viewing-as, #who person tabs, no [data-person]; Today asks /api/today with no user= (D207, both apps)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-V03",
+  "release": "R5",
+  "layer": "api",
+  "what": "/api/me has no view_as or picker field; /api/today with no ?user= is the signed-in person; Google ignores ?user= (D207)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-V04",
+  "release": "R5",
+  "layer": "unit",
+  "what": "the pure rules of load_error_retry and no_view_as: named error, reason, Retry button, no raw fetch text; no picker hooks, no user= on /api/today",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-X06",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "CI green on a fresh runner with Node - the test job sets up Node 24, runs npm --prefix web ci, then web lint, type check and unit tests before pytest; the gate step 1 tests stub web/node_modules",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ },
+ {
+  "id": "R5-S09",
+  "release": "R5",
+  "layer": "guardrails",
+  "what": "no internal id in any UI string - the STE lint refuses R<n>, Q-, D<n> and tab:row: text; exemptions are named with a reason (the human, 21 Oct)",
+  "ok": true,
+  "note": "passed",
+  "pending": null
+ }
+]

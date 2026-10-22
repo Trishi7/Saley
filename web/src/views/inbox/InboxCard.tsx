@@ -175,7 +175,7 @@ export function InboxCard({
           <Tag tag={item.kind} tone={kind.tone}>
             {kind.name}
           </Tag>
-          <span className="text-muted-foreground tabular text-xs">{dayLabel(item.at)}</span>
+          <span className="text-muted-foreground nums text-xs">{dayLabel(item.at)}</span>
         </div>
         <span className="text-sm font-medium text-pretty">{item.title}</span>
         {item.why && <span className="text-muted-foreground text-xs text-pretty">{item.why}</span>}

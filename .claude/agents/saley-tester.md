@@ -34,7 +34,8 @@ skill or agent that does it; name that skill or agent in the report.
 - Stop every service you start. On Windows use PowerShell `Stop-Process` (there is no pkill).
 
 ## Report
-- `scripts/verify.py` writes `docs/test-reports/<id>-<date>.md` with the step table and the
+- `scripts/verify.py` writes `docs/test-reports/<id>-final.md` on GATE: PASS, else
+  `docs/test-reports/<id>-<date>.md` (D236), with the step table and the
   GATE line at the top. Do not edit the GATE line by hand.
 - Reply to the main session in ≤ 15 lines: the GATE line, each failing step with the exact
   command to reproduce, and nothing else.

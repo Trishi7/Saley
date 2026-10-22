@@ -6,14 +6,14 @@ Sales lead and chief-of-staff system for Membrane's sales team. Dashboard first,
 - Rules for Claude Code and humans: `CLAUDE.md`.
 - Status: `docs/STATUS.md`. Plan for the current release: `docs/plans/`.
 
-## What runs (release R4)
+## What runs (release R5)
 | Service | Command | Does |
 | --- | --- | --- |
-| dev | `uv run saley dev` | Web in this process and the worker as a child process (`saley worker`) on http://localhost:8090 (`WEB_PORT`; laptop only, D43, D46). Ctrl+C stops both |
-| web | `uv run saley web` | Read-only dashboard on http://localhost:8090 (`WEB_PORT`); every `/api` call needs a sign-in (`/signin`, R4) |
+| dev | `uv run saley dev` | Web in this process and the worker as a child process (`saley worker`) on http://localhost:8090 (`WEB_PORT`; laptop only, D43, D46). Ctrl+C stops both. R5 (D151): the dev worker (slot `worker:main`) also runs news: one edition at start when the last run is over 6 h old (`NEWS_RUN_AT_START`, default true), "Run news now" requests and the topic backfill |
+| web | `uv run saley web` | The dashboard app at http://localhost:8090/ (`WEB_PORT`; needs the web build, see R5 run notes); every page and `/api` call needs a sign-in (`/signin`, R4) |
 | worker | `uv run saley worker` | Sheet sync every 60 s, sheet push every 2 s (quiet when empty), parity check hourly, metrics 23:50 IST, heartbeat 5 min, R2 jobs: facts, proposals, commitments scan, mail poll, reminders, R3 job: profile-link search requests (`search_requests`, every 15 s, quiet); R4 jobs: `weekly_pack` (Mon 14:00 IST) with `weekly_pack_catchup` (hourly), `bot_plan` (every 5 min), `daily_brief` (`DAILY_BRIEF_TIME`, weekdays; DMs only when on), `health_line` (23:45 IST weekdays) |
 | bot | `uv run saley bot` | Answers `@Saley` questions and sends the bot queue with the caps (R4). In dev, the TEST channel only (D125) |
-| news | `uv run saley news` | R3 editions at 06:30, 12:00, 17:00, 22:00 IST; OpenAlex 07:30; arXiv 10:00; cleanup 03:00. Runs only here (D70) |
+| news | `uv run saley news` | R3 editions at 06:30, 12:00, 17:00, 22:00 IST; OpenAlex 07:30; arXiv 10:00; cleanup 03:00. The only news scheduler in production (D70); on the laptop the dev worker runs news too (D151) |
 
 ## Run on a laptop
 1. Install Python 3.12, `uv`, and Docker (or use an existing PostgreSQL 16+).
@@ -33,7 +33,7 @@ Sales lead and chief-of-staff system for Membrane's sales team. Dashboard first,
    - A downgrade that drops the `saley_*` functions (migrations 0006, 0008, 0009) must run as the role that owns them. After `roles.sql` that role is `saley`. The migration switches to it with `SET LOCAL ROLE` when the migrating role is a member of it. Otherwise it stops with a clear message: run the downgrade as `saley`.
 6. `uv run saley health` — prints `db ok`, the Alembic head, `sheet=copy|live` and `test_mode`.
 7. Share the GTM Playbook COPY with the service account email (Viewer; Editor once `SHEET_WRITE_ENABLED=true`, D57). Then `uv run saley sync --once`.
-8. `uv run saley web` and open http://localhost:8090/signin (`WEB_PORT`, default 8090; 8080 is often taken on laptops). On the laptop, sign in with the mock button (see R4 run notes). The "View as" select works only with the mock provider (D116).
+8. `uv run saley web` and open http://localhost:8090/signin (`WEB_PORT`, default 8090; 8080 is often taken on laptops). On the laptop, sign in with the mock button (see R4 run notes). There is no "View as" (D207): every page shows the signed-in person's data. First build the web app (R5 run notes).
 9. Or run web and worker together: `uv run saley dev` (http://localhost:8090; it uses `WEB_PORT`, `--port` overrides it).
    It refuses to start when another worker ran in the last 2 × `SHEET_SYNC_SECONDS` (use `--force` only if that worker is gone).
    The top bar turns red when the worker stopped or the sheet sync fails.
@@ -46,7 +46,7 @@ Sales lead and chief-of-staff system for Membrane's sales team. Dashboard first,
 - Decisions: `uv run saley decisions import` loads `docs/DECISIONS.md` into the decision table. `--file PATH` reads another file. Safe to run again. Superseded rows are skipped, and a decision confirmed on the dashboard stays confirmed.
 - `uv run saley dev` starts the web and a worker child process (D46). The web never holds the write credential. Ctrl+C stops both. On Windows the whole process tree stops.
 - Meeting notes: put `.md`, `.txt` or `.pdf` files in `MEETING_NOTES_DIR` (default `data/notes`). PDF reading uses pypdf. Notes by mail wait for the cc mailbox (Q-R2-3). Until then, Sources and health shows the mail source as not configured.
-- Dev identity: `DEV_USER_SHORT` (default `trishi`) is who the dashboard acts as. The "View as" select sends `X-Saley-As` from this machine only (D50).
+- Dev identity: `DEV_USER_SHORT` (default `trishi`) is who the dashboard acts as. Tests may send `X-Saley-As` from this machine with the mock provider only (D50, D116). The page has no "View as" (D207).
 - The gate's `saley dev` runs with `SHEET_WRITE_ENABLED=false`, so browser QA never writes to the sheet.
 
 ## R3 run notes
@@ -89,8 +89,13 @@ The new dashboard lives in `web/` (Vite, React, TypeScript, Tailwind, vendored s
    Without a build, `/` answers "The dashboard is not built yet. Run the web build.".
    Browser QA runs every check (R1.1 to R5) on `/` in one run: `uv run python scripts/browser_qa.py --base http://localhost:8090 --release R5 --widths 1440` (one width per process on this laptop, D142).
 4. Dev loop: run `npm --prefix web run build -- --watch` in a second terminal beside `uv run saley dev`, and reload the page after a save. There is no Vite dev server, so the CSP and the Host-port check stay as in production. Stop the watch before you run pytest (D142).
-5. Checks: `npm --prefix web run lint` (ESLint; all visible text comes from `web/src/words.ts`) and `npm --prefix web run typecheck`. Gate step 1 runs both and fails when the build stamp is older than `web/` ("Run npm --prefix web run build").
+5. Checks: `npm --prefix web run lint` (ESLint; all visible text comes from `web/src/words.ts`), `npm --prefix web run typecheck` and `npm --prefix web test` (web unit tests, `node --test`). Gate step 1 runs all three and fails when the build stamp is older than `web/` ("Run npm --prefix web run build").
 6. Docker builds `web/` in a Node stage (`node:24-bookworm-slim`, pinned by digest); the run image only copies `dist/`.
+7. CI (`.github/workflows/ci.yml`): the `web` job runs `npm ci --ignore-scripts`, `npm run build` and `npm audit` (runtime packages block on a high advisory; dev tools report only). The test job uses that build, installs `web/` again for gate step 1, and runs lint, typecheck, the web unit tests, ruff and pytest.
+8. Run news now: on Sources and health an admin can queue one news edition (`POST /api/admin/news/run`; one open request, 10 min cooldown; D150). The dev worker or `saley news` runs it.
+9. Undo: Done turns into Undo in place for `UNDO_MINUTES`, default 5 (was 10, D143). A `.env` that sets 10 keeps 10.
+10. Off features show "Coming soon": Find people (`FIND_PEOPLE_ENABLED=false`), Add email while `EMAIL_WRITE_ALLOWED=false`, speaker matches, Apollo, mail replies, DMs (D164).
+11. Env changes in R5: NEW `NEWS_RUN_AT_START` (true), `FIND_PEOPLE_ENABLED` (false). CHANGED-default `UNDO_MINUTES` 10 → 5. RETIRED none.
 
 ## Tests
 - `uv run ruff check .` and `uv run pytest -q`. On the laptop, run one file at a time: `uv run pytest -q -x -p no:cacheprovider tests/<file>.py` (D142).
@@ -104,9 +109,12 @@ Every release ends with `/verify <release>` (`.claude/commands/verify.md`). GATE
   Static checks, tests with coverage, STE lint (`uv run python -m saley.qa.ste_lint`), sheet robustness,
   API abuse suite, `uv run saley sheet verify` (sheet copy vs API), `saley dev`, browser QA and click-path check.
 - Steps 10–11 (reviewers, docs) are recorded with `--record 10 PASS "…"`; step 12 is `--finalize`.
+  The finalize fails step 11 when `docs/STATUS.md` has no NEW, CHANGED-default or RETIRED env row for the release,
+  or (from R5) when `uv run python scripts/impeccable_report.py --check --release <id>` fails (D236).
 - Browser QA uses Playwright with the installed Microsoft Edge (`channel="msedge"`). No browser download is needed.
   It opens only localhost. Screenshots go to `docs/test-reports/<release>-screens/`.
-- Reports: `docs/test-reports/<release>-<date>.md`, `<release>-api-abuse.md`, `<release>-sheet-verify.md`.
+- Reports: `docs/test-reports/<release>-final.md` on GATE: PASS, else `<release>-<date>.md` (D236);
+  `<release>-api-abuse.md`, `<release>-sheet-verify.md`; from R5 `<release>-impeccable.json` (the score table goes into the report).
 
 ## Repo hygiene (`/tidy`)
 `.claude/commands/tidy.md` + `scripts/tidy.py`. Safe to run again.

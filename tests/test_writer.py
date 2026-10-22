@@ -412,7 +412,7 @@ def test_email_write_refused_while_not_allowed(
 def test_writes_off_keeps_rows_held_and_health_says_why(
     client: TestClient, synced: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """SHEET_WRITE_ENABLED=false: rows stay held, no credential is built, health shows Q-R2-1."""
+    """SHEET_WRITE_ENABLED=false: rows stay held, no credential is built, health: writes are off."""
     from saley.worker import jobs
 
     alex = contact_id(synced, "Alex Search")
@@ -424,12 +424,12 @@ def test_writes_off_keeps_rows_held_and_health_says_why(
     monkeypatch.setattr(jobs, "build_write_sheet", no_client)
     note = jobs.sheet_push()
 
-    assert note == "sheet writes off: Q-R2-1 · 1 held"
+    assert note == "Sheet writes are off · 1 held"
     assert synced.execute(text("select state from sync_outbox")).scalar_one() == "held"
     writes = client.get("/api/health/full").json()["writes"]
     assert writes == {
         "enabled": False,
-        "message": "sheet writes off: Q-R2-1",
+        "message": "Sheet writes are off",
         "open": 1,
         "failed": 0,
     }
@@ -442,7 +442,7 @@ def test_held_rows_are_pushed_when_writes_turn_on(
 
     alex = contact_id(synced, "Alex Search")
     sql_act(synced, "sid", [{"role": "meeting_status", "value": "booked"}], [alex])
-    assert jobs.sheet_push().startswith("sheet writes off")
+    assert jobs.sheet_push().startswith("Sheet writes are off")
     setting("SHEET_WRITE_ENABLED", "true")
     monkeypatch.setattr(jobs, "build_write_sheet", lambda: fake_sheet)
     assert jobs.sheet_push() == "pushed 1 · failed 0 · retry 0"

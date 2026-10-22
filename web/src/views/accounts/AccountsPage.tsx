@@ -52,7 +52,7 @@ export function AccountsPage({ view }: { view: ViewDef }) {
       {!shown && loading && <LoadingLine />}
       {shown && (
         <div data-content className="flex flex-col gap-5" aria-busy={loading || undefined}>
-          <p className="text-muted-foreground tabular text-sm" data-stamp>
+          <p className="text-muted-foreground nums text-sm" data-stamp>
             {fmt(W.accStamp, { n: shown.with_people, m: shown.in_master })}
           </p>
           <IndustryBars industries={shown.industries} current={filter} onPick={pick} />

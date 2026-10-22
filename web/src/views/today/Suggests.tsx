@@ -34,12 +34,16 @@ export function Suggests({ block }: { block: TodayData["saley_suggests"] }) {
                 kind="suggest"
                 className="flex items-center gap-3 py-3"
               >
-                <span className="min-w-0 flex-1 text-sm text-pretty">{item.line}</span>
-                {findOff && item.can_find_people && (
-                  <span data-feature="find_people" className="shrink-0">
-                    <ComingSoon feature="find_people" withName />
-                  </span>
-                )}
+                {/* The line keeps the width; the badge goes under it, never beside it, so a
+                    narrow card does not squeeze the line into one word per row (R5 T17). */}
+                <span className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+                  <span className="text-sm text-pretty">{item.line}</span>
+                  {findOff && item.can_find_people && (
+                    <span data-feature="find_people">
+                      <ComingSoon feature="find_people" withName />
+                    </span>
+                  )}
+                </span>
                 <ChevronRightIcon
                   aria-hidden
                   className="text-muted-foreground size-4 shrink-0 transition-transform duration-150 group-hover/card:translate-x-0.5"

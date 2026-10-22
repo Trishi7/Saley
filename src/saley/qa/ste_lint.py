@@ -48,8 +48,16 @@ def banned_words(path: Path = ROOT / "docs" / "ste-banned-words.txt") -> list[st
     return [w.strip().lower() for w in lines if w.strip() and not w.startswith("#")]
 
 
+# The human, 21 Oct (Q-R5-14): no release id (R5, R1.1), question id (Q-...), decision id (D31)
+# or raw sheet row key ("Outreach PoCs:412:...") in any UI string. Words for the people who use
+# the page; the ids live in docs/. No exceptions (the human, Q-R5-16, D238).
+INTERNAL_IDS = re.compile(r"\bR\d+(?:\.\d+)?\b|\bQ-[A-Za-z0-9]|\bD\d+\b|[^:\s][^:]*:\d+:")
+
+
 def check(source: str, text: str, banned: list[str]) -> list[Finding]:
     found = []
+    if INTERNAL_IDS.search(text):
+        found.append(Finding(source, text, "internal id (R<n>, Q-, D<n> or tab:row:) in UI text"))
     if visible_length(text) > MAX_CHARS:
         found.append(Finding(source, text, f"over {MAX_CHARS} characters"))
     lower = text.lower()

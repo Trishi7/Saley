@@ -67,7 +67,7 @@ export function SuggestPage({ view }: { view: ViewDef }) {
         {list.markFailed && <SeenMarkFailed />}
         {data && (
           <>
-            <p className="text-muted-foreground tabular text-xs" data-stamp>
+            <p className="text-muted-foreground nums text-xs" data-stamp>
               {fmt(W.winLine, { w: data.window.label })}
               {data.capped_note ? ` · ${data.capped_note}` : ""}
             </p>

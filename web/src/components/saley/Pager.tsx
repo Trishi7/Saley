@@ -83,7 +83,7 @@ export function Pager({
       <div data-pager-list>{children}</div>
       {paged && (
         <nav aria-label={label} className="flex flex-wrap items-center justify-between gap-2">
-          <span data-pager-more className="text-muted-foreground tabular text-sm">
+          <span data-pager-more className="text-muted-foreground nums text-sm">
             {state.more > 0
               ? fmt(W.pagerMore, { n: state.more })
               : fmt(W.pagerRange, { a: state.offset + 1, b: state.offset + shown, n: total })}

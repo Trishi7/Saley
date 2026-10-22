@@ -63,7 +63,7 @@ export function NewsRun() {
             </Tag>
           )}
           {latest && (
-            <span className="text-muted-foreground tabular">
+            <span className="text-muted-foreground nums">
               {fmt(W.runNewsAsked, { t: istTime(latest.requested_at), u: latest.requested_by })}
             </span>
           )}

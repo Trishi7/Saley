@@ -42,7 +42,7 @@
 | test-reports/R1-final.md, R1.1-final.md, R2-final.md, R3-final.md, R4-final.md | The GATE: PASS report of each release |
 | test-reports/R4-files.txt | Source manifest of the last release: gate step 2 reads it as the coverage baseline |
 | test-reports/R5-impeccable.json | R5 Impeccable audit scores (work in progress until the R5 gate) |
-| test-reports/parity-2026-10-18.md, R1.1-api-abuse.md, R1.1-files.txt, R1.1-gate.json, R1.1-gate.tree, R1.1-sheet-verify.md, R1-files.txt, tidy-2026-10-19.md | Older run records still tracked in git (kept until the human removes them) |
+| test-reports/<release>-<date>.md | A gate run that is not a PASS (steps 1-9, or a failed finalize). A PASS writes <release>-final.md (D236). Run records move to .scratch/ at a tidy stop |
 
 Older run records, dev logs and screenshots live in `.scratch/test-reports/` (ignored).
 

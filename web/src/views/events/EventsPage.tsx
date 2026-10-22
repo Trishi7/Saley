@@ -59,7 +59,7 @@ function EventRow({ e }: { e: EventItem }) {
       </TableCell>
       <TableCell className="py-2.5">
         <span className="flex flex-col">
-          <span className="tabular text-sm">{e.date_label}</span>
+          <span className="nums text-sm">{e.date_label}</span>
           <span className="text-muted-foreground text-xs">{e.days_text}</span>
         </span>
       </TableCell>
@@ -118,7 +118,7 @@ export function EventsPage({ view }: { view: ViewDef }) {
         {list.markFailed && <SeenMarkFailed />}
         {data && (
           <>
-            <p className="text-muted-foreground tabular text-xs" data-stamp>
+            <p className="text-muted-foreground nums text-xs" data-stamp>
               {fmt(W.winLine, { w: data.window.label })}
             </p>
             <section

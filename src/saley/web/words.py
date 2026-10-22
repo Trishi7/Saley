@@ -34,13 +34,13 @@ MONEY_NO_VALUE = "Deals with no value on file: {n}"
 
 # Where each number comes from (`source` on every tile, R1.1 ticket A.2).
 SRC_DEALS = "Goal tab and Deal Status column"
-SRC_LIVE = "Outreach PoCs, stage rules (D29)"
+SRC_LIVE = "Outreach PoCs, stage rules"
 SRC_BACKLOG = "Outreach PoCs, Sid - LI Addition"
 SRC_P1 = "Outreach PoCs, Priority column"
 SRC_WEEK = "Outreach PoCs, First Contact Date"
 SRC_LATE = "Deliverables Checklist, Tentative Deadline"
 SRC_MONEY = "Estd. Deal Size and late deliverables"
-SRC_REPLY = "No source until R2"
+SRC_REPLY = "No source yet"
 
 # ------------------------------------------------------------------ status bar
 UPDATED = "Updated {t} IST · sheet {s} · news {n}"
@@ -62,7 +62,7 @@ LINKED_BY = "industry rule"
 # ------------------------------------------------------------------ money and values
 NO_VALUE = "No value on file"
 NONE_ON_FILE = "None on file"
-REPLY_NOTE = "No source until R2"
+REPLY_NOTE = "No source yet"
 
 # ------------------------------------------------------------------ errors (API)
 ERR_SIGN_IN = "Sign in to use Saley."
@@ -107,7 +107,7 @@ ERR_TOO_BIG = "The request is too large."
 ERR_HOST = "This address is not allowed in dev mode."
 # / without a build (D145, D224): a plain line, never a trace.
 APP_NOT_BUILT = "The dashboard is not built yet. Run the web build."
-WRITES_OFF = "sheet writes off: Q-R2-1"
+WRITES_OFF = "Sheet writes are off"
 PENDING_NOTE = "Sheet updates in a few seconds"
 WRITE_FAILED = "Sheet write failed: {n}. See Decisions."
 
@@ -231,7 +231,7 @@ NEWS_SCORED = "Scored"
 NEWS_SCORED_4 = "Scored 4 or 5"
 NEWS_LINKED = "About our companies or people"
 NEWS_SENT = "Sent to Discord"
-NEWS_SENT_NOTE = "—, no digest until R4"
+NEWS_SENT_NOTE = "Digest not started yet"  # the human, 21 Oct (Q-R5-14)
 NEWS_DAY_LABEL = "News on {day}"
 SOURCE_PROBLEM = "Last answer: {status}"
 SOURCE_NO_ANSWER = "No answer yet"
@@ -386,8 +386,8 @@ TAG_SINGLE = "Single-threaded"
 TAG_QUALIFIED_MEANS = "At least one person is at stage Qualified"
 TAG_ENGAGED_MEANS = "Two or more people are in a thread"
 TAG_SINGLE_MEANS = "One person is in a thread"
-TAG_SOURCE = "Stage rules (D29) and the thread count of the account"
-FOLLOW_UP_RULE = "D31"
+TAG_SOURCE = "Stage rules and the thread count of the account"
+FOLLOW_UP_RULE = "the follow-up rule"  # Q-R5-16: no decision id in UI text
 OWNER_SRC_FIRST = "First Contact"
 OWNER_SRC_LI = "Sid - LI Addition"
 OWNER_SRC_TYPE = "First Contact Type"
@@ -398,7 +398,7 @@ NOTE_SOURCE = "note {day}"
 CITY_BANGALORE = "Bangalore"
 CITY_LONDON = "London"
 CITY_OTHER = "Other"
-ERR_FIND_OFF = "Find people is off (FIND_PEOPLE_ENABLED)."  # D164
+ERR_FIND_OFF = "Find people is off for now."  # D164
 # Run news now (R5 T8, D150, D151): each line is at most 60 characters.
 ERR_NEWS_ADMIN = "Only an admin can run news now."
 ERR_NEWS_BUSY = "A news run is already waiting or running."
