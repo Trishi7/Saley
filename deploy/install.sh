@@ -107,9 +107,9 @@ for dir in secrets backups state; do run install -d -m 700 "$ROOT_DIR/$dir"; don
 
 step "6. Docker network saley_net"
 if [ "$DRY" = 1 ]; then
-	echo "would run: docker network create --subnet 172.30.0.0/24 saley_net (when missing)"
+	echo "would run: docker network create --subnet 172.30.0.0/24 --ip-range 172.30.0.128/25 saley_net (when missing)"
 else
-	docker network inspect saley_net >/dev/null 2>&1 || docker network create --subnet 172.30.0.0/24 saley_net
+	docker network inspect saley_net >/dev/null 2>&1 || docker network create --subnet 172.30.0.0/24 --ip-range 172.30.0.128/25 saley_net
 fi
 
 step "7. Start on boot (systemd unit saley.service)"

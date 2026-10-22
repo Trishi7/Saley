@@ -98,6 +98,30 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod             run --rm --no-deps migrate saley db-owners
 
+      - name: R6-C07 caddy gets its fixed address with every service order
+        run: |
+          set -eu
+          . deploy/lib.sh  # dc, wait_healthy: the same helpers as deploy.sh
+          check() { # caddy is 172.30.0.2; every other container takes an address from .128/25
+            for svc in postgres web worker bot news caddy; do
+              ip="$(docker inspect -f '{{(index .NetworkSettings.Networks "saley_net").IPAddress}}' "$(dc ps -q "$svc")")"
+              echo "$1 $svc $ip"
+              if [ "$svc" = caddy ]; then test "$ip" = 172.30.0.2; else
+                test "${ip%.*}" = 172.30.0 && test "${ip##*.}" -ge 128; fi
+            done
+          }
+          check "first deploy:"
+          # Stop all, start caddy first (alone if compose allows it), then the rest.
+          dc stop
+          dc start caddy || true
+          dc up -d
+          wait_healthy 300
+          check "caddy first:"
+          # Every container new, in compose's own order.
+          dc up -d --force-recreate
+          wait_healthy 300
+          check "recreated:"
+
       - name: Sync the saved sheet (worker, D249)
         run: |
           docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod \

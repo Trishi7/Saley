@@ -204,7 +204,7 @@ bash deploy/deploy.sh
 
 1. Is the server up? `ssh` works.
 2. Are the services healthy? Run `dc ps`. Every line must say `healthy`. A service that says `unhealthy` or `restarting`: run `dc logs --tail 100 <service>`.
-3. A deploy says "network saley_net has subnet …": the network was made by hand. Run `dc down`, then `docker network rm saley_net`, then deploy again.
+3. A deploy says "network saley_net is …, want …": the network was made by hand or by an older version. Run `dc down`, then `docker network rm saley_net`, then deploy again.
 4. Is there free memory and disk? Run `free -h` and `df -h /`. If the disk is full, remove old backups. Docker can also free space: `docker image prune`.
 4. Is caddy up, with a valid certificate? Run `dc logs --tail 50 caddy`.
    - If you see "certificate" errors, check that the domain points at this server (section 1, step 6).

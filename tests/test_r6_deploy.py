@@ -152,7 +152,7 @@ case "$1 $2" in
 	*) exit 0 ;;
 	esac ;;
 "network inspect")
-	case "$*" in *Subnet*) echo "172.30.0.0/24" ;; esac
+	case "$*" in *Subnet*) echo "172.30.0.0/24 172.30.0.128/25" ;; esac
 	exit 0 ;;
 esac
 if [ "$1" = inspect ]; then echo healthy; exit 0; fi
@@ -371,7 +371,7 @@ def test_install_dry_run_prints_every_step() -> None:
         "fail2ban",
         "install -d -m 700 /srv/saley/secrets",
         "install -d -m 700 /srv/saley/backups",
-        "docker network create --subnet 172.30.0.0/24 saley_net",
+        "docker network create --subnet 172.30.0.0/24 --ip-range 172.30.0.128/25 saley_net",
         "would run: install -d -m 700 /srv/saley\n",
         "--profile prod up -d",
         "systemctl enable saley.service",
@@ -517,3 +517,17 @@ def test_deploy_stops_when_the_key_cannot_go_to_the_worker(server: dict[str, Any
     code, out, calls = run_script({**server, "env": env}, "deploy.sh", "--no-pull")
     assert code != 0 and "cannot give" in out and "sudo chown 10001:10001" in out, out
     assert not any("build" in c for c in calls)
+
+
+def test_caddy_address_is_outside_the_automatic_range() -> None:
+    """The fourth compose run: another container took 172.30.0.2 first ("Address already in
+    use"). The network gives automatic addresses from NET_RANGE only, and caddy's fixed
+    address is in the subnet but outside that range."""
+    import ipaddress
+
+    lib = (DEPLOY / "lib.sh").read_text(encoding="utf-8")
+    subnet = ipaddress.ip_network(re.search(r'^NET_SUBNET="([^"]+)"', lib, re.M).group(1))
+    auto = ipaddress.ip_network(re.search(r'^NET_RANGE="([^"]+)"', lib, re.M).group(1))
+    caddy = ipaddress.ip_address(services()["caddy"]["networks"]["saley_net"]["ipv4_address"])
+    assert auto.subnet_of(subnet) and caddy in subnet and caddy not in auto
+    assert f"--ip-range {auto}" in (DEPLOY / "install.sh").read_text(encoding="utf-8")

@@ -43,15 +43,19 @@ db_name() {
 }
 
 NET_SUBNET="172.30.0.0/24" # D254: caddy is 172.30.0.2 on it (docker-compose.yml)
+# Docker gives the other containers addresses from this range only, so 172.30.0.2 stays free
+# for caddy (the fourth compose run: "Address already in use" when another container took it).
+NET_RANGE="172.30.0.128/25"
 
 ensure_network() {
-	local subnet
+	local got
 	if ! docker network inspect saley_net >/dev/null 2>&1; then
-		docker network create --subnet "$NET_SUBNET" saley_net >/dev/null
+		docker network create --subnet "$NET_SUBNET" --ip-range "$NET_RANGE" saley_net >/dev/null
 		return
 	fi
-	subnet="$(docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' saley_net)"
-	[ "$subnet" = "$NET_SUBNET" ] || die "network saley_net has subnet $subnet, want $NET_SUBNET"
+	got="$(docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{.IPRange}}{{end}}' saley_net)"
+	[ "$got" = "$NET_SUBNET $NET_RANGE" ] ||
+		die "network saley_net is '$got', want '$NET_SUBNET $NET_RANGE' (runbook: the dashboard is down, step 3)"
 }
 
 # The env file holds every secret: root only (review M4). Tests on Windows skip it.

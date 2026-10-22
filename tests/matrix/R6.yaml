@@ -73,6 +73,20 @@ rows:
     tool: ci
     command: ci R6-C06
     pass: the CI step succeeded for HEAD
+  - id: R6-C07
+    feature: F-R6-04
+    layer: guardrails
+    what: caddy gets its fixed address 172.30.0.2 with every service order (first deploy, caddy started first, all recreated); every other container takes an address from 172.30.0.128/25
+    tool: ci
+    command: ci R6-C07
+    pass: the CI step succeeded for HEAD
+  - id: R6-C08
+    feature: F-R6-04
+    layer: guardrails
+    what: caddy's fixed address is inside saley_net and outside the range for automatic addresses; the web trusts X-Forwarded-For from that address only
+    tool: pytest
+    command: pytest tests/test_r6_deploy.py::test_caddy_address_is_outside_the_automatic_range tests/test_r6_server.py::test_web_trusts_forwarded_for_from_the_named_proxy_only
+    pass: tests pass
   - id: R6-D01
     feature: F-R6-05
     layer: guardrails

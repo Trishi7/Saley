@@ -215,7 +215,8 @@ services:
   #     - ./deploy/squid.conf:/etc/squid/squid.conf:ro
 
 networks:
-  # install.sh and deploy.sh create it on 172.30.0.0/24 (D254: caddy has a fixed address).
+  # install.sh and deploy.sh create it on 172.30.0.0/24, other containers from .128/25 only
+  # (D254: caddy has the fixed address 172.30.0.2).
   saley_net:
     external: true
 
