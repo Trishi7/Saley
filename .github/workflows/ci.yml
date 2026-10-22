@@ -53,6 +53,9 @@ jobs:
     env:
       # `saley` owns saley_test (roles.sql). The tests drop and rebuild its schema.
       TEST_DATABASE_URL: postgresql+psycopg://saley:saley@localhost:5432/saley_test
+      # R6 (Q-R6-3 follow-up): the server migrates as saley_admin, a member of saley (D244).
+      # tests/test_r6_schema.py uses the service superuser to prove that path on a scratch database.
+      SALEY_SUPERUSER_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4

@@ -30,10 +30,10 @@ Why (docs/plans/R4.md §3, D24, D48, D129, D135):
   TRUE / FALSE are upper case (one key for chat and dashboard). Meeting Status and the LinkedIn
   cell take free text on the dashboard, so no value list is added here.
 
-Function owner: same pattern as 0009-0018. `set local role` to the owner when the migrating role
-is a member of it. `security definer`, `set search_path = public, pg_temp`, revoked from public,
-executable by `saley_ro`. Downgrade restores the old surface check and drops the new function.
-"""
+Owner (R6, Q-R6-4): migrations run as saley_admin and never switch role. saley_admin is a
+member of `saley` (D244), so it may replace or drop the saley_* functions that `saley` owns,
+and the MOVE_OWNER step gives new functions to `saley` at the end. saley_admin owns every
+table and view (docs/01 §11)."""
 
 from __future__ import annotations
 
@@ -56,18 +56,6 @@ RESOLVE_SIG = (
     "saley_proposal_resolve(text, bigint, text, text, text, text, integer, integer, boolean)"
 )
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 SURFACE_OLD = "('dashboard','chat','card')"
 SURFACE_NEW = "('dashboard','chat','card','discord')"
@@ -274,18 +262,14 @@ GRANT = (
 
 
 def upgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(_patch(PATCHED, SWAPS))
     op.execute(SALEY_PROPOSAL_RESOLVE)
     op.execute(f"revoke all on function {RESOLVE_SIG} from public")
     op.execute(MOVE_OWNER)
     op.execute(GRANT)
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(f"drop function if exists {RESOLVE_SIG}")
     # 'discord' rows stay in `decision` (0018 owns the table check).
     op.execute(_unpatch())
-    op.execute("reset role")

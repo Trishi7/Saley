@@ -244,7 +244,7 @@ def test_db_roles_creates_or_updates_and_runs_the_grants() -> None:
     )
     assert 'ALTER ROLE "saley" WITH LOGIN PASSWORD \'SCRAM-SHA-256$4096:saley$' in joined
     assert "'pa'" not in joined and "'pw'" not in joined and "'pr'" not in joined
-    assert 'GRANT "saley" TO "saley_admin"' in joined
+    assert "GRANT saley TO saley_admin;" in log[-1]  # in grants.sql since Q-R6-4 (D256)
     assert 'CREATE DATABASE "saley" OWNER "saley_admin"' in joined
     assert log[-1] == GRANTS_SQL.read_text(encoding="utf-8")
     roles_sql = (Path(__file__).resolve().parents[1] / "deploy" / "sql" / "roles.sql").read_text(
@@ -528,3 +528,131 @@ def _raw(row: matrix.Row) -> dict[str, str]:
         "command": row.command,
         "pass": row.pass_rule,
     }
+
+
+# ------------------------------------------------------------------ owner model (Q-R6-4, D256)
+
+
+class CatalogConn:
+    """Answers the db_owners queries from canned rows, by a word in each query."""
+
+    def __init__(self, answers: dict[str, list[tuple[Any, ...]]]) -> None:
+        self.answers = answers
+
+    def execute(self, query: str, params: Any = None) -> Any:
+        for key, rows in self.answers.items():
+            if key in query:
+                return SimpleNamespace(fetchall=lambda rows=rows: rows)
+        return SimpleNamespace(fetchall=lambda: [])
+
+
+GOOD = {
+    "relowner::regrole::text": [("account", "r", "saley_admin"), ("v_today", "v", "saley_admin")],
+    "pg_has_role": [(True,)],
+    "prosecdef": [("saley_act(text)", "saley", False)],
+    "'SELECT,INSERT,UPDATE,DELETE'": [],
+    "has_table_privilege('saley_ro', c.oid, 'SELECT'), ": [
+        ("account", False, False),
+        ("sheet_snapshot", True, False),
+    ],
+    "relkind = 'v'": [],
+}
+
+
+def test_db_owners_accepts_the_model_and_names_each_break() -> None:
+    from saley.qa.db_owners import problems
+
+    assert problems(CatalogConn(GOOD)) == []
+    bad = {
+        **GOOD,
+        "relowner::regrole::text": [("account", "r", "saley")],
+        "pg_has_role": [(False,)],
+        "prosecdef": [("saley_act(text)", "saley_admin", True)],
+        "'SELECT,INSERT,UPDATE,DELETE'": [("notes_file",)],
+        "has_table_privilege('saley_ro', c.oid, 'SELECT'), ": [("contact", True, True)],
+        "relkind = 'v'": [("v_people",)],
+    }
+    assert problems(CatalogConn(bad)) == [
+        "account (r) is owned by saley, want saley_admin",
+        "saley_admin is not a member of saley",
+        "function saley_act(text) is owned by saley_admin, want saley",
+        "function saley_act(text) may be run by PUBLIC",
+        "saley cannot read and write the rows of notes_file",
+        "saley_ro may read the table contact (views only, docs/01 §11)",
+        "saley_ro may write the table contact",
+        "saley_ro cannot read the view v_people",
+    ]
+
+
+class OwnerConn:
+    def __init__(self, owned: list[tuple[str, str]], member: bool) -> None:
+        self.owned, self.member, self.log = owned, member, []
+
+    def __enter__(self) -> OwnerConn:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def execute(self, query: Any, params: Any = None) -> Any:
+        text_ = query if isinstance(query, str) else query.as_string(None)
+        self.log.append(text_)
+        if "from pg_class" in text_:
+            return SimpleNamespace(fetchall=lambda: self.owned)
+        return SimpleNamespace(fetchone=lambda: (self.member,))
+
+
+DEV_ADMIN = "postgresql+psycopg://saley_admin:pa@localhost:5432/saley"
+
+
+def test_dev_transfer_moves_saley_objects_once() -> None:
+    from saley.core.ownership import transfer_dev
+
+    settings = Settings(_env_file=None, saley_env="dev", database_url_admin=DEV_ADMIN)
+    conn = OwnerConn([("account", "r"), ("v_today", "v"), ("free_seq", "S")], member=True)
+    assert transfer_dev(settings, lambda info: conn) == "moved: 3 objects from saley to saley_admin"
+    joined = "\n".join(conn.log)
+    assert 'ALTER TABLE "account" OWNER TO "saley_admin"' in joined
+    assert 'ALTER VIEW "v_today" OWNER TO "saley_admin"' in joined
+    assert 'ALTER SEQUENCE "free_seq" OWNER TO "saley_admin"' in joined
+    assert "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO saley" in joined
+    done = OwnerConn([], member=True)
+    assert transfer_dev(settings, lambda info: done).startswith("ok:")
+
+
+def test_dev_transfer_says_why_it_cannot_move() -> None:
+    from saley.core.ownership import NEEDS_ROLES, transfer_dev
+
+    dev = Settings(_env_file=None, saley_env="dev", database_url_admin=DEV_ADMIN)
+    stuck = OwnerConn([("account", "r")], member=False)
+    result = transfer_dev(dev, lambda info: stuck)
+    assert result == f"pending: 1 objects still owned by saley; {NEEDS_ROLES}"
+    assert not any("ALTER" in q for q in stuck.log)
+    never = lambda info: pytest.fail("no connection expected")  # noqa: E731
+    assert transfer_dev(Settings(_env_file=None, saley_env="prod"), never).startswith("skipped")
+    no_admin = Settings(_env_file=None, saley_env="dev", database_url_admin="")
+    assert transfer_dev(no_admin, never).startswith("skipped: DATABASE_URL_ADMIN")
+    test_db = DEV_ADMIN.replace("/saley", "/saley_test")
+    assert (
+        transfer_dev(Settings(_env_file=None, saley_env="dev", database_url_admin=test_db), never)
+        == "skipped: a _test database"
+    )
+
+
+def test_saley_dev_logs_the_owner_step_and_never_stops_on_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import saley.cli as cli
+    from saley.core import ownership
+
+    lines: list[tuple[str, dict[str, Any]]] = []
+    monkeypatch.setattr(cli.log, "info", lambda event, **kw: lines.append((event, kw)))
+    monkeypatch.setattr(cli.log, "warning", lambda event, **kw: lines.append((event, kw)))
+    monkeypatch.setattr(ownership, "transfer_dev", lambda s: "moved: 2 objects")
+    cli._dev_owners(Settings(_env_file=None))
+    monkeypatch.setattr(ownership, "transfer_dev", lambda s: (_ for _ in ()).throw(OSError()))
+    cli._dev_owners(Settings(_env_file=None))
+    assert lines == [
+        ("dev_db_owners", {"result": "moved: 2 objects"}),
+        ("dev_db_owners", {"result": "failed: OSError"}),
+    ]

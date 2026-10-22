@@ -2,6 +2,11 @@
 
 (newest first)
 
+## Q-R6-4 · 2026-10-22 · R6 gate · The compose run of 5d25b80 failed at migrate (resolved)
+- **Answer (Trishi, 22 Oct, chat):** 0016 set role to the saley owner, then `references account` failed. Fix for every migration: saley_admin only, never `set role`, owners set with `alter ... owner to` or grants.sql, saley_ro views only; a CI row that checks every table owner and the grants on a clean database; the laptop moves to the same model through a one-time step in `saley dev` with a log line (D256). **Resolved.**
+- Done: 17 migrations lose every role switch (0012 no longer gives its tables to saley); grants.sql makes saley_admin a member of saley, moves objects that saley made to saley_admin, and gives every SECURITY DEFINER saley_* function to saley; `saley db-owners` (src/saley/qa/db_owners.py) checks the model; CI row R6-G03 runs it after the first deploy; `saley dev` runs `saley.core.ownership.transfer_dev` once. Proved on a private Postgres 17 cluster in .scratch (removed after): clean database as saley_admin -> db-owners ok (51 tables, 49 views, 38 sequences); a laptop-style database migrated as saley -> db-owners names the breaks -> the dev step moves 100 objects -> db-owners ok; a second run moves nothing.
+- for the laptop: if the `dev_db_owners` line says "pending", run once `psql -h 127.0.0.1 -U postgres -f deploy/sql/roles.sql` (it makes saley_admin a member of saley), then start `saley dev` again. The step also needs DATABASE_URL_ADMIN in `.env`.
+
 ## Q-R6-3 · 2026-10-22 · R6 gate · The compose run of 7eda591 failed at R6-C02 (resolved)
 - **Answer (Trishi, 22 Oct, chat):** the log: the build failed, `ghcr.io/astral-sh/uv:0.13.1-python3.12-bookworm-slim: not found`; and "cannot give google-sa.json to uid 10001". Fix: no uv base image (python base + `pip install uv==0.13.1`), pin python and node by digest, deploy.sh makes the key readable by the worker user or stops early. **Resolved** (done; postgres and caddy pinned too).
 - What happened: compose run 39735950349 (commit 7eda591) failed in its first row step, "R6-C02 compose up healthy from clean (first deploy)", and skipped the rest. The public API shows only "Process completed with exit code 1". GitHub job logs need a token, so Claude Code cannot read why.

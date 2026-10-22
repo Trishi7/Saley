@@ -19,10 +19,10 @@ Why (pipeline stage 5, findings H1, H5, H6, M8, M11):
 - M8 indexes for the hot lookups and the foreign keys.
 Migrations 0006 to 0008 are not edited (only their downgrade steps, for H4).
 
-Function owner: `create or replace` needs the owner. When `roles.sql` moved the owner to
-`saley` and the migrating role is a member of it, the steps switch to that role with
-`set local role` and switch back at the end. Otherwise run the migration as the owner.
-"""
+Owner (R6, Q-R6-4): migrations run as saley_admin and never switch role. saley_admin is a
+member of `saley` (D244), so it may replace or drop the saley_* functions that `saley` owns,
+and the MOVE_OWNER step gives new functions to `saley` at the end. saley_admin owns every
+table and view (docs/01 §11)."""
 
 from __future__ import annotations
 
@@ -53,19 +53,6 @@ ALL_SIGS = (
     "saley_dismiss(text, bigint, text)",
 )
 
-# Switch to the role that owns the saley_* functions, when this role may. `reset role` ends it.
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 # ------------------------------------------------------------------ views
 
@@ -330,7 +317,6 @@ def upgrade() -> None:
     op.execute(f"create or replace view v_decision as {V_DECISION}")
     op.execute(f"create or replace view v_pending_write as {V_PENDING_WRITE}")
 
-    op.execute(AS_OWNER)
     op.execute(_new_act())
     op.execute(_new_undo())
     op.execute(COMMITMENT_DONE)
@@ -338,7 +324,6 @@ def upgrade() -> None:
     op.execute(f"revoke all on function {NEW_SIG} from public")
     op.execute(MOVE_OWNER)
     op.execute(GRANT_RO)
-    op.execute("reset role")
 
 
 def downgrade() -> None:
@@ -354,7 +339,6 @@ def downgrade() -> None:
     op.execute(REGRANT_VIEW)
     op.execute(f"create or replace view v_pending_write as {old6.VIEWS['v_pending_write']}")
 
-    op.execute(AS_OWNER)
     op.execute(f"drop function if exists {NEW_SIG}")
     op.execute(old6.SALEY_ACT)
     op.execute(old6.SALEY_UNDO)
@@ -364,4 +348,3 @@ def downgrade() -> None:
         "do $$ begin if exists (select 1 from pg_roles where rolname = 'saley_ro') then "
         f"grant execute on function {OLD_SIG} to saley_ro; end if; end $$"
     )
-    op.execute("reset role")

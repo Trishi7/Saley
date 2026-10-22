@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from alembic import command
 from sqlalchemy import create_engine, text
@@ -92,3 +94,61 @@ def test_decision_act_txid_partial_index(db: Session) -> None:
         text("select indexdef from pg_indexes where indexname = 'ix_decision_act_txid'")
     ).scalar_one()
     assert "(act_txid)" in index and "WHERE (act_txid IS NOT NULL)" in index
+
+
+SUPERUSER_URL = os.environ.get("SALEY_SUPERUSER_URL", "")  # CI only (.github/workflows/ci.yml)
+ADMIN_CHECK_DB = "saley_admin_check"
+
+
+@pytest.mark.skipif(not SUPERUSER_URL, reason="needs SALEY_SUPERUSER_URL (the CI test job)")
+def test_migrations_as_saley_admin_give_the_owner_model() -> None:
+    """Q-R6-4 (D256): every migration runs on a clean database as saley_admin, in deploy order
+    (grants.sql as superuser, `alembic upgrade head` as saley_admin, grants.sql again), and
+    then owners and grants match docs/01 §11 (`saley.qa.db_owners`). The third R6 compose run
+    failed here: a migration switched to `saley` and could not reference saley_admin's table."""
+    import psycopg
+    from sqlalchemy.engine import make_url
+
+    from saley.core.roles import GRANTS_SQL
+    from saley.qa.db_owners import problems
+
+    admin_url = make_url(SUPERUSER_URL).set(
+        drivername="postgresql+psycopg",
+        username="saley_admin",
+        password="saley_admin",  # deploy/sql/roles.sql laptop/CI default
+        database=ADMIN_CHECK_DB,
+    )
+    target = make_url(SUPERUSER_URL).set(database=ADMIN_CHECK_DB)
+    target_info = target.render_as_string(hide_password=False)
+    grants = GRANTS_SQL.read_text(encoding="utf-8")
+    with psycopg.connect(SUPERUSER_URL, autocommit=True) as conn:
+        conn.execute(f"drop database if exists {ADMIN_CHECK_DB} with (force)")
+        conn.execute(f"create database {ADMIN_CHECK_DB} owner saley_admin")
+    try:
+        with psycopg.connect(target_info, autocommit=True) as conn:
+            conn.execute(grants)
+        dispose_engines()
+        command.upgrade(alembic_config(admin_url.render_as_string(hide_password=False)), "head")
+        with psycopg.connect(target_info, autocommit=True) as conn:
+            conn.execute(grants)
+            head = conn.execute("select version_num from alembic_version").fetchone()
+            found = problems(conn)
+        assert head == ("0026",)
+        assert found == []
+    finally:
+        dispose_engines()
+        with psycopg.connect(SUPERUSER_URL, autocommit=True) as conn:
+            conn.execute(f"drop database if exists {ADMIN_CHECK_DB} with (force)")
+
+
+def test_no_migration_switches_role() -> None:
+    """Q-R6-4 (D256): migrations run as saley_admin only and never `set role`."""
+    from pathlib import Path
+
+    versions = Path(__file__).resolve().parents[1] / "migrations" / "versions"
+    for path in sorted(versions.glob("*.py")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        code = "\n".join(line for line in lines if not line.lstrip().startswith("#"))
+        body = code.split('"""', 2)[-1]  # the module docstring may tell the history
+        for word in ("set local role", "set role", "reset role", "set session authorization"):
+            assert word not in body.lower(), f"{path.name}: {word}"

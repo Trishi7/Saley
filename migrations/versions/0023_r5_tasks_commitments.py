@@ -50,17 +50,6 @@ down_revision: str | None = "0022"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = 'contact'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 VIEW = r"""
 create or replace view v_column_vocab as
@@ -152,19 +141,6 @@ end $$;
 """
 )
 
-# The owner of the saley_* functions (as in 0022): `create or replace` needs that role.
-AS_FN_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 COMMITMENT_SIG = "saley_commitment_done(text, bigint, text, integer)"
 COMMITMENT_DONE = r"""
@@ -323,7 +299,6 @@ GRANT_UNDO_GROUP = (
 
 
 def upgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(VIEW)
     op.execute(GRANT)
     op.execute(ADD_COLUMN)
@@ -332,23 +307,16 @@ def upgrade() -> None:
     op.execute(f"revoke all on function {UNDO_GROUP_SIG} from public")
     op.execute(MOVE_OWNER)
     op.execute(GRANT_UNDO_GROUP)
-    op.execute("reset role")
     # T4, D155: owner-only Done and signer-only Undo for a commitment.
-    op.execute(AS_FN_OWNER)
     op.execute(COMMITMENT_DONE)
     op.execute(_patch_undo(UNDO_NEEDLE, UNDO_SIGNER + UNDO_NEEDLE))
     op.execute(_patch_act(ACT_NEEDLE, ACT_NEEDLE + ACT_EMAIL))
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(AS_FN_OWNER)
     op.execute(_old_commitment_done())
     op.execute(_patch_undo(UNDO_SIGNER + UNDO_NEEDLE, UNDO_NEEDLE))
     op.execute(_patch_act(ACT_NEEDLE + ACT_EMAIL, ACT_NEEDLE))
-    op.execute("reset role")
-    op.execute(AS_OWNER)
     op.execute(f"drop function if exists {UNDO_GROUP_SIG}")
     op.execute("alter table decision drop column if exists act_txid")
     op.execute("drop view if exists v_column_vocab")
-    op.execute("reset role")

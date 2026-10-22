@@ -192,6 +192,20 @@ rows:
     tool: ci
     command: ci R6-G02
     pass: the CI step succeeded for HEAD
+  - id: R6-G03
+    feature: F-R6-16
+    layer: guardrails
+    what: on a clean database migrated as saley_admin by deploy.sh, owners and grants match docs/01 §11 (saley db-owners)
+    tool: ci
+    command: ci R6-G03
+    pass: the CI step succeeded for HEAD
+  - id: R6-G04
+    feature: F-R6-16
+    layer: guardrails
+    what: no migration switches role; the owner check names each break; the dev database moves to the owner model once, with a log line
+    tool: pytest
+    command: pytest tests/test_r6_schema.py::test_no_migration_switches_role tests/test_r6_server.py::test_db_owners_accepts_the_model_and_names_each_break tests/test_r6_server.py::test_dev_transfer_moves_saley_objects_once tests/test_r6_server.py::test_dev_transfer_says_why_it_cannot_move tests/test_r6_server.py::test_saley_dev_logs_the_owner_step_and_never_stops_on_it tests/test_review_fixes.py::test_downgrade_text_names_the_owner_rule
+    pass: tests pass
   - id: R6-M01
     feature: F-R6-13
     layer: guardrails

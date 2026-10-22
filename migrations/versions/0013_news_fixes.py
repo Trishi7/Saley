@@ -18,9 +18,10 @@ Why (pipeline stage 5, findings A2, A5, A6, B6, B9, B10):
 Migrations 0010 to 0012 are not edited. (The `drop view v_commitment` in the 0012 downgrade has
 no `if exists`; a downgrade that stops there is re-run after `drop view if exists`.)
 
-Table owner: like 0009, the steps switch to the role that owns the table (`set local role`)
-when the migrating role is a member of it, and switch back at the end.
-"""
+Owner (R6, Q-R6-4): migrations run as saley_admin and never switch role. saley_admin is a
+member of `saley` (D244), so it may replace or drop the saley_* functions that `saley` owns,
+and the MOVE_OWNER step gives new functions to `saley` at the end. saley_admin owns every
+table and view (docs/01 §11)."""
 
 from __future__ import annotations
 
@@ -32,20 +33,6 @@ revision: str = "0013"
 down_revision: str | None = "0012"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-
-def _as_owner_of(relation: str) -> str:
-    return rf"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = '{relation}'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 
 IST_DAY = "((%s at time zone 'Asia/Kolkata')::date)"
@@ -73,7 +60,6 @@ INDEX_NAMES = (
 
 
 def upgrade() -> None:
-    op.execute(_as_owner_of("news_stories"))
     op.execute("alter table news_seen drop constraint news_seen_story_id_fkey")
     op.execute(
         "alter table news_seen add constraint news_seen_story_id_fkey "
@@ -90,28 +76,22 @@ def upgrade() -> None:
     for statement in NEW_INDEXES:
         op.execute(statement)
     op.execute("drop index if exists ix_user_seen_item")
-    op.execute("reset role")
 
-    op.execute(_as_owner_of("notes_sync_state"))
     op.execute("alter table notes_sync_state drop constraint ck_notes_sync_state")
     op.execute(
         "alter table notes_sync_state add constraint ck_notes_sync_state "
         "check (state in ('ok','partial','folder_not_shared','api_disabled','error'))"
     )
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(_as_owner_of("notes_sync_state"))
     op.execute("update notes_sync_state set state = 'error' where state = 'partial'")
     op.execute("alter table notes_sync_state drop constraint ck_notes_sync_state")
     op.execute(
         "alter table notes_sync_state add constraint ck_notes_sync_state "
         "check (state in ('ok','folder_not_shared','api_disabled','error'))"
     )
-    op.execute("reset role")
 
-    op.execute(_as_owner_of("news_stories"))
     op.execute("create index if not exists ix_user_seen_item on user_seen (item_type, item_id)")
     for name in INDEX_NAMES:
         op.execute(f"drop index if exists {name}")
@@ -130,4 +110,3 @@ def downgrade() -> None:
         "alter table news_seen add constraint news_seen_story_id_fkey "
         "foreign key (story_id) references news_stories(id) on delete cascade"
     )
-    op.execute("reset role")

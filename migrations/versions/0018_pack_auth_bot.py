@@ -21,12 +21,10 @@ Why (docs/plans/R4.md §3, D114, D118, D128-D132):
 - `users.discord_id` exists since 0001. It gets a unique index so one Discord account maps to one
   person.
 
-Function owner: same pattern as 0009 and 0011-0017. `set local role` to the owner when the
-migrating role is a member of it. Functions are `security definer` with
-`set search_path = public, pg_temp`, revoked from public, executable by `saley_ro`. `saley_ro`
-gets SELECT on the four views and nothing on the tables. The downgrade drops the new objects and
-restores the 0006 surface check; 'discord' rows become 'chat' first.
-"""
+Owner (R6, Q-R6-4): migrations run as saley_admin and never switch role. saley_admin is a
+member of `saley` (D244), so it may replace or drop the saley_* functions that `saley` owns,
+and the MOVE_OWNER step gives new functions to `saley` at the end. saley_admin owns every
+table and view (docs/01 §11)."""
 
 from __future__ import annotations
 
@@ -39,33 +37,6 @@ down_revision: str | None = "0017"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-
-def _as_owner_of(relation: str) -> str:
-    return rf"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = '{relation}'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
-
-
-AS_FUNCTION_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 HEAD = """
 language plpgsql
@@ -344,7 +315,6 @@ SURFACE_OLD = "surface is null or surface in ('dashboard','chat','card')"
 
 
 def upgrade() -> None:
-    op.execute(_as_owner_of("decision"))
     op.execute("alter table decision drop constraint ck_decision_surface")
     op.execute(f"alter table decision add constraint ck_decision_surface check ({SURFACE_NEW})")
     op.execute(TABLES)
@@ -352,9 +322,7 @@ def upgrade() -> None:
     for name, body in VIEWS.items():
         op.execute(f"create or replace view {name} as {body}")
     op.execute(GRANT_VIEWS)
-    op.execute("reset role")
 
-    op.execute(AS_FUNCTION_OWNER)
     op.execute(SALEY_SESSION_START)
     op.execute(SALEY_SESSION_END)
     op.execute(SALEY_ASK_LOG)
@@ -362,16 +330,12 @@ def upgrade() -> None:
         op.execute(f"revoke all on function {sig} from public")
     op.execute(MOVE_OWNER)
     op.execute(GRANT_FUNCTIONS)
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(AS_FUNCTION_OWNER)
     for sig in NEW_SIGS:
         op.execute(f"drop function if exists {sig}")
-    op.execute("reset role")
 
-    op.execute(_as_owner_of("decision"))
     for name in reversed(tuple(VIEWS)):
         op.execute(f"drop view if exists {name}")
     op.execute("drop index if exists uq_users_discord_id")
@@ -381,4 +345,3 @@ def downgrade() -> None:
     op.execute("update decision set surface = 'chat' where surface = 'discord'")
     op.execute("alter table decision drop constraint ck_decision_surface")
     op.execute(f"alter table decision add constraint ck_decision_surface check ({SURFACE_OLD})")
-    op.execute("reset role")

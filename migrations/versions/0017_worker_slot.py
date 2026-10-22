@@ -22,33 +22,17 @@ down_revision: str | None = "0016"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-AS_TABLE_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = 'job_runs'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
-
 
 def upgrade() -> None:
-    op.execute(AS_TABLE_OWNER)
     op.execute("alter table job_runs add column slot text not null default 'worker:main'")
     op.execute(
         "alter table job_runs add constraint ck_job_runs_slot "
         "check (slot ~ '^worker:[a-z0-9_-]{1,30}$')"
     )
     op.execute("create index ix_job_runs_slot_started on job_runs (slot, started_at desc)")
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(AS_TABLE_OWNER)
     op.execute("drop index if exists ix_job_runs_slot_started")
     op.execute("alter table job_runs drop constraint if exists ck_job_runs_slot")
     op.execute("alter table job_runs drop column if exists slot")
-    op.execute("reset role")

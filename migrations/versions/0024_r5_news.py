@@ -45,17 +45,6 @@ INDEX = "ix_news_stories_topic"
 SIGNAL_VIEW_NAMES = ("v_signal_all", "v_signal_linked")
 LANE_COLUMN = "fs.lane as lane"
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = 'news_stories'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 GRANT_VIEWS = (
     "do $$ begin if exists (select 1 from pg_roles where rolname = 'saley_ro') then "
@@ -176,7 +165,6 @@ def _with_topic(body: str) -> str:
 
 
 def upgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute("alter table news_stories add column if not exists topic text")
     values = ", ".join(f"'{t}'" for t in TOPICS)
     op.execute(
@@ -195,7 +183,6 @@ def upgrade() -> None:
     op.execute(f"revoke all on function {REQUEST_SIG} from public")
     op.execute(MOVE_REQUEST_OWNER)
     op.execute(GRANT_REQUEST)
-    op.execute("reset role")
 
 
 def downgrade() -> None:
@@ -207,7 +194,6 @@ def downgrade() -> None:
     table column. No code of 0023 reads it. A new upgrade replaces it with the real column.
     """
     older = _load("0011_row_add_seen.py")
-    op.execute(AS_OWNER)
     op.execute(f"drop function if exists {REQUEST_SIG}")
     op.execute(f"drop view if exists {REQUEST_VIEW}")
     op.execute(f"drop table if exists {REQUEST_TABLE}")
@@ -217,4 +203,3 @@ def downgrade() -> None:
     op.execute(f"drop index if exists {INDEX}")
     op.execute(f"alter table news_stories drop constraint if exists {CHECK}")
     op.execute("alter table news_stories drop column if exists topic")
-    op.execute("reset role")

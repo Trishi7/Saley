@@ -7,9 +7,8 @@ every deploy, so a new password in `.env` reaches Postgres with the next deploy 
 "rotate a secret"). It connects as the `postgres` superuser with POSTGRES_PASSWORD, to the host
 of DATABASE_URL.
 
-`saley_admin` (migrations) becomes a member of `saley`: migrations replace the SECURITY DEFINER
-functions that `saley` owns (grants.sql moves them there), and the migrations switch to the
-owner with SET LOCAL ROLE only when the migrating role is a member.
+The owner model (docs/01 §11, D256) is in `sql/grants.sql`: saley_admin owns the tables and
+views and is a member of `saley`, which owns the saley_* functions. No migration switches role.
 
 The grants are in `sql/grants.sql`, the same file deploy/sql/roles.sql includes on a laptop.
 """
@@ -120,7 +119,6 @@ def apply(settings: Settings, connect: Connect = _connect) -> list[str]:
             )
             conn.execute(role_statements(login, exists, scram(conn, login)))
             done.append(f"role {login.role} {'password set' if exists else 'created'}")
-        conn.execute(sql.SQL("GRANT {} TO {}").format(sql.Identifier(RW), sql.Identifier(ADMIN)))
         if conn.execute("select 1 from pg_database where datname = %s", (database,)).fetchone():
             done.append(f"database {database} exists")
         else:

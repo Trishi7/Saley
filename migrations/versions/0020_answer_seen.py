@@ -41,19 +41,6 @@ LIST_NEW = (
     + ")"
 )
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_mark_seen' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
-
 
 def _load(name: str) -> ModuleType:
     path = Path(__file__).with_name(name)
@@ -72,12 +59,8 @@ def _new_seen() -> str:
 
 
 def upgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(_new_seen())
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(_load("0014_r3_web_fixes.py")._new_seen())
-    op.execute("reset role")

@@ -256,6 +256,7 @@ def dev(
     if not force and recent_worker(window):
         _fail("Another worker ran in the last minutes. Stop it, or use --force.")
     _refuse_busy_port(port or settings.web_port)  # Q-N5: before the worker child starts
+    _dev_owners(settings)
     child = start_worker_child(reap=not force)
     died = threading.Event()
     stop = threading.Event()
@@ -281,6 +282,16 @@ def dev(
         stop_child(child)
     if died.is_set():
         raise typer.Exit(code=1)
+
+
+def _dev_owners(settings: Any) -> None:
+    """Q-R6-4 (D256): the dev database gets the server's owner model once. Never stops dev."""
+    from saley.core.ownership import transfer_dev
+
+    try:
+        log.info("dev_db_owners", result=transfer_dev(settings))
+    except Exception as exc:  # a laptop without the admin login still runs dev
+        log.warning("dev_db_owners", result=f"failed: {exc.__class__.__name__}")
 
 
 def watch_child(

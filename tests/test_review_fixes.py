@@ -276,7 +276,8 @@ def test_downgrade_through_0009_and_back(test_db_url: str, db: Session) -> None:
 
 
 def test_downgrade_text_names_the_owner_rule() -> None:
-    """H4: the drop runs as the function owner when it may, and says what to do when it cannot."""
+    """H4, then Q-R6-4: the drop never switches role (saley_admin is a member of the owner,
+    D244), and it says what to do when the role cannot drop."""
     import importlib.util
     from pathlib import Path
 
@@ -290,8 +291,8 @@ def test_downgrade_text_names_the_owner_rule() -> None:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         sql = getattr(module, attr)
-        assert "set local role" in sql and "pg_has_role" in sql and "reset role" in sql
-        assert "insufficient_privilege" in sql and "roles.sql" in sql
+        assert "set local role" not in sql and "reset role" not in sql
+        assert "insufficient_privilege" in sql and "saley_admin, a member of saley" in sql
 
 
 # ------------------------------------------------------------------ H5 failed writes are visible

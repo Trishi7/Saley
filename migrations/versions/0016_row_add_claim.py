@@ -19,11 +19,10 @@ Why (gate step 10 review notes, fixed in R3 on the human's instruction, D111):
 - `ix_news_seen_story_id`: `news_seen.story_id` is `on delete set null` (0013). The nightly story
   cleanup scanned `news_seen` once per deleted story.
 
-Function owner: same pattern as 0009 and 0011-0015 (`set local role` to the owner when the
-migrating role is a member of it). `security definer` with `set search_path = public, pg_temp`.
-`saley_ro` gets no grant on the table (views only, 0005). Downgrade restores the 0014 text of
-`saley_act` exactly (0015 did not change it).
-"""
+Owner (R6, Q-R6-4): migrations run as saley_admin and never switch role. saley_admin is a
+member of `saley` (D244), so it may replace or drop the saley_* functions that `saley` owns,
+and the MOVE_OWNER step gives new functions to `saley` at the end. saley_admin owns every
+table and view (docs/01 §11)."""
 
 from __future__ import annotations
 
@@ -38,33 +37,6 @@ revision: str = "0016"
 down_revision: str | None = "0015"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
-
-
-def _as_owner_of(relation: str) -> str:
-    return rf"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = '{relation}'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 
 def _load(name: str) -> ModuleType:
@@ -197,33 +169,21 @@ def _new_act() -> str:
 
 
 def upgrade() -> None:
-    op.execute(_as_owner_of("news_seen"))
     op.execute("create index ix_news_seen_story_id on news_seen (story_id)")
-    op.execute("reset role")
 
-    op.execute(AS_OWNER)
     op.execute(TABLE)
     op.execute(BACKFILL)
     op.execute(RELEASE_FN)
     op.execute(_new_act())
-    op.execute("reset role")
-    for table, (create, _name) in TRIGGERS.items():
-        op.execute(_as_owner_of(table))
+    for create, _name in TRIGGERS.values():
         op.execute(create)
-        op.execute("reset role")
 
 
 def downgrade() -> None:
     for table, (_create, name) in TRIGGERS.items():
-        op.execute(_as_owner_of(table))
         op.execute(f"drop trigger if exists {name} on {table}")
-        op.execute("reset role")
-    op.execute(AS_OWNER)
     op.execute(_load("0014_r3_web_fixes.py")._new_act())
     op.execute("drop function if exists saley_row_add_release()")
     op.execute("drop table if exists row_add_claim")
-    op.execute("reset role")
 
-    op.execute(_as_owner_of("news_seen"))
     op.execute("drop index if exists ix_news_seen_story_id")
-    op.execute("reset role")

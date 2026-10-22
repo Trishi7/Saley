@@ -18,9 +18,10 @@ Why (docs/plans/R3.md §3, D75, D76, D77):
 - Views for Events, the four Suggestions lists, "needs a look" and "Saley suggests" read by
   `saley_ro` only. The weights live in `saley.intel.suggest` (plain code), not in SQL.
 
-Function owner: same pattern as 0009. `create or replace` needs the owner, so the steps switch
-to the owner role (`set local role`) when the migrating role is a member of it.
-"""
+Owner (R6, Q-R6-4): migrations run as saley_admin and never switch role. saley_admin is a
+member of `saley` (D244), so it may replace or drop the saley_* functions that `saley` owns,
+and the MOVE_OWNER step gives new functions to `saley` at the end. saley_admin owns every
+table and view (docs/01 §11)."""
 
 from __future__ import annotations
 
@@ -48,18 +49,6 @@ SEEN_SIG = "saley_mark_seen(text, text, bigint[], text)"
 SEARCH_SIG = "saley_request_search(text, bigint, text)"
 NEW_SIGS = (SEEN_SIG, SEARCH_SIG)
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 # ------------------------------------------------------------------ views
 
@@ -525,7 +514,6 @@ def upgrade() -> None:
         op.execute(f"create or replace view {name} as {body}")
     op.execute(GRANT_VIEWS)
 
-    op.execute(AS_OWNER)
     op.execute(_new_act())
     op.execute(_new_undo())
     op.execute(SALEY_MARK_SEEN)
@@ -534,7 +522,6 @@ def upgrade() -> None:
         op.execute(f"revoke all on function {sig} from public")
     op.execute(MOVE_OWNER)
     op.execute(GRANT_FUNCTIONS)
-    op.execute("reset role")
 
 
 def downgrade() -> None:
@@ -570,9 +557,7 @@ def downgrade() -> None:
         + " end if; end $$"
     )
 
-    op.execute(AS_OWNER)
     for sig in NEW_SIGS:
         op.execute(f"drop function if exists {sig}")
     op.execute(old._new_act())
     op.execute(old._new_undo())
-    op.execute("reset role")

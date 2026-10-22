@@ -135,6 +135,9 @@ uv run saley discord read --test --last 5
 ```
 `--as <id>` tags a message with a test user id from `DISCORD_TEST_USER_IDS`. The bot needs the Message Content intent in the Discord developer portal.
 
+## Database owners (R6, D256)
+saley_admin runs the migrations and owns every table, view and sequence; `saley` owns the SECURITY DEFINER `saley_*` functions and has row rights; `saley_ro` reads views only (docs/01 §11). No migration switches role. Check any database with `uv run saley db-owners`. A laptop database made before R6 belongs to `saley`: `saley dev` moves it once and logs `dev_db_owners`. If that line says "pending", run `psql -h 127.0.0.1 -U postgres -f deploy/sql/roles.sql` once (it makes saley_admin a member of saley); the step also needs `DATABASE_URL_ADMIN` in `.env`.
+
 ## Server (R6)
 The droplet runs caddy, web, worker, bot, news and postgres from one image with Docker Compose (profile `prod`), behind https://saley.membrane.social. Every step, for a non-developer, is in `docs/14-runbook.md`:
 - once: `sudo bash /srv/saley/app/deploy/install.sh` (firewall 22/80/443, fail2ban, folders, network, start on boot, nightly backup);

@@ -182,6 +182,8 @@ def dev_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(cli.time, "sleep", lambda s: None)
     monkeypatch.setattr(cli, "_is_windows", lambda: False)
     monkeypatch.setattr(cli, "port_in_use", lambda port: False)
+    # R6 (D256): the dev owner step has its own tests (test_r6_server); here it only logs.
+    monkeypatch.setattr(cli, "_dev_owners", lambda settings: None)
 
     class FakeConfig:
         """uvicorn.Config probes the platform with subprocess.Popen, which is faked here."""

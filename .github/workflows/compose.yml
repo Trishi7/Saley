@@ -86,13 +86,17 @@ jobs:
       - name: R6-C02 compose up healthy from clean (first deploy)
         run: |
           set -eu
-          SALEY_HEALTH_WAIT=300 bash deploy/deploy.sh --no-pull --skip sheet,bot | tee "$RUNNER_TEMP/deploy1.log"
+          SALEY_HEALTH_WAIT=300 bash deploy/deploy.sh --no-pull --skip sheet,bot 2>&1 | tee "$RUNNER_TEMP/deploy1.log"
           grep -q "deploy ok" "$RUNNER_TEMP/deploy1.log"
           for svc in postgres web worker bot news caddy; do
             cid="$(docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod ps -q "$svc")"
             test "$(docker inspect -f '{{.State.Health.Status}}' "$cid")" = healthy
           done
           test -z "$(docker ps --filter label=com.docker.compose.project=saley --format '{{.Ports}}' | grep -v -e '8080->80' -e '8443->8443' | grep -- '->' || true)"
+
+      - name: R6-G03 owners and grants on a clean database match docs/01 section 11
+        run: |
+          docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod             run --rm --no-deps migrate saley db-owners
 
       - name: Sync the saved sheet (worker, D249)
         run: |
@@ -104,7 +108,7 @@ jobs:
           set -eu
           dc() { docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod "$@"; }
           before="$(for s in web worker bot news caddy; do docker inspect -f '{{.Id}} {{.State.StartedAt}}' "$(dc ps -q $s)"; done)"
-          bash deploy/deploy.sh --no-pull --skip bot | tee "$RUNNER_TEMP/deploy2.log"
+          bash deploy/deploy.sh --no-pull --skip bot 2>&1 | tee "$RUNNER_TEMP/deploy2.log"
           grep -q "deploy ok" "$RUNNER_TEMP/deploy2.log"
           grep -q "OK   sheet" "$RUNNER_TEMP/deploy2.log"
           after="$(for s in web worker bot news caddy; do docker inspect -f '{{.Id}} {{.State.StartedAt}}' "$(dc ps -q $s)"; done)"
@@ -133,9 +137,9 @@ jobs:
       - name: R6-B02 backup then restore passes sheet verify
         run: |
           set -eu
-          bash deploy/backup.sh --tag ci | tee "$RUNNER_TEMP/backup.log"
+          bash deploy/backup.sh --tag ci 2>&1 | tee "$RUNNER_TEMP/backup.log"
           grep -q "backup ok" "$RUNNER_TEMP/backup.log"
-          bash deploy/restore.sh --raw-file "$SAMPLE_SHEET" | tee "$RUNNER_TEMP/restore.log"
+          bash deploy/restore.sh --raw-file "$SAMPLE_SHEET" 2>&1 | tee "$RUNNER_TEMP/restore.log"
           grep -q "restore ok: sheet verify PASS" "$RUNNER_TEMP/restore.log"
 
       - name: R6-M01 memory under limits for 10 min of load

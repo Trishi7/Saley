@@ -25,18 +25,6 @@ down_revision: str | None = "0018"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class
-   where oid = 'scorecard_snapshot'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 VIEW = r"""
 create or replace view v_scorecard_history as
@@ -51,13 +39,9 @@ GRANT = (
 
 
 def upgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(VIEW)
     op.execute(GRANT)
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute("drop view if exists v_scorecard_history")
-    op.execute("reset role")

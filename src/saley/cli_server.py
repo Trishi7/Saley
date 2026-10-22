@@ -86,6 +86,25 @@ def register(app: typer.Typer) -> None:
             typer.echo(line)
         typer.echo("roles ok")
 
+    @app.command("db-owners")
+    def db_owners() -> None:
+        """Owners and grants against docs/01 §11 (CI row R6-G03, D256). Exit 1 names each break."""
+        import psycopg
+
+        from saley.qa.db_owners import counts, problems
+
+        url = make_url(get_settings().admin_database_url).set(drivername="postgresql")
+        with psycopg.connect(url.render_as_string(hide_password=False)) as conn:
+            found, n = problems(conn), counts(conn)
+        for line in found:
+            typer.echo(f"FAIL {line}")
+        if found:
+            raise typer.Exit(code=1)
+        typer.echo(
+            f"db owners ok: {n.get('r', 0)} tables, {n.get('v', 0)} views, "
+            f"{n.get('S', 0)} sequences (docs/01 section 11)"
+        )
+
     @app.command("last-run")
     def last_run(
         job: Annotated[str, typer.Argument(help="A job name, for example sheet_sync.")],

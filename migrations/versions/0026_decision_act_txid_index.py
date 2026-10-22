@@ -22,28 +22,12 @@ depends_on: str | Sequence[str] | None = None
 
 INDEX = "ix_decision_act_txid"
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = 'decision'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
-
 
 def upgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(
         f"create index if not exists {INDEX} on decision (act_txid) where act_txid is not null"
     )
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(f"drop index if exists {INDEX}")
-    op.execute("reset role")

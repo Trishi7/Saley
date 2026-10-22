@@ -33,18 +33,6 @@ TOPICS = (*OLD_TOPICS[:5], "Opportunity", *OLD_TOPICS[5:])
 CHECK = "ck_news_stories_topic"
 PAPER_KIND = "paper"
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = 'news_stories'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
-
 
 def _check(topics: tuple[str, ...]) -> str:
     values = ", ".join(f"'{t}'" for t in topics)
@@ -52,7 +40,6 @@ def _check(topics: tuple[str, ...]) -> str:
 
 
 def upgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute(f"alter table news_stories drop constraint if exists {CHECK}")
     op.execute(_check(TOPICS))
     # Only rows that have a topic: an untagged row needs no new row version (DB review).
@@ -60,12 +47,9 @@ def upgrade() -> None:
         "update news_stories set topic = null "
         f"where kind is distinct from '{PAPER_KIND}' and topic is not null"
     )
-    op.execute("reset role")
 
 
 def downgrade() -> None:
-    op.execute(AS_OWNER)
     op.execute("update news_stories set topic = null where topic = 'Opportunity'")
     op.execute(f"alter table news_stories drop constraint if exists {CHECK}")
     op.execute(_check(OLD_TOPICS))
-    op.execute("reset role")

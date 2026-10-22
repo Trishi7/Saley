@@ -16,11 +16,10 @@ Why (pipeline stage 5, round 3, findings M1, MED2):
   the last RUN_DAYS (90) days of runs: the cleanup deletes older runs anyway, so the view no
   longer scans rows the job would remove.
 
-Function owner: same pattern as 0009, 0011 and 0014 (`set local role` to the owner when the
-migrating role is a member of it). `security definer` and `set search_path = public, pg_temp`
-are kept: the functions are replaced by editing the 0014 text. `saley_ro` stays view-only (it
-has EXECUTE on the saley_* functions from 0009). Downgrade restores the 0014 text exactly.
-"""
+Owner (R6, Q-R6-4): migrations run as saley_admin and never switch role. saley_admin is a
+member of `saley` (D244), so it may replace or drop the saley_* functions that `saley` owns,
+and the MOVE_OWNER step gives new functions to `saley` at the end. saley_admin owns every
+table and view (docs/01 §11)."""
 
 from __future__ import annotations
 
@@ -35,33 +34,6 @@ revision: str = "0015"
 down_revision: str | None = "0014"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
-
-
-def _as_owner_of(relation: str) -> str:
-    return rf"""
-do $$
-declare
-  o name;
-begin
-  select relowner::regrole::name into o from pg_class where oid = '{relation}'::regclass;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 
 def _load(name: str) -> ModuleType:
@@ -126,27 +98,19 @@ def _new_undo() -> str:
 
 
 def upgrade() -> None:
-    for table, (create, _name) in INDEXES.items():
-        op.execute(_as_owner_of(table))
+    for create, _name in INDEXES.values():
         op.execute(create)
-        op.execute("reset role")
     op.execute(f"create or replace view v_news_run_summary as {NEW_RUN_SUMMARY}")
 
-    op.execute(AS_OWNER)
     op.execute(_new_undo())
-    op.execute("reset role")
 
 
 def downgrade() -> None:
     older = _load("0014_r3_web_fixes.py")
-    op.execute(AS_OWNER)
     op.execute(older._new_undo())
-    op.execute("reset role")
 
     op.execute(
         f"create or replace view v_news_run_summary as {older.NEW_VIEWS['v_news_run_summary']}"
     )
-    for table, (_create, name) in INDEXES.items():
-        op.execute(_as_owner_of(table))
+    for _create, name in INDEXES.values():
         op.execute(f"drop index if exists {name}")
-        op.execute("reset role")

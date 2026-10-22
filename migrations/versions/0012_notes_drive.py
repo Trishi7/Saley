@@ -15,8 +15,9 @@ Why (D81, docs/03 §3):
   from a Drive file that is now gone.
 - The web role (`saley_ro`) reads views only. It gets no grant on the two tables.
 
-Table owner: like 0009 and 0011, the tables move to the `saley` role when the migrating role
-is a member of it, so the worker can write them. Otherwise run `deploy/sql/roles.sql`.
+Table owner (R6, Q-R6-4): the tables stay with the migrating role (saley_admin on the server,
+docs/01 §11). The worker writes them through the row grants of `saley` (grants.sql, and the
+default privileges of saley_admin). Before R6 they moved to `saley`.
 """
 
 from __future__ import annotations
@@ -93,13 +94,8 @@ begin
   if exists (select 1 from pg_roles where rolname = 'saley_ro') then
     revoke all on notes_file, notes_sync_state from saley_ro;
   end if;
-  if exists (select 1 from pg_roles where rolname = 'saley')
-     and current_user <> 'saley'
-     and pg_has_role(current_user, 'saley', 'member') then
-    alter table notes_file owner to saley;
-    alter table notes_sync_state owner to saley;
-  else
-    raise notice 'notes tables stay with %: run deploy/sql/roles.sql', current_user;
+  if exists (select 1 from pg_roles where rolname = 'saley') and current_user <> 'saley' then
+    grant select, insert, update, delete on notes_file, notes_sync_state to saley;
   end if;
 end $$;
 """

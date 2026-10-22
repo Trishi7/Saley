@@ -138,20 +138,12 @@ def upgrade() -> None:
 DROP_FUNCTION = (
     r"""
 do $$
-declare
-  o name;
 begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_commitment_done' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
   drop function if exists """
     + SIGNATURE
     + r""";
-  reset role;
 exception when insufficient_privilege then
-  raise exception 'run this downgrade as the owner of the saley_* functions (deploy/sql/roles.sql)';
+  raise exception 'run this downgrade as saley_admin, a member of saley (D244)';
 end $$;
 """
 )

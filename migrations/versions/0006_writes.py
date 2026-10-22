@@ -683,21 +683,14 @@ DROP_FUNCTIONS = (
 do $$
 declare
   s text;
-  o name;
 begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
   foreach s in array array["""
     + ", ".join(f"'{sig}'" for sig in SIGNATURES.values())
     + r"""] loop
     execute format('drop function if exists %s', s);
   end loop;
-  reset role;
 exception when insufficient_privilege then
-  raise exception 'run this downgrade as the owner of the saley_* functions (deploy/sql/roles.sql)';
+  raise exception 'run this downgrade as saley_admin, a member of saley (D244)';
 end $$;
 """
 )

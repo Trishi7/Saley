@@ -20,9 +20,10 @@ Why (pipeline stage 5, part 2, findings A1, A7, A9):
   undo answers `busy` at once and the web returns 409. Deleting a row that is half written would
   race the worker.
 
-Function owner: same pattern as 0009 and 0011. `create or replace` needs the owner, so the steps
-switch to the owner role (`set local role`) when the migrating role is a member of it.
-"""
+Owner (R6, Q-R6-4): migrations run as saley_admin and never switch role. saley_admin is a
+member of `saley` (D244), so it may replace or drop the saley_* functions that `saley` owns,
+and the MOVE_OWNER step gives new functions to `saley` at the end. saley_admin owns every
+table and view (docs/01 §11)."""
 
 from __future__ import annotations
 
@@ -38,18 +39,6 @@ down_revision: str | None = "0013"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-AS_OWNER = r"""
-do $$
-declare
-  o name;
-begin
-  select proowner::regrole::name into o from pg_proc
-   where proname = 'saley_act' and pronamespace = 'public'::regnamespace limit 1;
-  if o is not null and o <> current_user and pg_has_role(current_user, o, 'member') then
-    execute format('set local role %I', o);
-  end if;
-end $$;
-"""
 
 # ------------------------------------------------------------------ views
 
@@ -228,11 +217,9 @@ def upgrade() -> None:
         op.execute(f"create or replace view {name} as {body}")
     op.execute(GRANT_VIEWS)
 
-    op.execute(AS_OWNER)
     op.execute(_new_act())
     op.execute(_new_undo())
     op.execute(_new_seen())
-    op.execute("reset role")
 
 
 def downgrade() -> None:
@@ -246,8 +233,6 @@ def downgrade() -> None:
         "grant select on v_search_request to saley_ro; end if; end $$"
     )
 
-    op.execute(AS_OWNER)
     op.execute(older._new_act())
     op.execute(older._new_undo())
     op.execute(older.SALEY_MARK_SEEN)
-    op.execute("reset role")
