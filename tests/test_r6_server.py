@@ -656,3 +656,70 @@ def test_saley_dev_logs_the_owner_step_and_never_stops_on_it(
         ("dev_db_owners", {"result": "moved: 2 objects"}),
         ("dev_db_owners", {"result": "failed: OSError"}),
     ]
+
+
+# ------------------------------------------------------------------ DISCORD_USER_MAP (R6 server)
+
+SERVER_MAP = (
+    "sid:729178203930755132,trishi:763638100173651988,"
+    "vaishnavi:1480468450475380816,kushal:948671815276957808"
+)
+
+
+def test_user_map_takes_the_server_line_and_17_to_19_digit_ids() -> None:
+    """The server's own line (commas, a 19-digit id) was refused by `db-roles` (R6)."""
+    from saley.core.settings import parse_user_map
+
+    got = parse_user_map(SERVER_MAP)
+    assert list(got) == ["sid", "trishi", "vaishnavi", "kushal"]
+    assert got["vaishnavi"] == "1480468450475380816" and len(got["vaishnavi"]) == 19
+    ids = {"a": "1" * 17, "b": "2" * 18, "c": "3" * 19}
+    line = ",".join(f"{k}:{v}" for k, v in ids.items())
+    assert parse_user_map(line) == ids
+    assert parse_user_map(line.replace(",", ";")) == ids  # the old separator still works
+    assert parse_user_map(" sid : 729178203930755132 ; ") == {"sid": "729178203930755132"}
+
+
+def test_user_map_error_names_the_entry_never_the_id() -> None:
+    from saley.core.settings import parse_user_map
+
+    for line, want in (
+        ("sid:729178203930755132,trishi:76363810017", "entry 2 (trishi:<11 characters>)"),
+        ("sid:729178203930755132,Kushal:948671815276957808", "entry 2 (Kushal:<18 characters>)"),
+        ("sid:729178203930755132,kushal", "entry 2 ('kushal')"),
+    ):
+        with pytest.raises(ValueError) as err:
+            parse_user_map(line)
+        assert want in str(err.value), str(err.value)
+        assert "729178203930755132" not in str(err.value) and "948671815276957808" not in str(
+            err.value
+        )
+
+
+def test_core_settings_match_settings() -> None:
+    from saley.core.settings import CoreSettings
+
+    for name, field in CoreSettings.model_fields.items():
+        assert Settings.model_fields[name].default == field.default, name
+
+
+def test_db_commands_never_load_the_discord_settings(set_env: Callable[..., None]) -> None:
+    """db-roles reads only the database values: a broken DISCORD_USER_MAP cannot stop it."""
+    set_env(DISCORD_USER_MAP="sid:12", DATABASE_URL_ADMIN="")
+    result = runner.invoke(app, ["db-roles"])
+    assert result.exit_code == 1
+    assert "DATABASE_URL_ADMIN is empty" in result.output  # it got past every other setting
+    assert "DISCORD_USER_MAP" not in result.output
+
+
+def test_llm_error_carries_the_api_reason_not_only_the_class() -> None:
+    """R6 gate: R3-L02 said only "BadRequestError"; the API's own words now come with it."""
+    from saley.core.llm import _reason
+
+    exc = SimpleNamespace(
+        body={"type": "error", "error": {"type": "invalid_request_error", "message": "x" * 500}}
+    )
+    reason = _reason(exc)  # type: ignore[arg-type]
+    assert reason.startswith(" (invalid_request_error: xxx") and len(reason) <= 204
+    assert _reason(SimpleNamespace(body=None)) == ""  # type: ignore[arg-type]
+    assert _reason(SimpleNamespace(body={"error": "oops"})) == ""  # type: ignore[arg-type]

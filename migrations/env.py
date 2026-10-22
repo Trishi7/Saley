@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, pool
 
 from saley.core import models  # noqa: F401 - registers tables on Base.metadata
 from saley.core.db import Base
-from saley.core.settings import get_settings
+from saley.core.settings import get_core_settings
 
 config = context.config
 if config.config_file_name is not None and config.attributes.get("configure_logger", True):
@@ -24,7 +24,7 @@ target_metadata = Base.metadata
 
 
 def _url() -> str:
-    return config.get_main_option("sqlalchemy.url") or get_settings().admin_database_url
+    return config.get_main_option("sqlalchemy.url") or get_core_settings().admin_database_url
 
 
 def run_migrations_offline() -> None:

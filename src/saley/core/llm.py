@@ -203,6 +203,21 @@ def _log_call(job: str, model: str, key: str, **fields: Any) -> None:
 
 
 RETRYABLE = (anthropic.RateLimitError, anthropic.APIConnectionError, anthropic.InternalServerError)
+REASON_CHARS = 200
+
+
+def _reason(exc: anthropic.APIError) -> str:
+    """The API's own words for a refused call ("invalid_request_error: ..."), for the log line.
+
+    Why (R6 gate): R3-L02 failed with only "BadRequestError", so nobody could tell a wrong model
+    name from an empty credit balance. The answer body holds no secret (the key is a header).
+    """
+    body = getattr(exc, "body", None)
+    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return ""
+    kind, message = str(error.get("type", "")), str(error.get("message", ""))
+    return f" ({kind}: {message})"[: REASON_CHARS + 4] if message else ""
 
 
 def _create_with_retry(client: anthropic.Anthropic, **kwargs: Any) -> Any:
@@ -266,7 +281,7 @@ def complete[T: BaseModel](
         # An egress block surfaces as a connection error; name the real cause.
         cause = type(exc.__cause__).__name__ if exc.__cause__ else type(exc).__name__
         _log_call(job, model, key, ok=False, error=cause)
-        raise LLMError(f"LLM call failed: {cause}") from exc
+        raise LLMError(f"LLM call failed: {cause}{_reason(exc)}") from exc
 
     usage = response.usage
     tokens = {"tokens_in": usage.input_tokens, "tokens_out": usage.output_tokens}

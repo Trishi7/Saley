@@ -14,7 +14,7 @@ from typing import Any
 
 import structlog
 
-from saley.core.settings import get_settings
+from saley.core.settings import get_core_settings
 
 _SECRET_KEY = re.compile(
     r"(token|secret|passw|api_key|apikey|authorization|cookie|credential|bearer|dsn|session)",
@@ -71,7 +71,7 @@ def _stderr_logger(*_args: Any) -> structlog.PrintLogger:
 
 def configure_logging(level: str | None = None, *, json: bool | None = None) -> None:
     """Configure structlog once per process. JSON outside dev, readable console in dev."""
-    settings = get_settings()
+    settings = get_core_settings()  # R6: never stopped by another service's value
     level_name = (level or settings.log_level).upper()
     use_json = (not settings.is_dev) if json is None else json
     logging.basicConfig(stream=sys.stderr, level=level_name, format="%(message)s")

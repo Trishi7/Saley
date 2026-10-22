@@ -80,7 +80,7 @@ check_key_file() {
 # a plain message (Q-R6-3: CI got only a warning and a worker that cannot read the key).
 fix_key_owner() {
 	local owner mode
-	[ "${SALEY_SKIP_MODE_CHECK:-0}" = 1 ] && return 0 # tests on NTFS: no Unix owners or modes
+	[ "${SALEY_SKIP_KEY_OWNER_CHECK:-0}" = 1 ] && return 0 # tests on NTFS: no Unix owners
 	[ -f "$KEY_FILE" ] || return 0                     # check_key_file names a missing key
 	owner="$(stat -c %u "$KEY_FILE")"
 	if [ "$owner" != "$APP_UID" ]; then

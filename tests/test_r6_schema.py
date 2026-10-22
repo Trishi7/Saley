@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import glob
 import os
+import shutil
+import socket
+import subprocess
+from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from alembic import command
@@ -96,12 +102,68 @@ def test_decision_act_txid_partial_index(db: Session) -> None:
     assert "(act_txid)" in index and "WHERE (act_txid IS NOT NULL)" in index
 
 
-SUPERUSER_URL = os.environ.get("SALEY_SUPERUSER_URL", "")  # CI only (.github/workflows/ci.yml)
 ADMIN_CHECK_DB = "saley_admin_check"
+ROOT = Path(__file__).resolve().parents[1]
+PG_BIN_GLOBS = ("C:/Program Files/PostgreSQL/*/bin", "/usr/lib/postgresql/*/bin")
 
 
-@pytest.mark.skipif(not SUPERUSER_URL, reason="needs SALEY_SUPERUSER_URL (the CI test job)")
-def test_migrations_as_saley_admin_give_the_owner_model() -> None:
+def _pg_bin() -> Path | None:
+    """The folder of initdb, pg_ctl and psql: on PATH, else a standard install folder."""
+    found = shutil.which("initdb")
+    if found:
+        return Path(found).parent
+    for pattern in PG_BIN_GLOBS:
+        for hit in sorted(glob.glob(pattern), reverse=True):  # the newest version first
+            if (Path(hit) / ("initdb.exe" if os.name == "nt" else "initdb")).exists():
+                return Path(hit)
+    return None
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+@pytest.fixture
+def superuser_url(tmp_path: Path) -> Iterator[str]:
+    """A Postgres superuser. CI: the service (SALEY_SUPERUSER_URL). Elsewhere (the laptop gate,
+    step 2): a short-lived private cluster in a temp folder, with the Saley roles of roles.sql,
+    stopped and removed after the test. The gate counts a skipped test as not passed."""
+    given = os.environ.get("SALEY_SUPERUSER_URL", "")
+    if given:
+        yield given
+        return
+    pg = _pg_bin()
+    if pg is None:
+        pytest.skip("no SALEY_SUPERUSER_URL and no Postgres binaries for a private cluster")
+    data, port = tmp_path / "pgdata", _free_port()
+
+    def run(*args: str) -> None:
+        # No pipes: `pg_ctl start` hands its output handles to the server it starts, so a
+        # captured run waits for ever on Windows (it hung the first local run). The server's
+        # log goes to pg.log; a failure still raises through check=True.
+        subprocess.run(  # noqa: S603 - our own Postgres binaries
+            [str(pg / args[0]), *args[1:]],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+            timeout=120,
+        )
+
+    run("initdb", "-D", str(data), "-U", "postgres", "--auth=trust", "-E", "UTF8")
+    run("pg_ctl", "-D", str(data), "-o", f"-p {port} -c listen_addresses=127.0.0.1",
+        "-l", str(tmp_path / "pg.log"), "-w", "start")  # fmt: skip
+    try:
+        run("psql", "-h", "127.0.0.1", "-p", str(port), "-U", "postgres", "-q",
+            "-v", "ON_ERROR_STOP=1", "-f", str(ROOT / "deploy" / "sql" / "roles.sql"))  # fmt: skip
+        yield f"postgresql://postgres:postgres@127.0.0.1:{port}/postgres"
+    finally:
+        run("pg_ctl", "-D", str(data), "-m", "fast", "-w", "stop")
+
+
+def test_migrations_as_saley_admin_give_the_owner_model(superuser_url: str) -> None:
     """Q-R6-4 (D256): every migration runs on a clean database as saley_admin, in deploy order
     (grants.sql as superuser, `alembic upgrade head` as saley_admin, grants.sql again), and
     then owners and grants match docs/01 §11 (`saley.qa.db_owners`). The third R6 compose run
@@ -112,16 +174,16 @@ def test_migrations_as_saley_admin_give_the_owner_model() -> None:
     from saley.core.roles import GRANTS_SQL
     from saley.qa.db_owners import problems
 
-    admin_url = make_url(SUPERUSER_URL).set(
+    admin_url = make_url(superuser_url).set(
         drivername="postgresql+psycopg",
         username="saley_admin",
         password="saley_admin",  # deploy/sql/roles.sql laptop/CI default
         database=ADMIN_CHECK_DB,
     )
-    target = make_url(SUPERUSER_URL).set(database=ADMIN_CHECK_DB)
+    target = make_url(superuser_url).set(database=ADMIN_CHECK_DB)
     target_info = target.render_as_string(hide_password=False)
     grants = GRANTS_SQL.read_text(encoding="utf-8")
-    with psycopg.connect(SUPERUSER_URL, autocommit=True) as conn:
+    with psycopg.connect(superuser_url, autocommit=True) as conn:
         conn.execute(f"drop database if exists {ADMIN_CHECK_DB} with (force)")
         conn.execute(f"create database {ADMIN_CHECK_DB} owner saley_admin")
     try:
@@ -137,7 +199,7 @@ def test_migrations_as_saley_admin_give_the_owner_model() -> None:
         assert found == []
     finally:
         dispose_engines()
-        with psycopg.connect(SUPERUSER_URL, autocommit=True) as conn:
+        with psycopg.connect(superuser_url, autocommit=True) as conn:
             conn.execute(f"drop database if exists {ADMIN_CHECK_DB} with (force)")
 
 

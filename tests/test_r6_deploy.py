@@ -138,10 +138,35 @@ def test_caddyfile_proxies_public_url_with_hsts_and_leaves_app_headers() -> None
 
 # ------------------------------------------------------------------ scripts with stubs
 
-BASH = shutil.which("bash")
-needs_bash = pytest.mark.skipif(
-    BASH is None or "system32" in BASH.lower(), reason="needs a real bash (never WSL)"
-)
+
+def find_bash() -> str | None:
+    """A real bash, never the WSL launcher in System32 (it would start a Linux VM).
+
+    The R6 gate runs from PowerShell, where PATH has the WSL `bash.exe` first and Git's bash not
+    at all (13 skipped tests failed step 2): Git for Windows ships bash beside git.exe.
+    """
+    found = shutil.which("bash")
+    if found and "system32" not in found.lower():
+        return found
+    git = shutil.which("git")
+    if git:
+        root = Path(git).resolve().parents[1]  # <Git>/cmd/git.exe -> <Git>
+        for rel in ("usr/bin/bash.exe", "bin/bash.exe"):
+            if (root / rel).exists():
+                return str(root / rel)
+    return None
+
+
+BASH = find_bash()
+needs_bash = pytest.mark.skipif(BASH is None, reason="needs a real bash (never WSL)")
+
+
+def bash_env(**extra: str) -> dict[str, str]:
+    """The environment for bash: its own tools (sed, awk, gzip) first on PATH. From PowerShell
+    the PATH has neither them nor Git's bash, only the WSL launcher (the R6 gate)."""
+    tools = str(Path(BASH).parent) if BASH else ""
+    return {**os.environ, "PATH": os.pathsep.join([tools, os.environ.get("PATH", "")]), **extra}
+
 
 STUB_DOCKER = r"""#!/usr/bin/env bash
 echo "docker $*" >>"$STUB_LOG"
@@ -170,6 +195,12 @@ echo "git $*" >>"$STUB_LOG"
 [ "$1" = rev-parse ] && echo abc123def456
 exit 0
 """
+# chown that is refused, as for a user that is not root: the key cannot go to uid 10001.
+STUB_CHOWN = """#!/usr/bin/env bash
+echo "chown $*" >>"$STUB_LOG"
+echo "chown: changing ownership: Operation not permitted" >&2
+exit 1
+"""
 STUB_PYTHON = """#!/usr/bin/env bash
 echo "python3 $*" >>"$STUB_LOG"
 exit "${STUB_SMOKE:-0}"
@@ -187,7 +218,12 @@ def posix(path: Path) -> str:
 def server(tmp_path: Path) -> dict[str, Any]:
     stubs = tmp_path / "stubs"
     stubs.mkdir()
-    for name, body in (("docker", STUB_DOCKER), ("git", STUB_GIT), ("python3", STUB_PYTHON)):
+    for name, body in (
+        ("docker", STUB_DOCKER),
+        ("git", STUB_GIT),
+        ("python3", STUB_PYTHON),
+        ("chown", STUB_CHOWN),
+    ):
         (stubs / name).write_text(body, encoding="utf-8", newline="\n")
         (stubs / name).chmod(0o755)
     app = tmp_path / "app"
@@ -206,6 +242,7 @@ def server(tmp_path: Path) -> dict[str, Any]:
         "STUB_LOG": (tmp_path / "calls.log").as_posix(),
         "GOOGLE_SERVICE_ACCOUNT_HOST_FILE": (tmp_path / "google-sa.json").as_posix(),
         "SALEY_SKIP_MODE_CHECK": "1",  # NTFS has no Unix modes; the server checks 600
+        "SALEY_SKIP_KEY_OWNER_CHECK": "1",  # NTFS has no Unix owners; one test turns it on
     }
     (tmp_path / "google-sa.json").write_text("{}", encoding="utf-8")
     return {"tmp": tmp_path, "stubs": posix(stubs), "env": env, "env_file": env_file}
@@ -214,8 +251,12 @@ def server(tmp_path: Path) -> dict[str, Any]:
 def run_script(
     server: dict[str, Any], script: str, *args: str, **extra: str
 ) -> tuple[int, str, list[str]]:
-    env = {**os.environ, **server["env"], **extra}
-    command = f'export PATH="{server["stubs"]}:$PATH"; exec "{posix(DEPLOY / script)}" "$@"'
+    env = bash_env(**{**server["env"], **extra})
+    # /usr/bin right after the stubs: from PowerShell, PATH has the WSL bash.exe first, and the
+    # scripts' `#!/usr/bin/env bash` would pick it (it cannot open a C:/ path).
+    command = (
+        f'export PATH="{server["stubs"]}:/usr/bin:/bin:$PATH"; exec "{posix(DEPLOY / script)}" "$@"'
+    )
     proc = subprocess.run(  # noqa: S603 - our own script with stub tools
         [BASH, "-c", command, script, *args],
         env=env, capture_output=True, text=True, timeout=120, check=False,
@@ -358,6 +399,7 @@ def test_install_dry_run_prints_every_step() -> None:
     """R6-D01: ufw 22/80/443 + deny, fail2ban, folders, the network, systemd, the cron."""
     proc = subprocess.run(  # noqa: S603
         [BASH, posix(DEPLOY / "install.sh"), "--dry-run"],
+        env=bash_env(),
         capture_output=True, text=True, timeout=60, check=False,
     )  # fmt: skip
     out = proc.stdout
@@ -384,7 +426,7 @@ def test_install_dry_run_prints_every_step() -> None:
 def test_every_script_parses() -> None:
     for script in sorted(DEPLOY.glob("*.sh")):
         proc = subprocess.run(  # noqa: S603
-            [BASH, "-n", posix(script)], capture_output=True, text=True, check=False
+            [BASH, "-n", posix(script)], capture_output=True, text=True, check=False, env=bash_env()
         )
         assert proc.returncode == 0, f"{script.name}: {proc.stderr}"
 
@@ -504,16 +546,11 @@ def test_every_image_is_pinned_by_digest() -> None:
             assert re.search(r"@sha256:[0-9a-f]{64}$", image), f"{name}: {image}"
 
 
-@pytest.mark.skipif(
-    os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
-    reason="needs Unix file owners and a non-root user (CI test job)",
-)
 @needs_bash
 def test_deploy_stops_when_the_key_cannot_go_to_the_worker(server: dict[str, Any]) -> None:
     """Q-R6-3: a key the worker cannot read stops the deploy before the build, with a plain
     message (before: a warning and a worker that failed later)."""
-    env = {k: v for k, v in server["env"].items() if k != "SALEY_SKIP_MODE_CHECK"}
-    (server["tmp"] / ".env").chmod(0o600)
+    env = {k: v for k, v in server["env"].items() if k != "SALEY_SKIP_KEY_OWNER_CHECK"}
     code, out, calls = run_script({**server, "env": env}, "deploy.sh", "--no-pull")
     assert code != 0 and "cannot give" in out and "sudo chown 10001:10001" in out, out
     assert not any("build" in c for c in calls)

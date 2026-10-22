@@ -23,7 +23,7 @@ from typing import Any
 from psycopg import sql
 from sqlalchemy.engine import URL, make_url
 
-from saley.core.settings import Settings, is_missing
+from saley.core.settings import CoreSettings, Settings, is_missing
 
 GRANTS_SQL = Path(__file__).with_name("sql") / "grants.sql"
 SUPERUSER = "postgres"
@@ -42,7 +42,7 @@ class Login:
     password: str
 
 
-def logins(settings: Settings) -> tuple[list[Login], URL]:
+def logins(settings: CoreSettings | Settings) -> tuple[list[Login], URL]:
     """The three logins from the .env URLs, and the URL of the database they share."""
     found: list[Login] = []
     target: URL | None = None
@@ -68,7 +68,7 @@ def logins(settings: Settings) -> tuple[list[Login], URL]:
     return found, target
 
 
-def superuser_conninfo(settings: Settings, target: URL, database: str) -> str:
+def superuser_conninfo(settings: CoreSettings | Settings, target: URL, database: str) -> str:
     if is_missing(settings.postgres_password):
         raise RolesRefused("POSTGRES_PASSWORD is empty.")
     url = target.set(
@@ -106,7 +106,7 @@ def _connect(conninfo: str) -> Any:
     return psycopg.connect(conninfo, autocommit=True)
 
 
-def apply(settings: Settings, connect: Connect = _connect) -> list[str]:
+def apply(settings: CoreSettings | Settings, connect: Connect = _connect) -> list[str]:
     """Make Postgres match .env. Returns plain lines for the deploy log (no password)."""
     found, target = logins(settings)
     database = target.database or "saley"

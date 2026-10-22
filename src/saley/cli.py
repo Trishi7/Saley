@@ -26,7 +26,7 @@ from sqlalchemy import text
 
 from saley import cli_server
 from saley.core.logging import configure_logging, get_logger
-from saley.core.settings import MissingSettings, get_settings
+from saley.core.settings import MissingSettings, get_core_settings, get_settings
 
 # Tracebacks never print local variables: they can hold tokens.
 app = typer.Typer(
@@ -83,7 +83,8 @@ CHILD_WATCH_SECONDS = 1.0  # how often `saley dev` looks at its worker child
 def alembic_config(url: str | None = None) -> Config:
     cfg = Config(str(ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(ROOT / "migrations"))
-    cfg.set_main_option("sqlalchemy.url", url or get_settings().admin_database_url)
+    # R6: the database values only, so `saley db-upgrade` never stops on another service's value.
+    cfg.set_main_option("sqlalchemy.url", url or get_core_settings().admin_database_url)
     cfg.attributes["configure_logger"] = False
     return cfg
 

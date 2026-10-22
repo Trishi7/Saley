@@ -20,7 +20,7 @@ import typer
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
-from saley.core.settings import get_settings
+from saley.core.settings import get_core_settings, get_settings
 
 
 def _fail(message: str) -> NoReturn:
@@ -79,7 +79,7 @@ def register(app: typer.Typer) -> None:
         from saley.core.roles import RolesRefused, apply
 
         try:
-            lines = apply(get_settings())
+            lines = apply(get_core_settings())  # the database values only (R6)
         except RolesRefused as exc:
             _fail(f"Refused: {exc}")
         for line in lines:
@@ -93,7 +93,7 @@ def register(app: typer.Typer) -> None:
 
         from saley.qa.db_owners import counts, problems
 
-        url = make_url(get_settings().admin_database_url).set(drivername="postgresql")
+        url = make_url(get_core_settings().admin_database_url).set(drivername="postgresql")
         with psycopg.connect(url.render_as_string(hide_password=False)) as conn:
             found, n = problems(conn), counts(conn)
         for line in found:

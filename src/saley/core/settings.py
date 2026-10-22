@@ -95,20 +95,78 @@ def parse_user_hours(value: str) -> dict[str, tuple[int, int]]:
 
 
 def parse_user_map(value: str) -> dict[str, str]:
-    """`sid:123...;kushal:456...` as {short: discord id} (D135). The ids are never logged."""
+    """`sid:123...,kushal:456...` as {short: discord id} (D135). The ids are never logged.
+
+    Entries are split by `,` or `;` (the server line used commas and every entry was refused,
+    R6). A Discord id has 17 to 20 digits. An error names the entry by its place and short
+    name and gives the id's length, never the id.
+    """
     mapping: dict[str, str] = {}
-    for entry in (e.strip() for e in value.split(";")):
+    entries = [e.strip() for e in re.split(r"[;,]", value)]
+    for place, entry in enumerate(entries, start=1):
         if not entry:
             continue
         short, sep, ident = entry.partition(":")
-        if not sep or not _SHORT.fullmatch(short) or not _DISCORD_ID.fullmatch(ident.strip()):
-            raise ValueError("DISCORD_USER_MAP entries must look like short:<discord id>")
+        short, ident = short.strip(), ident.strip()
+        if not sep or not _SHORT.fullmatch(short) or not _DISCORD_ID.fullmatch(ident):
+            shown = f"{short or '?'}:<{len(ident)} characters>" if sep else f"{short[:20]!r}"
+            raise ValueError(
+                f"DISCORD_USER_MAP entry {place} ({shown}) must look like short:<discord id>, "
+                "a short name in lower case and an id of 17 to 20 digits, "
+                "entries split by ',' or ';'"
+            )
         if short in mapping:
             raise ValueError(f"DISCORD_USER_MAP names {short} twice")
-        mapping[short] = ident.strip()
+        mapping[short] = ident
     if len(set(mapping.values())) != len(mapping):
         raise ValueError("DISCORD_USER_MAP gives one Discord id to two people")
     return mapping
+
+
+class CoreSettings(BaseSettings):
+    """Only what logging and the database commands need (R6): the environment, the log level and
+    the database logins.
+
+    Why: `saley db-roles` stopped a server deploy on a DISCORD_USER_MAP line it never uses,
+    because every command loaded every setting. Logging, `db-roles`, `db-upgrade` and
+    `db-owners` read this smaller set, so a value of another service cannot stop them. Same
+    env names and defaults as Settings (tests/test_r6_server.py checks it).
+    """
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    saley_env: str = "dev"
+    log_level: str = "INFO"
+    database_url: str = "postgresql+psycopg://saley:saley@localhost:5432/saley"
+    database_url_ro: str = "postgresql+psycopg://saley_ro:saley_ro@localhost:5432/saley"
+    database_url_admin: str = ""
+    postgres_password: str = ""
+
+    @field_validator("saley_env")
+    @classmethod
+    def _check_env(cls, value: str) -> str:
+        env = value.strip().lower()
+        if env not in ENVS:
+            raise ValueError(f"SALEY_ENV must be one of {', '.join(ENVS)}")
+        return env
+
+    @property
+    def is_dev(self) -> bool:
+        return self.saley_env == "dev"
+
+    @property
+    def admin_database_url(self) -> str:
+        """Migrations run as saley_admin when set, else as the read-write role."""
+        return (
+            self.database_url_admin
+            if not is_missing(self.database_url_admin)
+            else self.database_url
+        )
+
+
+def get_core_settings() -> CoreSettings:
+    """Read fresh each call (a few calls per process), so tests that change the env see it."""
+    return CoreSettings()
 
 
 class Settings(BaseSettings):
