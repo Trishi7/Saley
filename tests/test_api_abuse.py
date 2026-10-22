@@ -594,6 +594,7 @@ def test_cat_letters_and_unknown_text_are_422(client: TestClient, value: str) ->
         "Product launch",
         "Research",
         "Partnership",
+        "Opportunity",
         "Event",
         "Other",
         "hiring",

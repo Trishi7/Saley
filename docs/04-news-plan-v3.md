@@ -319,3 +319,19 @@ Stage 2: the scorer (model, rubric, fields, overrides, rank key). Stage 3: diges
 Still open for stage 1: the Google account for Alerts; the Apollo rule change and its cap. The scorer model is a stage 2 decision.
 
 Prepared 16 Oct 2026. Numbers are from the 16 Oct feed measurements and the 14 Oct cycle rows. They will move; the registry recomputes rates weekly.
+
+## Story topics (D156, D177, D239)
+
+Each story gets one topic, set by plain code in `src/saley/news/topic.py`. The LLM never picks a topic.
+
+- **Rules (the first match wins):**
+  - A paper (arXiv or OpenAlex) is Research.
+  - Then the title is checked against the keyword sets in this order: Funding, Hiring, Partnership, Product launch, Opportunity, Event. The summary is checked only when the title has no match.
+  - A story with no match is Other.
+- **Filter chips (seven):** Hiring, Funding, Product launch, Research, Partnership, Opportunity, Event. Other is never a chip.
+- **Opportunity (D239):** an opening a company can answer: call for proposals, CFP, RFP, tender, grant, pilot programme, expression of interest, applications open. It comes just before Event.
+- **D239 added words:**
+  - Funding: investment, invests in, closes a round, merger, acquired by
+  - Hiring: joins as, appointed, head of, VP of, layoffs
+  - Product launch: beta, general availability, GA (in capitals only), open source
+- **When the rules change:** a migration sets the topic of every non-paper story to null, and the news job `news_topic_backfill` tags the stories again (0025, D240).

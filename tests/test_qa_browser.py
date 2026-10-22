@@ -711,9 +711,18 @@ def test_seen_post_marks_exactly_the_shown_unseen_items(rules: ModuleType) -> No
     ]
 
 
-def test_category_chips_are_the_six_names_never_letters(rules: ModuleType) -> None:
+def test_category_chips_are_the_seven_names_never_letters(rules: ModuleType) -> None:
     """R5-N05 (D156)."""
-    good = ["All", "Hiring", "Funding", "Product launch", "Research", "Partnership", "Event"]
+    good = [
+        "All",
+        "Hiring",
+        "Funding",
+        "Product launch",
+        "Research",
+        "Partnership",
+        "Opportunity",
+        "Event",
+    ]
     assert rules.category_chip_problems(good) == []
     found = rules.category_chip_problems(["All", "A", "B", "Funding"])
     assert found[0].startswith("category chips ['All', 'A', 'B', 'Funding']")

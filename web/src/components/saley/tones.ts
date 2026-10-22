@@ -28,7 +28,8 @@ export type Tone =
   | "cat-3"
   | "cat-4"
   | "cat-5"
-  | "cat-6";
+  | "cat-6"
+  | "cat-7";
 
 /** The CSS colour of a tone, for a swatch, a dot or a bar segment. */
 export function toneColour(tone: Tone): string {

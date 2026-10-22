@@ -14,1208 +14,148 @@ Run:
 
 from __future__ import annotations
 
+# ruff: noqa: F401
 import argparse
-import hashlib
-import http.cookiejar
-import importlib.util
-import json
 import os
-import re
 import shutil
-import socket
 import subprocess
 import sys
-import tempfile
 import time
-import urllib.error
-import urllib.request
-import xml.etree.ElementTree as ET
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from types import ModuleType
-from urllib.parse import urlsplit
 
 from saley.qa import build_stamp, gate, matrix
 
-ROOT = Path(__file__).resolve().parents[1]
-REPORTS = ROOT / "docs" / "test-reports"
-STATUS_FILE = ROOT / "docs" / "STATUS.md"
-ENV_KINDS = ("NEW", "CHANGED-default", "RETIRED")
-# R5 brief, Gate: the Impeccable audit score goes into the test report. From R5 on the scores
-# file must be complete (scripts/impeccable_report.py --check), or step 11 fails (D236).
-IMPECCABLE_FROM = "R5"
-IMPECCABLE_SCRIPT = ROOT / "scripts" / "impeccable_report.py"
-GATE_TMP = ROOT / ".scratch" / "gate"  # junit and browser results of the current run
-IST = timezone(timedelta(hours=5, minutes=30))
-COVERAGE_MIN = 80.0
-DEV_START_SECONDS = 180
-POLL_SECONDS = 2
-ANOTHER_WORKER_WAIT_SECONDS = 20  # how long to watch a fresh `saley dev` for a worker refusal
-SALEY = (sys.executable, "-m", "saley.cli")  # the venv python: no PATH lookup
-RELEASE_RE = re.compile(r"^R\d+(\.\d+)*$")
-# Step 9: the only requests that are not GET are these POSTs (the card edit D129 and the admin news run D150 included), each made by one press of a
-# [data-act] control (scripts/browser_qa.py keeps the same list). Anything else fails the step.
-ALLOWED_POST = re.compile(
-    r"^/api/(act|undo/\d+|decision/\d+/confirm|proposal/\d+/(dismiss|edit)|commitment/\d+/done|admin/news/run)$"
+# scripts/ for the verify_gate package (the same pattern as qa_browser in browser_qa.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from verify_gate import ci as ci_compose
+from verify_gate import host
+from verify_gate.base import (
+    ALLOWED_POST,
+    ANOTHER_WORKER_WAIT_SECONDS,
+    ASK_POST_PATH,
+    CODE_DIRS,
+    CODE_SUFFIXES,
+    COVERAGE_MIN,
+    DEV_START_SECONDS,
+    ENV_KINDS,
+    FINGERPRINT_SKIP_DIRS,
+    GATE_TMP,
+    IMPECCABLE_FROM,
+    IMPECCABLE_SCRIPT,
+    IST,
+    KEY_FILE_NAMES,
+    LOW_RAM_MB,
+    NEWS_RUN_POST_PATH,
+    POLL_SECONDS,
+    PY_DIRS,
+    QA_WIDTHS,
+    R2_STEP9_KINDS,
+    R5_APP_NAMES,
+    R5_GROUP_MARKS,
+    R5_STEP9_KINDS,
+    RECORDED_STEPS,
+    RELEASE_RE,
+    REPORTS,
+    ROOT,
+    SALEY,
+    SEEN_POST_PATH,
+    STATUS_FILE,
+    STEPS,
+    Result,
+    run,
+    tail,
 )
-# R5 T16a (R5-K01, R5-K02): when the R5 app ran its click path, step 9 also needs these presses
-# (the `data-act` names of the new app) and one admin "Run news now" POST among the controls.
-R5_STEP9_KINDS = frozenset({"done", "undo", "commitment-done", "run-news"})
-# T16b review L2: since the cut-over the one run on `/` also holds the R2/R3 presses
-# (browser_qa core.CONTROL_KINDS minus the R5 ones), and step 9 demands them itself.
-R2_STEP9_KINDS = frozenset({"confirm", "primary", "dismiss", "add"})
-R5_GROUP_MARKS = ("commitment_owner_toast", "run_news_now")  # named checks only the R5 app runs
-NEWS_RUN_POST_PATH = "/api/admin/news/run"
-# browser_qa.py `app`: "/" is the one app since the cut-over (D224); "next" was the strangler's
-# R5 run (D147), kept so an older record still reads as an R5 run.
-R5_APP_NAMES = frozenset({"/", "next"})
-# One more known POST is not a control (R3, D75): after a list is drawn, the page tells Saley which
-# items it showed. It has no button, so it is counted apart (`seen_posts`) and has one fixed path.
-SEEN_POST_PATH = "/api/seen"
-# A second known POST that is not a control (R4 ticket 6, D131): the Ask card sends a typed
-# question. It changes only user_seen and bot_exchange, is counted apart (`ask_posts`) and has one
-# fixed path. In `non_get` it is a stray request, like a seen mark.
-ASK_POST_PATH = "/api/ask"
-# D112: below this much free RAM, browser QA runs one width per browser process.
-LOW_RAM_MB = 3072
-QA_WIDTHS = (1440, 1024, 390)  # the first width runs every group, the others the views only
-CODE_DIRS = ("src", "tests", "scripts", "migrations", "web")
-CODE_SUFFIXES = {
-    *(".py", ".js", ".html", ".css", ".toml", ".ini", ".txt", ".yaml"),
-    *(".ts", ".tsx", ".mjs", ".json"),  # the dashboard v2 (R5, D144)
-}
-# Never part of the fingerprint: installed or built trees, and key files (CLAUDE.md: never read).
-FINGERPRINT_SKIP_DIRS = {"__pycache__", "node_modules", "dist"}
-KEY_FILE_NAMES = ("*-write.json", "*service-account*", "*credentials*.json", "*-key.json")
-PY_DIRS = ("src", "tests", "scripts", "migrations")
-RECORDED_STEPS = (10, 11)  # reviewers and docs: recorded with --record, not run by this script
-STEPS = {
-    1: (
-        "Static: tidy --check, py_compile, ruff, eslint, tsc, web tests, build stamp",
-        "verification-loop",
-    ),
-    2: ("Tests, coverage, new files >= 80 %, a matrix row per feature", "pytest, tdd-guide"),
-    3: ("STE lint: <= 60 characters, no banned words", "saley.qa.ste_lint"),
-    4: ("Sheet robustness tests", "python-testing"),
-    5: ("API contract and abuse suite", "security-review"),
-    6: ("saley sheet verify", "dashboard-parity"),
-    7: ("saley dev: first sync within SHEET_SYNC_SECONDS", "saley dev"),
-    8: ("Browser QA, read-only", "browser-qa"),
-    9: ("Click-path audit: no non-GET request", "click-path-audit"),
-    10: ("Reviewers on the release diff", "code, python, database, security, silent-failure"),
-    11: (
-        "Docs: README, .env.example, docs/08, STATUS env rows, Impeccable scores",
-        "doc-updater",
-    ),
-}
-
-
-@dataclass
-class Result:
-    step: int
-    status: str  # PASS | FAIL
-    note: str
-    seconds: float = 0.0
-
-
-def run(cmd: list[str], timeout: int = 900, env: dict[str, str] | None = None) -> tuple[int, str]:
-    """`env` adds to this process's environment (the gate's database and slot, D113)."""
-    proc = subprocess.run(  # noqa: S603 - fixed commands from this file
-        cmd,
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        env={**os.environ, **env} if env else None,
-    )
-    return proc.returncode, (proc.stdout + proc.stderr).strip()
-
-
-def tail(text: str, lines: int = 6) -> str:
-    return " / ".join(text.splitlines()[-lines:])
-
-
-# ------------------------------------------------------------------ steps 1-6
-
-
-def step_static(_: argparse.Namespace) -> Result:
-    # First: no stray file in the tree (/tidy --check). The list goes into the note.
-    code, out = run([sys.executable, "scripts/tidy.py", "--check"])
-    if code:
-        return Result(1, "FAIL", f"tidy --check: {tail(out, 20)}")
-    files = [str(p) for d in PY_DIRS for p in (ROOT / d).rglob("*.py")]
-    code, out = run([sys.executable, "-m", "py_compile", *files])
-    if code:
-        return Result(1, "FAIL", f"py_compile: {tail(out)}")
-    code, out = run([sys.executable, "-m", "ruff", "check", "."])
-    if code:
-        return Result(1, "FAIL", f"ruff check: {tail(out)}")
-    code, out = run([sys.executable, "-m", "ruff", "format", "--check", "."])
-    if code:
-        return Result(1, "FAIL", f"ruff format: {tail(out)}")
-    web_fail = web_checks()
-    if web_fail:
-        return Result(1, "FAIL", web_fail)
-    return Result(
-        1,
-        "PASS",
-        f"no stray file; {len(files)} files compile; ruff check and format clean; "
-        "eslint and tsc clean; web unit tests pass; build stamp matches web/",
-    )
-
-
-def web_deps_installed() -> bool:
-    """True when `npm --prefix web ci` has run (its own function, so tests can stub it)."""
-    return (ROOT / "web" / "node_modules").is_dir()
-
-
-def web_checks() -> str | None:
-    """The dashboard v2 part of step 1 (R5, D144, D145): eslint, tsc, the web unit tests
-    (`npm --prefix web test`, node --test; CI runs them too), then the build stamp.
-
-    Why the stamp and not a build: a build here would race the human's `--watch` and costs
-    RAM (D142). The stamp proves dist was built from these exact sources; when it differs the
-    gate fails and says how to fix it. Returns the failure note, or None on a pass.
-    """
-    npm = shutil.which("npm")
-    if npm is None:
-        return "npm not found: install Node 24 (web/.nvmrc), then npm --prefix web ci"
-    if not web_deps_installed():
-        return "web/node_modules is missing: run npm --prefix web ci"
-    for name, script in (("eslint", "lint"), ("tsc", "typecheck"), ("web tests", "test")):
-        code, out = run([npm, "--prefix", "web", "run", script])
-        if code:
-            return f"{name}: {tail(out)}"
-    stamp = build_stamp.check()
-    return None if stamp.ok else f"build stamp: {stamp.note}"
-
-
-def junit_counts(path: Path) -> tuple[int, int]:
-    """(tests, not passed) from a pytest junit file. A skipped test did not pass: a gate
-    step must not go green on tests that never ran."""
-    root = ET.parse(path).getroot()  # noqa: S314 - our own file
-    suites = [root] if root.tag == "testsuite" else list(root)
-    total = sum(int(s.get("tests", 0)) for s in suites)
-    bad = sum(
-        int(s.get("failures", 0)) + int(s.get("errors", 0)) + int(s.get("skipped", 0))
-        for s in suites
-    )
-    return total, bad
-
-
-def release_key(release: str) -> tuple[int, ...]:
-    """'R1.10' -> (1, 10): releases sort as numbers, not as text."""
-    return tuple(int(n) for n in release[1:].split("."))
-
-
-def baseline_files(release: str) -> set[str] | None:
-    """Source files of the newest release before this one (its manifest), or None."""
-    older = []
-    for p in REPORTS.glob("R*-files.txt"):
-        name = p.name.removesuffix("-files.txt")
-        if RELEASE_RE.match(name) and release_key(name) < release_key(release):
-            older.append((release_key(name), p))
-    if not older:
-        return None
-    lines = max(older)[1].read_text(encoding="utf-8").splitlines()
-    return {line.strip() for line in lines if line.strip() and not line.startswith("#")}
-
-
-def low_new_files(coverage: dict, release: str) -> list[str]:
-    base = baseline_files(release) or set()
-    low = []
-    for name, data in coverage["files"].items():
-        rel = name.replace("\\", "/")
-        pct = data["summary"]["percent_covered"]
-        if rel.startswith("src/") and rel not in base and pct < COVERAGE_MIN:
-            low.append(f"{rel} {pct:.0f} %")
-    return low
-
-
-def step_tests(args: argparse.Namespace) -> Result:
-    with tempfile.TemporaryDirectory() as tmp:
-        junit, cov = Path(tmp) / "junit.xml", Path(tmp) / "cov.json"
-        code, out = run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                "-q",
-                "-x",  # D142: stop at the first failure, free the RAM early
-                "-p",
-                "no:cacheprovider",
-                "--cov=saley",
-                f"--cov-report=json:{cov}",
-                f"--junitxml={junit}",
-            ],
-            timeout=1800,
-        )
-        if not junit.exists():
-            return Result(2, "FAIL", f"pytest did not run: {tail(out)}")
-        total, bad = junit_counts(junit)
-        coverage = json.loads(cov.read_text(encoding="utf-8")) if cov.exists() else None
-        GATE_TMP.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(junit, junit_path(args.release))
-    rows, errors = matrix.load(args.release)
-    errors = matrix.own_problems(args.release) + errors
-    if errors:
-        return Result(2, "FAIL", f"matrix: {' / '.join(errors[:5])}")
-    missing = matrix.features_without_rows(args.release, rows)
-    if missing:
-        return Result(2, "FAIL", f"features without a matrix row: {', '.join(missing)}")
-    if code or bad:
-        return Result(2, "FAIL", f"{bad} of {total} tests failed or skipped: {tail(out)}")
-    if coverage is None:
-        return Result(2, "FAIL", "no coverage report")
-    pct = coverage["totals"]["percent_covered"]
-    low = low_new_files(coverage, args.release)
-    if low:
-        return Result(2, "FAIL", f"new files under {COVERAGE_MIN:.0f} %: {', '.join(low)}")
-    return Result(
-        2,
-        "PASS",
-        f"{total} passed, coverage {pct:.0f} %, every new file >= 80 %, "
-        f"{len(rows)} matrix rows ({', '.join(matrix.releases_up_to(args.release)) or 'none'})",
-    )
-
-
-def step_ste(_: argparse.Namespace) -> Result:
-    code, out = run([sys.executable, "-m", "saley.qa.ste_lint"])
-    return Result(3, "FAIL" if code else "PASS", tail(out, 8))
-
-
-def step_robust(_: argparse.Namespace) -> Result:
-    with tempfile.TemporaryDirectory() as tmp:
-        junit = Path(tmp) / "robust.xml"
-        code, out = run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                "-p",
-                "no:cacheprovider",
-                "tests/test_sales.py",
-                "-k",
-                "robust",
-                f"--junitxml={junit}",
-            ]
-        )
-        if not junit.exists():
-            return Result(4, "FAIL", f"pytest did not run: {tail(out)}")
-        total, bad = junit_counts(junit)
-    if code or bad or not total:
-        return Result(4, "FAIL", f"{bad} of {total} failed: {tail(out)}")
-    return Result(4, "PASS", f"{total} robustness tests passed")
-
-
-def abuse_report(junit: Path, release: str) -> tuple[int, int]:
-    """Write <release>-api-abuse.md: one row per test, from its first docstring line."""
-    sys.path.insert(0, str(ROOT))
-    root = ET.parse(junit).getroot()  # noqa: S314 - our own file
-    import tests.test_api_abuse as suite
-
-    rows, failed = [], 0
-    for case in root.iter("testcase"):
-        name = case.get("name", "")
-        fn = getattr(suite, name.split("[")[0], None)
-        doc = (fn.__doc__ or name).strip().splitlines()[0] if fn else name
-        bad = any(case.find(tag) is not None for tag in ("failure", "error", "skipped"))
-        failed += bad
-        rows.append(f"| {doc} | `{name}` | {'FAIL' if bad else 'PASS'} |")
-    lines = [
-        f"# API abuse suite · {release} · {datetime.now(IST):%d %b %Y %H:%M} IST",
-        "",
-        "Source: tests/test_api_abuse.py (gate step 5). Every row must pass.",
-        "",
-        "| Check | Test | Result |",
-        "| --- | --- | --- |",
-        *rows,
-        "",
-        f"**{len(rows) - failed} of {len(rows)} passed.**",
-        "",
-    ]
-    (REPORTS / f"{release}-api-abuse.md").write_text("\n".join(lines), encoding="utf-8")
-    return len(rows), failed
-
-
-def step_abuse(args: argparse.Namespace) -> Result:
-    with tempfile.TemporaryDirectory() as tmp:
-        junit = Path(tmp) / "abuse.xml"
-        code, out = run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                "-q",
-                "-p",
-                "no:cacheprovider",
-                "tests/test_api_abuse.py",
-                f"--junitxml={junit}",
-            ]
-        )
-        if not junit.exists():
-            return Result(5, "FAIL", tail(out))
-        total, failed = abuse_report(junit, args.release)
-    status = "FAIL" if code or failed or not total else "PASS"
-    return Result(5, status, f"{total - failed} of {total} passed; {args.release}-api-abuse.md")
-
-
-def clear_qa_leftovers() -> tuple[bool, str]:
-    """Remove `qa:` seed rows that a stopped run left behind (D112).
-
-    browser_qa tears its seed down in `finally`, but a run that is killed (low memory) never
-    gets there, and the next parity check counts the seeded people. The teardown touches only
-    rows marked `qa:` (D99). Returns (ok, note for the step).
-    """
-    code, out = run([sys.executable, "scripts/qa_seed.py", "teardown"])
-    if code:
-        return False, f"QA seed teardown failed: {tail(out)}"
-    line = next((x for x in out.splitlines() if x.startswith("removed:")), "")
-    removed = sum(int(n) for n in re.findall(r"(\d+) ", line))
-    return True, f"; removed {removed} leftover QA seed rows first" if removed else ""
-
-
-def step_sheet_verify(args: argparse.Namespace) -> Result:
-    cleared, note = clear_qa_leftovers()
-    if not cleared:
-        return Result(6, "FAIL", note)
-    out_file = REPORTS / f"{args.release}-sheet-verify.md"
-    # R4: the in-process API call signs in through the mock provider (dev only, D116).
-    code, out = run(
-        [*SALEY, "sheet", "verify", "--out", str(out_file)], env={"AUTH_PROVIDER": "mock"}
-    )
-    diffs = [line for line in out.splitlines() if line.endswith(" · DIFF")]
-    if code:
-        return Result(6, "FAIL", f"{len(diffs)} DIFF: {' / '.join(diffs[:5]) or tail(out)}{note}")
-    rows = sum(1 for line in out.splitlines() if line.endswith(" · OK"))
-    return Result(6, "PASS", f"{rows} checks OK, 0 DIFF; {out_file.name}{note}")
-
-
-# ------------------------------------------------------------------ steps 7-9
-
-
-def port_free(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(("127.0.0.1", port)) != 0
-
-
-def listening_pid(netstat: str, port: int) -> int | None:
-    """PID of the LISTENING socket on `port` in `netstat -ano` output (Windows)."""
-    for line in netstat.splitlines():
-        parts = line.split()
-        if len(parts) >= 5 and parts[3] == "LISTENING" and parts[1].endswith(f":{port}"):
-            return int(parts[4]) if parts[4].isdigit() else None
-    return None
-
-
-def task_name(tasklist: str) -> str | None:
-    """'name.exe (service A, B)' from `tasklist /svc /fo csv /nh` output (Windows)."""
-    for line in tasklist.splitlines():
-        cells = [c.strip('"') for c in re.findall(r'"[^"]*"', line)]
-        if len(cells) >= 3:
-            services = "" if cells[2] in ("N/A", "") else f" (service {cells[2]})"
-            return cells[0] + services
-    return None
-
-
-def port_owner(port: int) -> str:
-    """Who holds the port, so the step 7 error names the program to stop (Q-R1.1-2)."""
-    try:
-        return _port_owner(port)
-    except (OSError, subprocess.SubprocessError):  # no netstat / lsof, or it hung
-        return "an unknown program"
-
-
-def _port_owner(port: int) -> str:
-    if os.name == "nt":
-        code, out = run(["netstat", "-ano"], timeout=30)  # IPv4 and IPv6 listeners
-        pid = listening_pid(out, port) if code == 0 else None
-        if pid is None:
-            return "an unknown program"
-        code, out = run(["tasklist", "/svc", "/fo", "csv", "/nh", "/fi", f"PID eq {pid}"], 30)
-        name = task_name(out) if code == 0 else None
-        return f"{name or 'an unknown program'}, PID {pid}"
-    code, out = run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-Fpc"], timeout=30)
-    fields = dict((ln[0], ln[1:]) for ln in out.splitlines() if ln[:1] in ("p", "c"))
-    if code != 0 or "p" not in fields:
-        return "an unknown program"
-    return f"{fields.get('c', 'a program')}, PID {fields['p']}"
-
-
-def setting(name: str, fallback: int) -> int:
-    """One integer setting, read the way the app reads it (.env included)."""
-    code, out = run(
-        [
-            sys.executable,
-            "-c",
-            f"from saley.core.settings import get_settings;print(get_settings().{name})",
-        ]
-    )
-    return int(out.splitlines()[-1]) if code == 0 and out.strip() else fallback
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args: object, **kwargs: object) -> None:
-        return None  # the mock sign-in answers 303; only its cookie matters
-
-
-# One cookie jar for the gate's own server: every /api route needs a session (R4, D116).
-OPENER = urllib.request.build_opener(
-    urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()), _NoRedirect
+from verify_gate.clickpath import (
+    click_path_result,
+    r5_click_problems,
+    ran_r5_app,
+    stray_ask,
+    stray_requests,
+    stray_seen,
+    waived_presses,
+)
+from verify_gate.matrix_run import (
+    GATE_DB_KEYS,
+    refresh_late_step_rows,
+    run_matrix,
+    shell_runner,
+)
+from verify_gate.report import (
+    docs_problems,
+    env_changes,
+    env_rows,
+    gate_line,
+    impeccable_lines,
+    impeccable_module,
+    impeccable_needed,
+    impeccable_scores,
+    report_path,
+    with_docs_check,
+    write_manifest,
+    write_report,
+)
+from verify_gate.server import (
+    OPENER,
+    _NoRedirect,
+    _port_owner,
+    browser_results,
+    free_ram_mb,
+    get_json,
+    listening_pid,
+    merge_notes,
+    merge_qa,
+    notes_text,
+    port_free,
+    port_owner,
+    run_browser_qa,
+    save_browser,
+    serve_and_check,
+    setting,
+    sign_in,
+    start_dev,
+    step7_failed,
+    step_dev_and_browser,
+    stop_tree,
+    sync_seconds,
+    task_name,
+    wait_fresh,
+    worker_refused,
+)
+from verify_gate.state import (
+    browser_path,
+    code_files,
+    code_fingerprint,
+    current_release,
+    fingerprint_path,
+    junit_path,
+    load,
+    load_matrix,
+    matrix_path,
+    save,
+    state_path,
+)
+from verify_gate.steps import (
+    abuse_report,
+    baseline_files,
+    clear_qa_leftovers,
+    junit_counts,
+    low_new_files,
+    release_key,
+    step_abuse,
+    step_robust,
+    step_sheet_verify,
+    step_static,
+    step_ste,
+    step_tests,
+    web_checks,
+    web_deps_installed,
 )
 
-
-def sign_in(base: str) -> None:
-    """Sign in through the mock provider (the gate web runs AUTH_PROVIDER=mock on loopback)."""
-    request = urllib.request.Request(f"{base}/auth/mock", data=b"", method="POST")  # noqa: S310
-    try:
-        OPENER.open(request, timeout=10)
-    except urllib.error.HTTPError as exc:
-        if exc.code != 303:
-            raise
-
-
-def get_json(url: str) -> dict:
-    with OPENER.open(url, timeout=10) as r:  # localhost only
-        return json.load(r)
-
-
-def sync_seconds() -> int:
-    return setting("sheet_sync_seconds", 60)
-
-
-def wait_fresh(
-    base: str, started: datetime, limit: int, proc: subprocess.Popen | None = None
-) -> tuple[bool, str]:
-    """True when /api/status is `ok` (no stale tab) with a sync after `started`, within `limit` s."""
-    deadline = time.monotonic() + DEV_START_SECONDS
-    last = "no answer"
-    signed_in = False  # D162: sign in at most once per call
-    while time.monotonic() < deadline:
-        if proc is not None and proc.poll() is not None:
-            return False, f"saley dev stopped (exit {proc.returncode}): {last}"
-        try:
-            try:
-                status = get_json(f"{base}/api/status")
-            except urllib.error.HTTPError as exc:
-                if exc.code != 401 or signed_in:
-                    raise  # a second 401 after the sign-in is a last error: poll on, no re-post
-                sign_in(base)  # no session yet: sign in once, then ask again
-                signed_in = True  # only after a good sign-in: a failed one may be tried again
-                status = get_json(f"{base}/api/status")
-            last = status.get("message", "")
-            at = status.get("last_computed")
-            if status.get("state") == "ok" and at and datetime.fromisoformat(at) >= started:
-                age = (datetime.now(IST) - datetime.fromisoformat(at)).total_seconds()
-                return age <= limit, f"{last} (age {age:.0f} s, limit {limit} s)"
-        except (OSError, ValueError, TypeError, AttributeError) as exc:
-            # A half-started server can answer with a broken body (JSONDecodeError is a
-            # ValueError): keep polling, as for a refused connection (M10).
-            last = f"{type(exc).__name__}: {exc}"
-        time.sleep(POLL_SECONDS)
-    return False, f"no fresh sync in {DEV_START_SECONDS} s: {last}"
-
-
-def start_dev(port: int, log_path: Path, gate_env: dict[str, str]) -> subprocess.Popen:
-    """The child keeps its own copy of the log handle; ours closes at once.
-
-    D113: the gate's server runs on GATE_PORT against saley_test as worker slot `worker:gate`
-    (`gate_env`, from `saley.qa.gate.plan`). It never pushes to the sheet: browser QA presses
-    controls, and a write test belongs only in the SALEY_TEST scratch tab (docs/16 §3). An
-    environment value wins over .env, so the worker child keeps every write `held`.
-    """
-    env = {**os.environ, **gate_env, "SHEET_WRITE_ENABLED": "false"}
-    with log_path.open("w", encoding="utf-8") as log:
-        return subprocess.Popen(  # noqa: S603 - fixed command
-            [*SALEY, "dev", "--port", str(port)],
-            cwd=ROOT,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            env=env,
-        )
-
-
-def step7_failed(note: str) -> list[Result]:
-    return [
-        Result(7, "FAIL", note),
-        Result(8, "FAIL", "not run: step 7 failed"),
-        Result(9, "FAIL", "not run: step 7 failed"),
-    ]
-
-
-def step_dev_and_browser(args: argparse.Namespace) -> list[Result]:
-    """Steps 7-9 on the gate's own server (D113): GATE_PORT, saley_test, `worker:gate`.
-
-    WEB_PORT, the dev database and the dev worker are never touched, so a human's own
-    `saley dev` may keep running. The test-database lock is held until the server stops.
-    """
-    try:
-        plan = gate.plan()
-    except gate.GateConfigError as exc:
-        return step7_failed(f"gate settings: {exc}")
-    port = args.port or plan.port
-    if port == setting("web_port", 8090):
-        return step7_failed(f"the gate port {port} is WEB_PORT; set GATE_PORT")
-    if not port_free(port):
-        return step7_failed(
-            f"port {port} is in use by {port_owner(port)}; the gate's server cannot start. "
-            "Stop that program, or set GATE_PORT."
-        )
-    try:
-        held = gate.hold_and_reset(plan)
-    except Exception as exc:  # the note names the database, never the URL (it has a password)
-        return step7_failed(f"gate database {plan.database}: {type(exc).__name__}")
-    try:
-        return serve_and_check(args, port, plan.env)
-    finally:
-        held.close()  # frees the test-database lock for the next pytest run
-
-
-def serve_and_check(args: argparse.Namespace, port: int, env: dict[str, str]) -> list[Result]:
-    base = f"http://localhost:{port}"
-    log_path = REPORTS / f"{args.release}-dev.log"
-    limit = sync_seconds()
-    started = datetime.now(IST)
-    proc = start_dev(port, log_path, env)
-    try:
-        if worker_refused(proc, log_path):
-            time.sleep(2 * limit + POLL_SECONDS)  # the last worker ages out, then try once more
-            started = datetime.now(IST)
-            proc = start_dev(port, log_path, env)
-        fresh, note = wait_fresh(base, started, limit, proc)
-        if not fresh:
-            return step7_failed(note)
-        free = free_ram_mb()
-        low = args.low_memory or (free is not None and free < LOW_RAM_MB)
-        code, out = run_browser_qa(base, args.release, low, env)
-        save_browser(args.release, out)
-        found = browser_results(code, out)
-        if low:
-            note8 = f"; low memory ({free if free is not None else '?'} MB free): one width per run"
-            found[0] = Result(8, found[0].status, found[0].note + note8)
-        return [Result(7, "PASS", f"{note} · port {port}, {env.get('WORKER_SLOT')}"), *found]
-    finally:
-        stop_tree(proc)
-
-
-def free_ram_mb() -> int | None:
-    """Free physical memory in MB, or None when the platform does not say (D112)."""
-    if os.name == "nt":
-        import ctypes
-
-        class MemoryStatus(ctypes.Structure):
-            _fields_ = [  # the ctypes layout of MEMORYSTATUSEX
-                ("dwLength", ctypes.c_ulong),
-                ("dwMemoryLoad", ctypes.c_ulong),
-                ("ullTotalPhys", ctypes.c_ulonglong),
-                ("ullAvailPhys", ctypes.c_ulonglong),
-                ("ullTotalPageFile", ctypes.c_ulonglong),
-                ("ullAvailPageFile", ctypes.c_ulonglong),
-                ("ullTotalVirtual", ctypes.c_ulonglong),
-                ("ullAvailVirtual", ctypes.c_ulonglong),
-                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-            ]
-
-        status = MemoryStatus()
-        status.dwLength = ctypes.sizeof(MemoryStatus)
-        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-            return None
-        return int(status.ullAvailPhys // (1024 * 1024))
-    try:
-        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
-            if line.startswith("MemAvailable:"):
-                return int(line.split()[1]) // 1024
-    except (OSError, ValueError, IndexError):
-        return None
-    return None
-
-
-def run_browser_qa(
-    base: str, release: str, low: bool, env: dict[str, str] | None = None
-) -> tuple[int, str]:
-    """One browser run, or (low memory, D112) one browser process per width, merged.
-
-    Since the cut-over (T16b, D224) one run on `/` covers the R1.1-R5 checks; there is no
-    second `--app` run. `env` points the QA seed and the seen-mark check at the gate's database
-    (D113).
-    """
-    cmd = [sys.executable, "scripts/browser_qa.py", "--base", base, "--release", release]
-    if not low:
-        return run(cmd, timeout=1800, env=env)
-    parts = []
-    for i, width in enumerate(QA_WIDTHS):
-        extra = ["--widths", str(width)] + (["--views-only"] if i else [])
-        parts.append(run([*cmd, *extra], timeout=1800, env=env))
-    return merge_qa(parts)
-
-
-def merge_notes(runs: list[dict]) -> dict[str, list[str]]:
-    """Notes of every run (what each check verified), joined per check name."""
-    notes: dict[str, list[str]] = {}
-    for qa in runs:
-        raw = qa.get("notes")
-        if not isinstance(raw, dict):
-            continue
-        for name, items in raw.items():
-            if isinstance(items, list):
-                notes.setdefault(str(name), []).extend(str(x) for x in items)
-    return notes
-
-
-def merge_qa(parts: list[tuple[int, str]]) -> tuple[int, str]:
-    """Merge the JSON lines of the per-width runs. A crashed part makes the whole a crash."""
-    runs = []
-    for code, out in parts:
-        line = next((x for x in reversed(out.splitlines()) if x.startswith("{")), "")
-        try:
-            runs.append(json.loads(line))
-        except json.JSONDecodeError:
-            return code or 1, out
-    named: dict[str, bool] = {}
-    for qa in runs:
-        for name, ok in (qa.get("named") or {}).items():
-            named[name] = named.get(name, True) and bool(ok)
-    merged = {
-        "verdict": "SHIP" if all(q.get("verdict") == "SHIP" for q in runs) else "BLOCK",
-        "checks": sum(int(q.get("checks", 0)) for q in runs),
-        "findings": [f for q in runs for f in q.get("findings", ["no findings list"])],
-        "non_get": [x for q in runs for x in q.get("non_get", [])],
-        "seen_posts": [x for q in runs for x in q.get("seen_posts", [])],
-        "ask_posts": [x for q in runs for x in q.get("ask_posts", [])],
-        "act_posts": sum(int(q.get("act_posts", 0)) for q in runs),
-        "act_kinds": sorted({str(k) for q in runs for k in q.get("act_kinds", [])}),
-        "waived": {
-            str(k): str(v)
-            for q in runs
-            if isinstance(q.get("waived"), dict)
-            for k, v in q["waived"].items()
-        },
-        "apps": sorted({str(q["app"]) for q in runs if q.get("app")}),
-        "sign_ins": sum(int(q.get("sign_ins", 0)) for q in runs),  # D162, one run per width
-        "named": named,
-        "notes": merge_notes(runs),
-        "screens": sum(int(q.get("screens", 0)) for q in runs),
-        "dir": runs[0].get("dir", "-") if runs else "-",
-    }
-    code = max((c for c, _ in parts), default=1)
-    return code, json.dumps(merged)
-
-
-def notes_text(qa: dict) -> str:
-    """'; notes: pagers: no pager yet · themes: ...' (short), or '' when there are none."""
-    notes = merge_notes([qa])
-    if not notes:
-        return ""
-    return "; notes: " + " · ".join(f"{k}: {', '.join(v)[:120]}" for k, v in notes.items())
-
-
-def worker_refused(proc: subprocess.Popen, log_path: Path) -> bool:
-    """True when `saley dev` stopped with "Another worker ..." within a short watch (M10).
-
-    The refusal can take longer than one poll to appear (a slow start), so the log is read until
-    the process exits or ANOTHER_WORKER_WAIT_SECONDS pass.
-    """
-    deadline = time.monotonic() + ANOTHER_WORKER_WAIT_SECONDS
-    while True:
-        exited = proc.poll() is not None
-        seen = log_path.read_text(encoding="utf-8", errors="replace")
-        if exited:
-            return "Another worker" in seen
-        if "Uvicorn running" in seen or time.monotonic() >= deadline:
-            return False  # the web is up, so the worker check has passed
-        time.sleep(POLL_SECONDS)
-
-
-def stop_tree(proc: subprocess.Popen) -> None:
-    """Stop `saley dev` and the worker it started as a child (D46).
-
-    On Windows `terminate()` ends only the parent, so the child worker would keep running; the
-    whole tree is ended with taskkill. Elsewhere SIGTERM reaches the parent, which stops its child.
-    """
-    if os.name == "nt" and proc.poll() is None:
-        subprocess.run(  # noqa: S603 - fixed argv, our own pid
-            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],  # noqa: S607
-            capture_output=True,
-            check=False,
-        )
-    else:
-        proc.terminate()
-    try:
-        proc.wait(timeout=20)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-
-
-def save_browser(release: str, out: str) -> None:
-    """Keep the browser-QA JSON: matrix rows with tool `browser` read its named checks."""
-    line = next((x for x in reversed(out.splitlines()) if x.startswith("{")), "{}")
-    GATE_TMP.mkdir(parents=True, exist_ok=True)
-    browser_path(release).write_text(line, encoding="utf-8")
-
-
-def browser_results(code: int, out: str) -> list[Result]:
-    line = next((x for x in reversed(out.splitlines()) if x.startswith("{")), "")
-    try:
-        qa = json.loads(line)
-    except json.JSONDecodeError:
-        return [
-            Result(8, "FAIL", f"browser QA crashed: {tail(out)}"),
-            Result(9, "FAIL", "not run: browser QA crashed"),
-        ]
-    findings = qa.get("findings", ["no findings list"])
-    clicks = [f for f in findings if f.startswith("click-path")]
-    others = [f for f in findings if not f.startswith("click-path")]
-    ship = qa.get("verdict") == "SHIP" and code == 0
-    r8 = Result(
-        8,
-        "PASS" if ship else "FAIL",
-        f"verdict {qa.get('verdict')}, {qa.get('checks', 0)} checks, {qa.get('screens', 0)} "
-        f"screenshots in {qa.get('dir', '-')}"
-        + (f"; {' / '.join(others[:5])}" if others else "")
-        + notes_text(qa),
-    )
-    return [r8, click_path_result(qa, clicks, ship)]
-
-
-def stray_requests(non_get: list[str]) -> list[str]:
-    """Non-GET requests that are not exactly one of the allowed POSTs (method, path, no query)."""
-    stray = []
-    for entry in non_get:
-        method, _, url = entry.partition(" ")
-        parts = urlsplit(url)
-        if method != "POST" or parts.query or not ALLOWED_POST.match(parts.path):
-            stray.append(entry)
-    return stray
-
-
-def stray_seen(seen_posts: list[str]) -> list[str]:
-    """Seen marks that are not exactly `POST /api/seen` (no query, no extra path)."""
-    stray = []
-    for entry in seen_posts:
-        method, _, url = entry.partition(" ")
-        parts = urlsplit(url)
-        if method != "POST" or parts.query or parts.path != SEEN_POST_PATH:
-            stray.append(entry)
-    return stray
-
-
-def stray_ask(ask_posts: list[str]) -> list[str]:
-    """Question posts that are not exactly `POST /api/ask` (no query, no extra path)."""
-    stray = []
-    for entry in ask_posts:
-        method, _, url = entry.partition(" ")
-        parts = urlsplit(url)
-        if method != "POST" or parts.query or parts.path != ASK_POST_PATH:
-            stray.append(entry)
-    return stray
-
-
-def ran_r5_app(qa: dict) -> bool:
-    """True when the browser run was against the R5 app: a run with `app` "/" (or the
-    strangler's "next"; merged: `apps`), or the R5 named checks in the result. A skipped check
-    cannot hide the R5 run."""
-    apps = qa.get("apps") if isinstance(qa.get("apps"), list) else [qa.get("app")]
-    named = qa.get("named") if isinstance(qa.get("named"), dict) else {}
-    return bool(R5_APP_NAMES & set(apps)) or any(mark in named for mark in R5_GROUP_MARKS)
-
-
-def waived_presses(qa: dict) -> dict[str, str]:
-    """Presses a check could not make by design (kind -> reason), e.g. Run news now while a
-    request is open. Step 9 does not demand them and names them in its note."""
-    raw = qa.get("waived")
-    if not isinstance(raw, dict):
-        return {}
-    return {str(k): str(v) for k, v in raw.items() if k in R5_STEP9_KINDS and str(v).strip()}
-
-
-def r5_click_problems(qa: dict, non_get: list[str]) -> list[str]:
-    """R5-K02: when the R5 app ran, the R5 presses all happened and one of them was the admin
-    POST /api/admin/news/run, unless that press was waived with a reason. Before R5 nothing."""
-    if not ran_r5_app(qa):
-        return []
-    kinds = qa.get("act_kinds")
-    if not isinstance(kinds, list):
-        return ["browser QA gave no list of pressed controls"]
-    waived = waived_presses(qa)
-    problems = []
-    pressed = {str(k) for k in kinds}
-    missing = sorted(R5_STEP9_KINDS - pressed - set(waived))
-    if missing:
-        problems.append(f"R5 controls never pressed: {missing}")
-    older = sorted(R2_STEP9_KINDS - pressed)
-    if older:
-        problems.append(f"R2 controls never pressed: {older}")
-    paths = [urlsplit(entry.partition(" ")[2]).path for entry in non_get]
-    if "run-news" not in waived and NEWS_RUN_POST_PATH not in paths:
-        problems.append(f"no press reached POST {NEWS_RUN_POST_PATH}")
-    return problems
-
-
-def click_path_result(qa: dict, clicks: list[str], ship: bool) -> Result:
-    """Step 9: allowed POSTs only, each from a [data-act] control; no form, no submit button.
-
-    The seen marks of the lists (R3) are a second, separate source with one fixed path. They do
-    not count as control presses, and a seen path inside `non_get` is a stray request.
-    """
-    non_get = qa.get("non_get")
-    if not isinstance(non_get, list):
-        return Result(9, "FAIL", "browser QA gave no list of non-GET requests")
-    seen_posts = qa.get("seen_posts", [])
-    if not isinstance(seen_posts, list):
-        return Result(9, "FAIL", "browser QA gave no valid list of seen marks")
-    ask_posts = qa.get("ask_posts", [])
-    if not isinstance(ask_posts, list):
-        return Result(9, "FAIL", "browser QA gave no valid list of Ask posts")
-    stray = stray_requests(non_get)
-    uncounted = qa.get("act_posts") != len(non_get)
-    problems = [*clicks[:5]]
-    bad_seen = stray_seen(seen_posts)
-    if bad_seen:
-        problems.append(f"seen marks that are not POST {SEEN_POST_PATH}: {bad_seen[:3]}")
-    bad_ask = stray_ask(ask_posts)
-    if bad_ask:
-        problems.append(f"Ask posts that are not POST {ASK_POST_PATH}: {bad_ask[:3]}")
-    if stray:
-        problems.append(f"requests that are not an allowed POST: {stray[:3]}")
-    if uncounted:
-        problems.append(
-            f"{len(non_get)} non-GET requests but {qa.get('act_posts')} control presses"
-        )
-    problems += r5_click_problems(qa, non_get)
-    if ship and not problems:
-        seen_note = f"; {len(seen_posts)} seen marks after list render" if seen_posts else ""
-        seen_note += f"; {len(ask_posts)} Ask questions" if ask_posts else ""
-        sign_ins = qa.get("sign_ins")
-        seen_note += f"; {sign_ins} sign-in" if type(sign_ins) is int else ""  # not a JSON true
-        if ran_r5_app(qa):
-            waived = waived_presses(qa)
-            pressed = sorted(R5_STEP9_KINDS - set(waived))
-            seen_note += f"; R5 presses: {', '.join(pressed)}"
-            seen_note += "" if "run-news" in waived else " and Run news now"
-            seen_note += "".join(f"; {k} not pressed: {why}" for k, why in sorted(waived.items()))
-        return Result(
-            9,
-            "PASS",
-            f"{len(non_get)} POSTs, all allowed, each from a [data-act] control{seen_note}; "
-            "no form, no submit button",
-        )
-    return Result(9, "FAIL", " / ".join(problems) or "browser QA did not ship")
-
-
-# ------------------------------------------------------------------ state and report
-
-
-def state_path(release: str) -> Path:
-    return REPORTS / f"{release}-gate.json"
-
-
-def junit_path(release: str) -> Path:
-    return GATE_TMP / f"{release}-junit.xml"
-
-
-def browser_path(release: str) -> Path:
-    return GATE_TMP / f"{release}-browser.json"
-
-
-def matrix_path(release: str) -> Path:
-    return REPORTS / f"{release}-matrix.json"
-
-
-GATE_DB_KEYS = ("DATABASE_URL", "DATABASE_URL_ADMIN", "DATABASE_URL_RO")
-
-
-def shell_runner() -> Callable[[matrix.Row], tuple[bool, str]]:
-    """Shell rows read and write saley_test, never the dev database (D113). Only the
-    database keys change: a roundtrip still uses the test channel and the sheet test tab."""
-    try:
-        env = {k: v for k, v in gate.plan().env.items() if k in GATE_DB_KEYS}
-    except gate.GateConfigError as exc:
-        note = f"not run: gate settings ({exc})"  # never fall back to the dev database
-        return lambda row: (False, note)
-    child = {**os.environ, **env}
-
-    def run_row(row: matrix.Row) -> tuple[bool, str]:
-        # R5 D161: a row writes to the sheet only if it declares `writes: test_tab`.
-        per_row = child if row.writes == "test_tab" else {**child, "SHEET_WRITE_ENABLED": "false"}
-        return matrix._shell(row, per_row)
-
-    return run_row
-
-
-def run_matrix(release: str, results: dict[int, Result]) -> list[dict]:
-    """Every row of this release and the earlier ones, after steps 1-9 (docs/16 §3)."""
-    rows, errors = matrix.load(release)
-    tests = matrix.junit_results(junit_path(release)) if junit_path(release).exists() else {}
-    named: dict[str, bool] = {}
-    if browser_path(release).exists():
-        try:
-            named = json.loads(browser_path(release).read_text(encoding="utf-8")).get("named", {})
-        except (json.JSONDecodeError, AttributeError):
-            named = {}  # browser rows then read "not checked" and fail
-    steps = {n: r.status for n, r in results.items()}
-    out = [
-        {
-            "id": o.row.id,
-            "release": o.row.release,
-            "layer": o.row.layer,
-            "what": o.row.what,
-            "ok": o.ok,
-            "note": o.note,
-            "pending": o.pending,
-        }
-        for o in matrix.evaluate(rows, tests, steps, named, run_shell=shell_runner())
-    ]
-    out += [
-        {
-            "id": "schema",
-            "release": release,
-            "layer": "-",
-            "what": e,
-            "ok": False,
-            "note": "matrix error",
-        }
-        for e in errors
-    ]
-    matrix_path(release).write_text(json.dumps(out, indent=1), encoding="utf-8")
-    return out
-
-
-def refresh_late_step_rows(release: str, results: dict[int, Result]) -> None:
-    """Re-read the matrix rows that run `step 10` or `step 11` (R5-D01) from the final results.
-
-    Why (D236): the matrix is evaluated after step 9, before the human records steps 10 and 11,
-    so such a row always read "not run" and the gate could never pass. The finalize knows them.
-    """
-    saved = load_matrix(release)
-    if saved is None:
-        return
-    rows, _errors = matrix.load(release)
-    late = {}
-    for row in rows:
-        if row.tool == "gate" and int(row.command.split()[1]) >= min(RECORDED_STEPS):
-            late[row.id] = int(row.command.split()[1])
-    for entry in saved:
-        n = late.get(entry["id"])
-        if n is None:
-            continue
-        r = results.get(n)
-        entry["ok"] = r is not None and r.status == "PASS"
-        entry["note"] = f"step {n} {r.status if r else 'not run'}"
-    matrix_path(release).write_text(json.dumps(saved, indent=1), encoding="utf-8")
-
-
-def load_matrix(release: str) -> list[dict] | None:
-    path = matrix_path(release)
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
-
-
-def current_release(status_file: Path | None = None) -> str | None:
-    """STATUS.md line 'Current release: R2' (the chain's default)."""
-    text = (status_file or STATUS_FILE).read_text(encoding="utf-8")
-    found = re.search(r"^Current release: (R[\d.]+)", text, re.MULTILINE)
-    return found.group(1) if found else None
-
-
-def load(release: str) -> dict[int, Result]:
-    path = state_path(release)
-    if not path.exists():
-        return {}
-    return {int(k): Result(**v) for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
-
-
-def save(release: str, results: dict[int, Result]) -> None:
-    data = {str(k): asdict(v) for k, v in sorted(results.items())}
-    state_path(release).write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
-def code_files(top: Path) -> list[Path]:
-    """Code files under `top`, sorted. node_modules and dist are pruned, not walked: web/
-    holds tens of thousands of installed files. Key files are never opened."""
-    found: list[Path] = []
-    for here, dirs, names in os.walk(top):
-        dirs[:] = [d for d in dirs if d not in FINGERPRINT_SKIP_DIRS]
-        for name in names:
-            p = Path(here) / name
-            if p.suffix in CODE_SUFFIXES and not any(p.match(k) for k in KEY_FILE_NAMES):
-                found.append(p)
-    return sorted(found)
-
-
-def code_fingerprint() -> str:
-    """Hash of every code file. Steps 1-9 count only for the code they ran on."""
-    digest = hashlib.sha256()
-    for d in CODE_DIRS:
-        for p in code_files(ROOT / d):
-            digest.update(str(p.relative_to(ROOT)).replace("\\", "/").encode())
-            digest.update(p.read_bytes())
-    for name in ("pyproject.toml", "uv.lock", "alembic.ini"):
-        digest.update((ROOT / name).read_bytes())
-    return digest.hexdigest()
-
-
-def fingerprint_path(release: str) -> Path:
-    return REPORTS / f"{release}-gate.tree"
-
-
-def env_rows(release: str, status_file: Path | None = None) -> dict[str, list[str]]:
-    """The release's rows in the STATUS.md env log, per kind (a kind with no row maps to [])."""
-    status = (status_file or STATUS_FILE).read_text(encoding="utf-8")
-    return {
-        kind: re.findall(
-            rf"^\| {re.escape(release)} \| {kind} \| (.*?) \|\r?$", status, re.MULTILINE
-        )
-        for kind in ENV_KINDS
-    }
-
-
-def env_changes(release: str, status_file: Path | None = None) -> list[str]:
-    rows = env_rows(release, status_file)
-    return [f"- {kind}: {'; '.join(rows[kind]) if rows[kind] else 'none'}" for kind in ENV_KINDS]
-
-
-def impeccable_module() -> ModuleType:
-    """scripts/impeccable_report.py, loaded by path: scripts/ is not a package."""
-    spec = importlib.util.spec_from_file_location("impeccable_report", IMPECCABLE_SCRIPT)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load {IMPECCABLE_SCRIPT}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def impeccable_needed(release: str) -> bool:
-    return release_key(release) >= release_key(IMPECCABLE_FROM)
-
-
-def impeccable_scores(release: str) -> tuple[str | None, list[str]]:
-    """(the score table, gaps) from docs/test-reports/<release>-impeccable.json.
-
-    Why: the same rules as `impeccable_report.py --check` (every page, both themes, every
-    dimension, no open critical finding), so the gate cannot pass on a partial audit.
-    """
-    path = REPORTS / f"{release}-impeccable.json"
-    if not path.is_file():
-        return None, [f"{path.name} is missing"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except ValueError:
-        return None, [f"{path.name} is not JSON"]
-    module = impeccable_module()
-    gaps = module.problems(data)
-    return (None if gaps else module.table(data)), gaps
-
-
-def docs_problems(release: str) -> list[str]:
-    """What the step-11 docs check proves by itself (D236): the STATUS.md env log has a NEW,
-    a CHANGED-default and a RETIRED row for the release (the report summary ends with them),
-    and, from R5 on, the Impeccable scores file is complete."""
-    rows = env_rows(release)
-    found = [f"docs/STATUS.md env log has no {release} {k} row" for k in ENV_KINDS if not rows[k]]
-    if impeccable_needed(release):
-        found += [f"Impeccable: {gap}" for gap in impeccable_scores(release)[1][:5]]
-    return found
-
-
-def with_docs_check(release: str, results: dict[int, Result]) -> dict[int, Result]:
-    """A copy of the results in which a recorded step-11 PASS turns FAIL when docs_problems
-    finds a gap. The saved state keeps the human's record, so a fix needs no new --record."""
-    r11 = results.get(11)
-    if r11 is None or r11.status != "PASS":
-        return dict(results)
-    found = docs_problems(release)
-    if not found:
-        return dict(results)
-    note = f"docs check: {'; '.join(found)} (recorded: {r11.note})"
-    return {**results, 11: Result(11, "FAIL", note, r11.seconds)}
-
-
-def report_path(release: str, gate_text: str) -> Path:
-    """D236: <release>-final.md on GATE: PASS, else <release>-<date>.md (one per day)."""
-    if gate_text == "GATE: PASS":
-        return REPORTS / f"{release}-final.md"
-    return REPORTS / f"{release}-{datetime.now(IST):%Y-%m-%d}.md"
-
-
-def impeccable_lines(release: str) -> list[str]:
-    if not impeccable_needed(release):
-        return []
-    table, gaps = impeccable_scores(release)
-    body = [table] if table else [f"FAIL: {'; '.join(gaps[:20])}"]
-    return ["", "## Impeccable audit", "", *body]
-
-
-def gate_line(results: dict[int, Result], rows: list[dict] | None = None) -> str:
-    """PASS only when steps 1-11 passed and every matrix row passed (rows=None: not run)."""
-    bad_row = next((r["id"] for r in rows if not r["ok"]), None) if rows is not None else "not run"
-    row_note = f" · first failing matrix row {bad_row}" if bad_row else ""
-    for n in sorted(STEPS):
-        r = results.get(n)
-        if r is None or r.status != "PASS":
-            return f"GATE: FAIL — step {n}{row_note}"
-    if bad_row:
-        return f"GATE: FAIL — matrix{row_note}"
-    return "GATE: PASS"
-
-
-def write_report(release: str, results: dict[int, Result], final: bool) -> Path:
-    rows = load_matrix(release)
-    gate = gate_line(results, rows) if final else "GATE: not final (steps 10-12 open)"
-    lines = [
-        gate,
-        "",
-        f"# /verify {release} · {datetime.now(IST):%d %b %Y %H:%M} IST",
-        "",
-        "| Step | Check | Skill or agent | Result | Note |",
-        "| --- | --- | --- | --- | --- |",
-    ]
-    for n, (name, tool) in STEPS.items():
-        r = results.get(n)
-        result, note = (r.status, r.note.replace("|", "/")) if r else ("OPEN", "")
-        lines.append(f"| {n} | {name} | {tool} | {result} | {note} |")
-    lines.append(f"| 12 | Finalize | scripts/verify.py | {'DONE' if final else 'OPEN'} | {gate} |")
-    lines += ["", "## Test matrix", ""]
-    if rows is None:
-        lines.append("Not run.")
-    else:
-        passed = sum(r["ok"] for r in rows)
-        lines += [
-            f"{passed} of {len(rows)} rows passed "
-            f"({', '.join(matrix.releases_up_to(release)) or 'no matrix'}).",
-            "",
-            "| Row | Release | Layer | What | Result | Note |",
-            "| --- | --- | --- | --- | --- | --- |",
-        ]
-        for r in rows:
-            what, note = r["what"].replace("|", "/"), r["note"].replace("|", "/")
-            result = ("PENDING" if r.get("pending") else "PASS") if r["ok"] else "FAIL"
-            lines.append(
-                f"| {r['id']} | {r['release']} | {r['layer']} | {what} | {result} | {note} |"
-            )
-    pending = [f"{r['id']} ({r['pending']})" for r in rows or [] if r.get("pending")]
-    lines += impeccable_lines(release)
-    lines += ["", "## Summary", "", gate, ""]
-    if pending:
-        lines += [f"PENDING live rows (open questions): {', '.join(pending)}", ""]
-    # The summary ends with the env list (R5 brief, Gate; CLAUDE.md release rule).
-    lines += ["Env changes:", *env_changes(release), ""]
-    path = report_path(release, gate)
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
-
-
-def write_manifest(release: str) -> None:
-    files = sorted(
-        str(p.relative_to(ROOT)).replace("\\", "/") for p in (ROOT / "src").rglob("*.py")
-    )
-    header = (
-        f"# Source files at release {release} (baseline for the gate's new-file coverage rule)."
-    )
-    (REPORTS / f"{release}-files.txt").write_text("\n".join([header, *files, ""]), encoding="utf-8")
+# The gate code in verify_gate reads the names that tests replace (run, REPORTS, ...) from this
+# module at call time, so `monkeypatch.setattr(verify, ...)` still reaches it.
+host.bind(sys.modules[__name__])
 
 
 AUTOMATED: list[Callable[[argparse.Namespace], Result]] = [
@@ -1236,6 +176,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--finalize", action="store_true")
     parser.add_argument(
         "--low-memory", action="store_true", help="browser QA one width per run (D112)"
+    )
+    parser.add_argument(
+        "--ci", action="store_true", help="read the compose rows from GitHub Actions (R6, D241)"
     )
     args = parser.parse_args(argv)
     args.release = args.release or current_release()
@@ -1287,6 +230,10 @@ def main(argv: list[str] | None = None) -> int:
         for r in step_dev_and_browser(args):
             results[r.step] = r
             print(f"step {r.step}: {r.status} · {r.note}", flush=True)
+        ci_compose.compose_path(args.release).unlink(missing_ok=True)
+        if args.ci:
+            _ok, note = ci_compose.collect(args.release)
+            print(f"ci: {note}", flush=True)
         rows = run_matrix(args.release, results)
         bad = [r["id"] for r in rows if not r["ok"]]
         print(

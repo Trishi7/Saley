@@ -328,6 +328,8 @@ export const W = {
   catResearchX: "A paper or a study.",
   catPartner: "Partnership",
   catPartnerX: "The company works with a partner.",
+  catOpportunity: "Opportunity",
+  catOpportunityX: "A call for proposals, a tender or a grant.",
   catEvent: "Event",
   catEventX: "A talk, a meetup or a conference.",
 

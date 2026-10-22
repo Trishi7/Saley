@@ -1,10 +1,20 @@
-# Caddy: HTTPS in, proxy to the web container. Set SALEY_DOMAIN in the server env.
-# Until Google sign-in (R4) the web-api refuses every /api call outside dev mode.
-{$SALEY_DOMAIN:localhost} {
+# Caddy: HTTPS in, proxy to the web container (R6).
+# PUBLIC_URL is the site address, for example https://saley.membrane.social. Caddy gets the
+# certificate itself (ACME, email = OPENALEX_MAILTO). For https://localhost:8443 (the CI checks)
+# Caddy uses its own local CA. Plain http on port 80 redirects to https.
+# Caddy adds HSTS and drops its Server header. It never touches the app's own security headers
+# (CSP, frame, referrer, COOP, CORP): the web sets them on every answer (saley.web.guards).
+{
+	email {$ACME_EMAIL}
+	skip_install_trust
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$PUBLIC_URL} {
 	encode gzip
 	reverse_proxy web:8090
-	header {
-		Strict-Transport-Security "max-age=31536000"
-		-Server
-	}
+	header Strict-Transport-Security "max-age=31536000"
+	header -Server
 }

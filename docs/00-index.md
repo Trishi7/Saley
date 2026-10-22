@@ -34,14 +34,16 @@
 | plans/R3.md | R3 plan |
 | plans/R4.md | R4 plan |
 | plans/R5.md | R5 plan (Dashboard v2); Appendix A: the human's brief, verbatim |
+| plans/R6.md | R6 plan (Deploy to the server); Appendix A: the human's brief, verbatim |
 
 ## Test reports (the PASS report per release, plus gate inputs)
 
 | File | What |
 | --- | --- |
 | test-reports/R1-final.md, R1.1-final.md, R2-final.md, R3-final.md, R4-final.md | The GATE: PASS report of each release |
-| test-reports/R4-files.txt | Source manifest of the last release: gate step 2 reads it as the coverage baseline |
-| test-reports/R5-impeccable.json | R5 Impeccable audit scores (work in progress until the R5 gate) |
+| test-reports/R5-files.txt | Source manifest of the last release: gate step 2 reads it as the coverage baseline (R4-files.txt is the older one) |
+| test-reports/R5-impeccable.json | R5 Impeccable audit scores |
+| test-reports/<release>-gate.json, -matrix.json, -compose.json, -api-abuse.md, -sheet-verify.md, tidy-*.md | Gate run records: by-products, ignored by git (D255); `tidy.py --commit-note` lists any that are still tracked |
 | test-reports/<release>-<date>.md | A gate run that is not a PASS (steps 1-9, or a failed finalize). A PASS writes <release>-final.md (D236). Run records move to .scratch/ at a tidy stop |
 
 Older run records, dev logs and screenshots live in `.scratch/test-reports/` (ignored).

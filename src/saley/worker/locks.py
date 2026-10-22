@@ -9,12 +9,22 @@ from __future__ import annotations
 
 import os
 import socket
+import threading
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import timedelta
 
 from sqlalchemy import Engine, text
 
+from saley.core.logging import get_logger
+
+log = get_logger("saley.worker")
+
 LOCK_EXPIRY = timedelta(minutes=15)
+# D246: a running job renews its lock this often, so a news edition that runs longer than the
+# expiry keeps it and a second run cannot start beside it.
+RENEW_EVERY = timedelta(minutes=5)
 
 
 def new_holder(slot: str) -> str:
@@ -57,3 +67,34 @@ def release(engine: Engine, name: str, holder: str) -> None:
         conn.execute(
             text("delete from job_locks where name = :n and holder = :h"), {"n": name, "h": holder}
         )
+
+
+@contextmanager
+def kept(
+    engine: Engine, name: str, holder: str, every: timedelta = RENEW_EVERY
+) -> Iterator[threading.Event]:
+    """Renew the lock in a background thread while the block runs (D246, the lock heartbeat).
+
+    Yields an Event that is set when a renewal found the lock gone (it expired, or another
+    holder took it): `job_lock_lost` is logged once, and the job's result still counts. A
+    renewal that fails on a database error is logged and tried again at the next beat.
+    """
+    stop, lost = threading.Event(), threading.Event()
+
+    def beat() -> None:
+        while not stop.wait(every.total_seconds()):
+            try:
+                if not renew(engine, name, holder):
+                    lost.set()
+                    log.error("job_lock_lost", lock=name)
+                    return
+            except Exception:  # the next beat tries again; the expiry is 3 beats away
+                log.exception("job_lock_renew_failed", lock=name)
+
+    thread = threading.Thread(target=beat, name=f"lock-{name}", daemon=True)
+    thread.start()
+    try:
+        yield lost
+    finally:
+        stop.set()
+        thread.join(timeout=5)

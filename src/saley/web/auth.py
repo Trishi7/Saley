@@ -6,7 +6,8 @@ role has no table grant, so `saley_session_start` and `saley_session_end` do the
 
 Providers (D116). `AUTH_PROVIDER=auto` means google when the client id, the secret and
 `WEB_ALLOWED_EMAILS` are all set, else mock. Mock signs in as DEV_USER_EMAIL and works only
-with SALEY_ENV=dev from this machine; anywhere else it is 404. `X-Saley-As` (D50) works only
+with SALEY_ENV=dev from this machine (or SALEY_ENV=ci on https://localhost, D242); anywhere else
+it is 404. `X-Saley-As` (D50) works only
 with mock.
 
 Allowlist (D115). `WEB_ALLOWED_EMAILS` is `short=email,...`. The entry names the user, so Saley
@@ -162,8 +163,14 @@ def client_host(request: Request) -> str:
 
 
 def mock_allowed(request: Request, settings: Settings) -> bool:
-    """Mock sign-in: provider mock AND SALEY_ENV=dev AND a client on this machine (D116)."""
-    return provider(settings) == "mock" and settings.is_dev and client_host(request) in LOOPBACK
+    """Mock sign-in: provider mock AND SALEY_ENV=dev AND a client on this machine (D116).
+
+    D242: or SALEY_ENV=ci on an https localhost PUBLIC_URL (the compose checks). Behind caddy
+    the client is the proxy, never loopback, so ci cannot use the loopback rule.
+    """
+    if provider(settings) != "mock":
+        return False
+    return settings.is_ci or (settings.is_dev and client_host(request) in LOOPBACK)
 
 
 # ------------------------------------------------------------------ rate limit
@@ -706,7 +713,7 @@ def install(app: FastAPI) -> None:
             redirect_uri=settings.google_oauth_redirect_url,
             client_id_end=settings.google_oauth_client_id[-6:],
         )
-    elif chosen == "mock" and not settings.is_dev:
+    elif chosen == "mock" and not (settings.is_dev or settings.is_ci):
         log.warning("auth_mock_outside_dev")  # nobody can sign in: mock needs SALEY_ENV=dev
     app.state.auth_limiter = RateLimiter()
     app.include_router(router)

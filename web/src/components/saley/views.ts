@@ -182,6 +182,12 @@ export const VIEWS: ViewDef[] = [
       { tag: "cat-launch", tone: "cat-3", name: W.catLaunch, explain: W.catLaunchX },
       { tag: "cat-research", tone: "cat-4", name: W.catResearch, explain: W.catResearchX },
       { tag: "cat-partner", tone: "cat-5", name: W.catPartner, explain: W.catPartnerX },
+      {
+        tag: "cat-opportunity",
+        tone: "cat-7",
+        name: W.catOpportunity,
+        explain: W.catOpportunityX,
+      },
       { tag: "cat-event", tone: "cat-6", name: W.catEvent, explain: W.catEventX },
       { tag: "ours", tone: "primary", name: W.lgOurs, explain: W.lgOursX },
       { tag: "important", tone: "warn", name: W.lgImportant, explain: W.lgImportantX },

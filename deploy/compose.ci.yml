@@ -1,0 +1,27 @@
+# The CI compose checks (R6, Q-R6-docker, D241): docker-compose.yml plus this file.
+#   docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file <ci env> --profile prod ...
+# SALEY_ENV=ci is prod plus the mock sign-in, and only on an https://localhost PUBLIC_URL (D242).
+# CI has no Discord token and no sheet key: the bot runs without the gateway (D247) and the
+# sheet comes from a saved file (`saley sync --raw-file`, D249). Never used on the server.
+services:
+  migrate:
+    environment:
+      SALEY_ENV: ci
+      SALEY_CI_RUNNER: "true"
+  web:
+    environment:
+      SALEY_ENV: ci
+      SALEY_CI_RUNNER: "true"
+  worker:
+    environment:
+      SALEY_ENV: ci
+      SALEY_CI_RUNNER: "true"
+  news:
+    environment:
+      SALEY_ENV: ci
+      SALEY_CI_RUNNER: "true"
+  bot:
+    command: ["saley", "bot", "--no-gateway"]
+    environment:
+      SALEY_ENV: ci
+      SALEY_CI_RUNNER: "true"

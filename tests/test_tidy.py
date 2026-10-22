@@ -177,3 +177,24 @@ def test_full_run_writes_plan_and_report(
     report = next((repo / "docs" / "test-reports").glob("tidy-*.md")).read_text(encoding="utf-8")
     assert "F401 x" in report and "Nothing was removed" in report
     assert (repo / "debug_dump.txt").exists()  # no move without a yes
+
+
+def test_commit_note_lists_tracked_by_products_for_git_rm(
+    tidy: ModuleType, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """D255: a run record committed before the tidy yes is listed for `git rm`, never removed."""
+    record = write(repo, "docs/test-reports/R5-gate.json", "{}")
+    subprocess.run(["git", "add", "-f", str(record)], cwd=repo, check=True)  # noqa: S603, S607
+    write(repo, ".gitignore", "__pycache__/\n.scratch/\n*.log\ndocs/test-reports/R*-gate.json\n")
+    assert tidy.tracked_byproducts(repo) == ["docs/test-reports/R5-gate.json"]
+    assert tidy.main(["--commit-note"], root=repo) == 0
+    out = capsys.readouterr().out
+    assert "git rm docs/test-reports/R5-gate.json" in out
+    assert record.exists()  # listed only; the human runs git rm
+
+
+def test_commit_note_on_a_clean_tree(
+    tidy: ModuleType, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert tidy.main(["--commit-note"], root=repo) == 0
+    assert "no tracked by-product" in capsys.readouterr().out

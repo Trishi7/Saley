@@ -10,6 +10,7 @@ from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
+from saley.core import alive
 from saley.core.clock import tz
 from saley.core.db import rw_engine
 from saley.core.logging import get_logger
@@ -98,9 +99,18 @@ def start_background(reap: bool = True) -> BaseScheduler:
     return scheduler
 
 
+def add_alive(scheduler: BaseScheduler, service: str) -> None:
+    """D245: the heartbeat file of the compose health check, from the scheduler's own thread."""
+    alive.beat(service)
+    scheduler.add_job(
+        alive.beat, "interval", seconds=alive.BEAT_SECONDS, args=[service], id=f"alive_{service}"
+    )
+
+
 def run_forever(reap: bool = True) -> None:
     """The worker loop. `reap=False` (`saley dev --force`): another worker may be alive."""
     scheduler = build_scheduler()
+    add_alive(scheduler, "worker")
     log.info("worker_start", jobs=sorted(REGISTRY))
     try:
         reaped = reap_stale() if reap else 0

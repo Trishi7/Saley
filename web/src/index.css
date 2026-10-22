@@ -72,13 +72,14 @@
   --touch-meet: #1baf7a;
   --touch-other: oklch(0.6 0.012 250);
 
-  /* Signal categories (D156): six fixed slots, always named in text beside the swatch. */
+  /* Signal categories (D156, D239): seven fixed slots, always named in text beside the swatch. */
   --cat-1: #2a78d6;
   --cat-2: #eb6834;
   --cat-3: #1baf7a;
   --cat-4: #eda100;
   --cat-5: #e87ba4;
   --cat-6: #6250d6;
+  --cat-7: #0e8fa3;
 
   --chart-1: oklch(0.55 0.09 200);
   --chart-2: oklch(0.62 0.14 185);
@@ -147,6 +148,7 @@
   --cat-4: #c98500;
   --cat-5: #d55181;
   --cat-6: #9085e9;
+  --cat-7: #2fb3c6;
 
   --chart-1: oklch(0.72 0.09 195);
   --chart-2: oklch(0.72 0.12 185);

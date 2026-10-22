@@ -13,6 +13,8 @@ Tools:
           A parametrised test counts when every one of its cases passed.
 - gate    `step <n>`: that gate step passed.
 - browser `browser <check name>`: the named browser-QA check passed (gate step 8).
+- ci      `ci <row id>`: the step of that name in the CI compose run for HEAD concluded
+          `success` (R6, D241; `verify.py --ci` reads it). No result = a failure.
 - shell   `<argv>`: the command exits 0. Used only for live checks (sheet copy, test channel).
           Exit 3 with "NOT CONFIGURED: Q-<id>" = PENDING on that open question (shown in the
           report and the ping); exit 3 without a question id is a failure.
@@ -37,7 +39,7 @@ MATRIX_DIR = ROOT / "tests" / "matrix"
 PLANS_DIR = ROOT / "docs" / "plans"
 QUESTIONS = ROOT / "docs" / "QUESTIONS.md"
 LAYERS = ("unit", "sheet", "api", "browser", "bot", "guardrails")
-TOOLS = ("pytest", "gate", "browser", "shell")
+TOOLS = ("pytest", "gate", "browser", "ci", "shell")
 FIELDS = ("id", "feature", "layer", "what", "tool", "command", "pass")
 # D161: the only allowed `writes` value, and the flag its command must carry.
 WRITES = ("test_tab",)
@@ -145,6 +147,8 @@ def row_problem(raw: Any) -> str | None:
         return "a gate row runs `step <n>`"
     if raw["tool"] == "browser" and (command[0] != "browser" or len(command) != 2):
         return "a browser row runs `browser <check name>`"
+    if raw["tool"] == "ci" and command != ["ci", str(raw["id"])]:
+        return "a ci row runs `ci <its own row id>`"
     return writes_problem(raw, command)
 
 
@@ -293,7 +297,9 @@ def evaluate(
     steps: dict[int, str],
     browser: dict[str, bool],
     run_shell: Callable[[Row], tuple[bool, str]] = _shell,
+    ci: dict[str, str] | None = None,
 ) -> list[Outcome]:
+    """`ci`: row id -> step conclusion of the CI compose run (None: the gate ran without --ci)."""
     out = []
     for row in rows:
         if row.tool == "pytest":
@@ -305,11 +311,22 @@ def evaluate(
             name = row.command.split()[1]
             ok = browser.get(name) is True
             note = "passed" if ok else ("failed" if name in browser else "not checked")
+        elif row.tool == "ci":
+            ok, note = _ci(row, ci)
         else:
             ok, note = run_shell(row)
         found = re.match(r"PENDING: not configured \((Q-[\w.-]+)\)", note)
         out.append(Outcome(row, ok, note, found.group(1) if ok and found else None))
     return out
+
+
+def _ci(row: Row, ci: dict[str, str] | None) -> tuple[bool, str]:
+    if ci is None:
+        return False, "no CI result: run the gate with --ci after the push (D241)"
+    conclusion = ci.get(row.id)
+    if conclusion is None:
+        return False, "the CI compose run has no step for this row"
+    return conclusion == "success", f"CI step {conclusion}"
 
 
 def first_failure(outcomes: Iterable[Outcome]) -> str | None:

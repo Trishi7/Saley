@@ -66,6 +66,9 @@ ignore = ["S101", "RUF001", "RUF002", "RUF003"]
 "tests/**" = ["S105", "S106", "S108", "S311", "S608"]
 # WHERE fragments come only from fixed dicts in this file; every value is a bound parameter.
 "src/saley/web/queries.py" = ["S608"]
+# Pydantic copies a mutable default per instance. Ruff cannot see that `Out` is a BaseModel
+# once it is imported from another module.
+"src/saley/web/schemas/*.py" = ["RUF012"]
 # Same rule: the WHERE text is fixed in the file (bound cast(:x) is null checks and constants).
 "src/saley/web/team.py" = ["S608"]
 "src/saley/intel/decisions.py" = ["S608"]

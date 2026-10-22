@@ -1,115 +1,225 @@
-# Saley v2. Same file on the laptop and the server (CLAUDE.md).
-#   laptop:  docker compose up -d postgres   then   uv run saley <service>
-#   server:  docker compose --profile migrate run --rm migrate && docker compose up -d
-# Secrets come from .env (never baked into the image). Inside compose the services reach
-# postgres by its service name, so DATABASE_URL* are overridden to host "postgres".
+# Saley v2 on the server (R6). deploy/deploy.sh runs it; docs/14-runbook.md has the commands.
+#   docker compose --env-file /srv/saley/.env --profile prod up -d
+# The app services carry the profile `prod`. A laptop runs the services with `uv run saley ...`
+# against its own Postgres (README), so it never starts this stack.
+# Secrets come from /srv/saley/.env (outside the repo, never in the image). Only caddy publishes
+# ports. Each service gets only the database role it needs (docs/01 §11): a value set under
+# `environment:` wins over the env file, so an empty value removes a secret from a service.
+# CI: deploy/compose.ci.yml on top (SALEY_ENV=ci, mock sign-in on https://localhost:8443).
+name: saley
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+# One image for every app service (D243). deploy.sh builds it as saley:<git sha> and tags the
+# good one `current`; a rollback puts the previous image back on `current`.
 x-app: &app
-  build: .
-  image: saley:local
-  env_file: .env
+  image: saley:current
+  pull_policy: never
+  env_file: ${SALEY_ENV_FILE:-/srv/saley/.env}
   restart: unless-stopped
+  profiles: ["prod"]
+  logging: *logging
+  networks: [saley_net]
   depends_on:
     postgres:
       condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
 
-# Each service gets only the database role it needs (docs/01 §11). Values set here win over
-# .env. The admin (DDL) URL exists only in the one-shot `migrate` service.
-x-db-rw: &db-rw
-  SALEY_ENV: prod
-  DATABASE_URL: postgresql+psycopg://saley:${SALEY_PASSWORD:-saley}@postgres:5432/saley
-  DATABASE_URL_RO: ""
-  DATABASE_URL_ADMIN: ""
+# D245: worker, news and bot write a heartbeat file every 30 s; `python -m saley.core.alive`
+# reads it (the small form of `saley alive`: a check runs every 30 s under the memory limit).
+x-alive: &alive
+  interval: 30s
+  timeout: 20s
+  retries: 3
+  start_period: 180s
 
 services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
+    logging: *logging
+    networks: [saley_net]
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_local}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in /srv/saley/.env}
       POSTGRES_DB: postgres
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
       timeout: 3s
       retries: 20
 
+  # One-shot: migrations as saley_admin (DATABASE_URL_ADMIN). deploy.sh also runs
+  # `saley db-roles` in it, the only other user of POSTGRES_PASSWORD.
   migrate:
     <<: *app
-    profiles: ["migrate"]
+    build:
+      context: .
     restart: "no"
     command: ["saley", "db-upgrade"]
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       SALEY_ENV: prod
-      DATABASE_URL: postgresql+psycopg://saley_admin:${SALEY_ADMIN_PASSWORD:-saley_admin}@postgres:5432/saley
-      DATABASE_URL_ADMIN: postgresql+psycopg://saley_admin:${SALEY_ADMIN_PASSWORD:-saley_admin}@postgres:5432/saley
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      DISCORD_BOT_TOKEN: ""
+      ANTHROPIC_API_KEY: ""
+      GOOGLE_OAUTH_CLIENT_SECRET: ""
+      WEB_SESSION_SECRET: ""
+      MAIL_APP_PASSWORD: ""
+      SMTP_APP_PASSWORD: ""
+      APOLLO_API_KEY: ""
 
   web:
     <<: *app
     command: ["saley", "web"]
+    mem_limit: 384m
+    memswap_limit: 384m
     expose: ["8090"]
     environment:
-      # Public-facing: read-only role only, and none of the other services' secrets.
+      # Public-facing: the read-only role only, and none of the other services' secrets.
       SALEY_ENV: prod
+      # D254: trust X-Forwarded-For from caddy only (its fixed address below).
+      FORWARDED_ALLOW_IPS: 172.30.0.2
       DATABASE_URL: ""
       DATABASE_URL_ADMIN: ""
-      DATABASE_URL_RO: postgresql+psycopg://saley_ro:${SALEY_RO_PASSWORD:-saley_ro}@postgres:5432/saley
+      POSTGRES_PASSWORD: ""
       DISCORD_BOT_TOKEN: ""
       ANTHROPIC_API_KEY: ""
       MAIL_APP_PASSWORD: ""
+      SMTP_APP_PASSWORD: ""
       APOLLO_API_KEY: ""
       GOOGLE_SERVICE_ACCOUNT_FILE: ""
-
-  bot:
-    <<: *app
-    command: ["saley", "bot"]
-    environment: *db-rw
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request as u; u.urlopen('http://127.0.0.1:8090/healthz', timeout=4)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   worker:
     <<: *app
     command: ["saley", "worker"]
+    mem_limit: 512m
+    memswap_limit: 512m
     volumes:
-      # The service account key lives outside the repo; mount it read-only.
+      # The service account key lives outside the repo; mounted read-only (owner uid 10001).
       - type: bind
-        source: ${GOOGLE_SERVICE_ACCOUNT_HOST_FILE:-/run/missing-saley-key.json}
+        source: ${GOOGLE_SERVICE_ACCOUNT_HOST_FILE:-/srv/saley/secrets/google-sa.json}
         target: /run/secrets/google-sa.json
         read_only: true
+        bind:
+          # A missing key must fail the start, never become an empty folder (review H2).
+          create_host_path: false
     environment:
-      <<: *db-rw
+      SALEY_ENV: prod
+      DATABASE_URL_ADMIN: ""
+      POSTGRES_PASSWORD: ""
+      GOOGLE_OAUTH_CLIENT_SECRET: ""
+      WEB_SESSION_SECRET: ""
       GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/google-sa.json
+    healthcheck:
+      test: ["CMD", "python", "-m", "saley.core.alive", "worker"]
+      <<: *alive
+
+  bot:
+    <<: *app
+    command: ["saley", "bot"]
+    mem_limit: 256m
+    memswap_limit: 256m
+    environment:
+      SALEY_ENV: prod
+      DATABASE_URL_ADMIN: ""
+      POSTGRES_PASSWORD: ""
+      GOOGLE_OAUTH_CLIENT_SECRET: ""
+      WEB_SESSION_SECRET: ""
+      GOOGLE_SERVICE_ACCOUNT_FILE: ""
+      MAIL_APP_PASSWORD: ""
+      SMTP_APP_PASSWORD: ""
+      APOLLO_API_KEY: ""
+    healthcheck:
+      test: ["CMD", "python", "-m", "saley.core.alive", "bot"]
+      <<: *alive
 
   news:
     <<: *app
     command: ["saley", "news"]
-    environment: *db-rw
+    mem_limit: 384m
+    memswap_limit: 384m
+    environment:
+      SALEY_ENV: prod
+      DATABASE_URL_ADMIN: ""
+      POSTGRES_PASSWORD: ""
+      DISCORD_BOT_TOKEN: ""
+      GOOGLE_OAUTH_CLIENT_SECRET: ""
+      WEB_SESSION_SECRET: ""
+      GOOGLE_SERVICE_ACCOUNT_FILE: ""
+      MAIL_APP_PASSWORD: ""
+      SMTP_APP_PASSWORD: ""
+      APOLLO_API_KEY: ""
+    healthcheck:
+      test: ["CMD", "python", "-m", "saley.core.alive", "news"]
+      <<: *alive
 
   caddy:
     image: caddy:2
     restart: unless-stopped
-    depends_on: [web]
+    profiles: ["prod"]
+    mem_limit: 64m
+    memswap_limit: 64m
+    logging: *logging
+    networks:
+      saley_net:
+        ipv4_address: 172.30.0.2 # D254: the one proxy the web trusts
+    depends_on:
+      web:
+        condition: service_healthy
     ports:
-      - "80:80"
-      - "443:443"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:${HTTPS_PORT:-443}"
     environment:
-      SALEY_DOMAIN: ${SALEY_DOMAIN:-localhost}
+      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL in /srv/saley/.env}
+      ACME_EMAIL: ${OPENALEX_MAILTO:?set OPENALEX_MAILTO in /srv/saley/.env (the ACME email)}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # egress: one forward proxy with the same allowlist, as a second wall (docs/01 §09).
-  # Stub until a decision on its shape (docs/QUESTIONS.md). The in-process guard in
-  # saley.core.egress already enforces the allowlist and blocks linkedin.com.
+  # Stub until a decision on its shape. The in-process guard in saley.core.egress already
+  # enforces the allowlist and blocks linkedin.com (R6 brief: the allowlist is unchanged).
   # egress:
   #   profiles: ["egress"]
   #   image: ubuntu/squid:latest
   #   volumes:
   #     - ./deploy/squid.conf:/etc/squid/squid.conf:ro
 
+networks:
+  # install.sh and deploy.sh create it on 172.30.0.0/24 (D254: caddy has a fixed address).
+  saley_net:
+    external: true
+
 volumes:
   pgdata:
   caddy_data:
+  caddy_config:

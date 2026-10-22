@@ -36,9 +36,11 @@ def build_scheduler() -> BlockingScheduler:
 def run_forever() -> None:
     """Run until stopped."""
     from saley.core.settings import set_process
+    from saley.worker.scheduler import add_alive
 
     set_process("news")
     scheduler = build_scheduler()
+    add_alive(scheduler, "news")
     log.info("news_start", jobs=sorted(job.id for job in scheduler.get_jobs()))
     signal.signal(signal.SIGTERM, lambda *_: scheduler.shutdown(wait=False))
     try:

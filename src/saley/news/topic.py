@@ -1,14 +1,16 @@
-"""The story topic: six names and Other, set by plain code (D156).
+"""The story topic: seven names and Other, set by plain code (D156, D239).
 
 Why: the A-L letters in the source registry are source groups, not what a story is about. A person
-filters Signals by Hiring, Funding, Product launch, Research, Partnership or Event. These rules
-live in ONE place. New stories get a topic when they are stored; old rows get one from the
-one-shot job `news_topic_backfill`. The LLM never picks a topic.
+filters Signals by Hiring, Funding, Product launch, Research, Partnership, Opportunity or Event.
+These rules live in ONE place. New stories get a topic when they are stored; old rows get one from
+the job `news_topic_backfill`. The LLM never picks a topic.
 
 Order of the rules (first match wins): a paper (arXiv or OpenAlex) is Research. Then the title is
 checked against the keyword sets in the order Funding, Hiring, Partnership, Product launch,
-Event; only if the title has no match is the summary checked the same way. "Raises $5M to launch"
-is Funding because money news is the stronger signal for sales.
+Opportunity, Event; only if the title has no match is the summary checked the same way. "Raises
+$5M to launch" is Funding because money news is the stronger signal for sales. Opportunity (a call
+for proposals, a tender, a grant) comes just before Event (the human, D239): a call for proposals
+at a summit is an opening to answer, not only a date.
 """
 
 from __future__ import annotations
@@ -27,15 +29,17 @@ TOPIC_PRODUCT: Final = "Product launch"
 TOPIC_RESEARCH: Final = "Research"
 TOPIC_PARTNERSHIP: Final = "Partnership"
 TOPIC_EVENT: Final = "Event"
+TOPIC_OPPORTUNITY: Final = "Opportunity"
 TOPIC_OTHER: Final = "Other"
 
-#: The six names a person can filter by. `Other` is the seventh value, never a filter chip.
+#: The seven names a person can filter by. `Other` is the eighth value, never a filter chip.
 TOPIC_NAMES: Final = (
     TOPIC_HIRING,
     TOPIC_FUNDING,
     TOPIC_PRODUCT,
     TOPIC_RESEARCH,
     TOPIC_PARTNERSHIP,
+    TOPIC_OPPORTUNITY,
     TOPIC_EVENT,
 )
 TOPICS: Final = (*TOPIC_NAMES, TOPIC_OTHER)
@@ -55,12 +59,16 @@ _RULES: Final[tuple[tuple[str, re.Pattern[str]], ...]] = tuple(
             r"\b(?:(?:raises?|raised|secures?|secured|bags?|bagged)\s+(?:\$|usd\s*|inr\s*|rs\.?\s*|₹|€|£)?\d|"
             r"(?:raises?|raised) (?:funds|capital|money)|"
             r"funding|fundraise|series [a-e]\b|seed round|pre-seed|valuation|unicorn|"
-            r"backed by|ipo\b|acquires?\b|acquired\b|acquisition)",
+            r"backed by|ipo\b|acquires?\b|acquired\b|acquisition|"
+            # D239 (the human's review of the D177 sets, 22 Oct): "acquired by" is in "acquired".
+            r"investments?\b|invests? in\b|close[sd]? (?:a|an|its) (?:\S+ ){0,2}round\b|"
+            r"mergers?\b)",
         ),
         (
             TOPIC_HIRING,
             r"\b(hires?|hired|hiring|appoints?|appointed|names? new|new (ceo|cto|coo|cfo|chief)|"
-            r"joins as|steps down|job openings?|recruit(s|ing|ment)?)\b",
+            r"joins as|steps down|job openings?|recruit(s|ing|ment)?|"
+            r"head of|vp of|layoffs?)\b",  # the last line: D239
         ),
         (
             TOPIC_PARTNERSHIP,
@@ -73,7 +81,15 @@ _RULES: Final[tuple[tuple[str, re.Pattern[str]], ...]] = tuple(
             # A bare "releases" matches "press releases": only "releases a/an/its/new".
             r"debuts?|(?:releases?|released) (?:a|an|its|new)|now available|"
             r"open-sources?|new model|"
-            r"announces (a |an )?new)\b",
+            r"announces (a |an )?new|"
+            # D239. "GA" counts only in capitals: a lower-case "ga" is a name or a word part.
+            r"beta|general availability|(?-i:GA)|open[- ]source)\b",
+        ),
+        (
+            TOPIC_OPPORTUNITY,
+            # D239: an opening a company can answer. Checked before Event.
+            r"\b(calls? for proposals|cfps?|rfps?|tenders?|grants?|pilot programmes?|"
+            r"expressions? of interest|applications open)\b",
         ),
         (
             TOPIC_EVENT,

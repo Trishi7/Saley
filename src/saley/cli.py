@@ -24,6 +24,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
+from saley import cli_server
 from saley.core.logging import configure_logging, get_logger
 from saley.core.settings import MissingSettings, get_settings
 
@@ -70,6 +71,7 @@ notes_app = typer.Typer(
     help="Meeting notes from the Drive folder (read only, D81).",
 )
 app.add_typer(notes_app, name="notes")
+cli_server.register(app)  # R6: db-roles, last-run (deploy.sh, smoke.py)
 log = get_logger("saley.cli")
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -141,7 +143,10 @@ def web() -> None:
         settings.require("web")
     except MissingSettings as exc:
         _fail(str(exc))
-    if settings.is_dev:
+    problems = settings.web_start_problems()  # D242: the server refuses a half-set sign-in
+    if problems:
+        _fail("Refused: " + "; ".join(problems) + ".")
+    if not settings.saley_in_container:
         _refuse_busy_port(settings.web_port)  # Q-N5: never two servers on one laptop port
     uvicorn.run(
         "saley.web.app:create_app",
@@ -151,18 +156,46 @@ def web() -> None:
         port=settings.web_port,
         log_level=settings.log_level.lower(),
         proxy_headers=True,
+        # D254: only caddy's X-Forwarded-For counts, so the sign-in limit is per real client.
+        forwarded_allow_ips=settings.forwarded_allow_ips,
     )
 
 
 @app.command()
-def bot() -> None:
+def bot(
+    no_gateway: Annotated[
+        bool, typer.Option("--no-gateway", help="CI only: no Discord connection (D247).")
+    ] = False,
+) -> None:
     """Run the Discord bot (test channel, ping only in R1)."""
-    from saley.bot.gateway import run
+    from saley.bot.gateway import run, run_offline
 
+    if no_gateway:
+        if get_settings().saley_env == "prod":
+            _fail("Refused: --no-gateway is for the CI compose checks, never the server.")
+        run_offline()
+        return
     try:
         run()
     except MissingSettings as exc:
         _fail(str(exc))
+
+
+@app.command()
+def alive(
+    service: Annotated[str, typer.Argument(help="worker, news or bot.")],
+    max_age: Annotated[int, typer.Option(help="Seconds a beat stays fresh.")] = 120,
+) -> None:
+    """D245: the compose health check. Exit 0 when the service wrote its heartbeat lately."""
+    from saley.core import alive as heartbeat
+
+    seconds = heartbeat.age(service)
+    if seconds is None or not heartbeat.is_alive(service, max_age):
+        typer.echo(
+            f"{service}: no fresh heartbeat ({'none' if seconds is None else f'{seconds:.0f} s'})"
+        )
+        raise typer.Exit(code=1)
+    typer.echo(f"{service}: alive ({seconds:.0f} s)")
 
 
 @app.command()
@@ -402,8 +435,15 @@ def _run_once(job: str) -> None:
 @app.command()
 def sync(
     once: Annotated[bool, typer.Option("--once", help="One sync, then exit.")] = False,
+    raw_file: Annotated[
+        Path | None, typer.Option(help="CI and tests: a saved sheet (JSON), never Google (D249).")
+    ] = None,
 ) -> None:
     """Sync the sheet copy into the database."""
+    if raw_file is not None:
+        result = cli_server.sync_from_file(raw_file)
+        typer.echo(f"sheet_sync: {result} · {getattr(result, 'note', None) or ''}")
+        raise typer.Exit(code=0 if result == "ok" else 1)
     try:
         get_settings().require("sync")
     except MissingSettings as exc:
@@ -460,6 +500,12 @@ def health() -> None:
 @sheet_app.command("verify")
 def sheet_verify(
     out: Annotated[Path | None, typer.Option(help="Write the markdown report here.")] = None,
+    raw_file: Annotated[
+        Path | None, typer.Option(help="CI and tests: a saved sheet (JSON), never Google (D249).")
+    ] = None,
+    database: Annotated[
+        str | None, typer.Option(help="Another database on the same server (restore.sh).")
+    ] = None,
 ) -> None:
     """Gate step 6: recount the sheet copy and compare every number with the API."""
     from fastapi.testclient import TestClient
@@ -470,14 +516,16 @@ def sheet_verify(
     from saley.sales.sheet import SheetNotCopy, fetch_raw
     from saley.web.app import create_app
 
+    if database:
+        cli_server.use_database(database)
     try:
-        raw = fetch_raw()
+        raw = cli_server.load_raw(raw_file) if raw_file else fetch_raw()
     except (SheetNotCopy, MissingSettings, EgressBlocked) as exc:
         _fail(f"Refused: {exc}")
     with TestClient(create_app()) as client:
         # R4: every /api route needs a session. The mock sign-in works with SALEY_ENV=dev only.
         if client.post("/auth/mock", follow_redirects=False).status_code != 303:
-            _fail("Refused: sign-in needs AUTH_PROVIDER=mock with SALEY_ENV=dev.")
+            _fail("Refused: sign-in needs AUTH_PROVIDER=mock with SALEY_ENV=dev or ci.")
 
         def get(path: str) -> dict:
             response = client.get(path)
@@ -600,7 +648,7 @@ def discord_read(
 @discord_app.command("roundtrip")
 def discord_roundtrip(
     test: Annotated[bool, typer.Option("--test", help="Required: use the TEST channel.")] = False,
-    case: Annotated[str, typer.Option("--case", help="pack or answer.")] = "pack",
+    case: Annotated[str, typer.Option("--case", help="pack, answer or ping.")] = "pack",
 ) -> None:
     """R4-P03, R4-Q02: post one shape to the TEST channel, read it back, delete it."""
     import httpx

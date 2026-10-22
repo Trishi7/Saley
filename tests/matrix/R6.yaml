@@ -1,0 +1,236 @@
+# Test matrix R6 (docs/16-verification-standard.md §3). Never edit a row to make it pass.
+# Feature ids match docs/plans/R6.md §2. Rows of tool `ci` read the step of the same id in
+# .github/workflows/compose.yml for HEAD (`scripts/verify.py --ci`, D241, Q-R6-docker).
+release: R6
+rows:
+  - id: R6-O01
+    feature: F-R6-01
+    layer: unit
+    what: the ARTPARK evals call is tagged Opportunity (D239)
+    tool: pytest
+    command: pytest tests/test_news.py::test_artpark_evals_call_is_tagged_opportunity
+    pass: test passes
+  - id: R6-O02
+    feature: F-R6-01
+    layer: unit
+    what: the D239 words - Funding, Hiring, Product launch additions; Opportunity before Event; GA in capitals only
+    tool: pytest
+    command: pytest tests/test_news.py::test_d239_keyword_sets
+    pass: every case passes
+  - id: R6-O03
+    feature: F-R6-01
+    layer: unit
+    what: 0025 - the topic check takes Opportunity; non-paper topics go back to null for the backfill; the downgrade round trip
+    tool: pytest
+    command: pytest tests/test_r6_schema.py::test_opportunity_is_a_topic_the_check_takes tests/test_r6_schema.py::test_0025_clears_news_topics_keeps_papers_and_round_trips
+    pass: tests pass
+  - id: R6-O04
+    feature: F-R6-01
+    layer: browser
+    what: the Signals chips are All + the seven names, never a source letter
+    tool: browser
+    command: browser signals_categories
+    pass: check passes
+  - id: R6-C01
+    feature: F-R6-02
+    layer: guardrails
+    what: compose - six services, memory limits, restart unless-stopped, health checks, json-file 20 MB x 3, named volume, only caddy publishes; web waits for postgres healthy and migrate done; web holds no rw secret
+    tool: pytest
+    command: pytest tests/test_r6_deploy.py::test_compose_prod_profile_limits_health_logs_and_ports tests/test_r6_deploy.py::test_web_waits_for_postgres_and_migrations_and_holds_no_rw_secret tests/test_r6_deploy.py::test_ci_overlay_is_ci_only
+    pass: tests pass
+  - id: R6-C02
+    feature: F-R6-02
+    layer: guardrails
+    what: compose up healthy from clean - the first deploy on a fresh runner; every service healthy; only caddy publishes ports
+    tool: ci
+    command: ci R6-C02
+    pass: the CI step succeeded for HEAD
+  - id: R6-C03
+    feature: F-R6-03
+    layer: guardrails
+    what: Dockerfile - Python 3.12 slim, non-root, no dev deps, no Node at run time, SALEY_IN_CONTAINER
+    tool: pytest
+    command: pytest tests/test_r6_deploy.py::test_dockerfile_runtime_non_root_no_dev_deps_in_container_flag tests/test_deploy.py::test_node_build_stage_no_node_at_runtime
+    pass: tests pass
+  - id: R6-C04
+    feature: F-R6-04
+    layer: guardrails
+    what: Caddyfile - PUBLIC_URL to web:8090, HSTS, ACME email from OPENALEX_MAILTO, the app's own headers untouched
+    tool: pytest
+    command: pytest tests/test_r6_deploy.py::test_caddyfile_proxies_public_url_with_hsts_and_leaves_app_headers
+    pass: test passes
+  - id: R6-C05
+    feature: F-R6-04
+    layer: api
+    what: caddy redirects http to https (308 to https://localhost:8443)
+    tool: ci
+    command: ci R6-C05
+    pass: the CI step succeeded for HEAD
+  - id: R6-C06
+    feature: F-R6-04
+    layer: api
+    what: /api without a session is 401 through caddy; HSTS on the answer
+    tool: ci
+    command: ci R6-C06
+    pass: the CI step succeeded for HEAD
+  - id: R6-D01
+    feature: F-R6-05
+    layer: guardrails
+    what: install.sh - ufw 22/80/443 and deny the rest, fail2ban, the folders, the network, the systemd unit, the backup cron
+    tool: pytest
+    command: pytest tests/test_r6_deploy.py::test_install_dry_run_prints_every_step tests/test_r6_deploy.py::test_every_script_parses
+    pass: tests pass
+  - id: R6-D02
+    feature: F-R6-06
+    layer: guardrails
+    what: deploy.sh - the steps in order, "deploy ok <sha>", rollback to the previous image on a failure and says so
+    tool: pytest
+    command: pytest tests/test_r6_deploy.py::test_deploy_runs_the_steps_in_order_and_says_deploy_ok tests/test_r6_deploy.py::test_deploy_rolls_back_to_the_previous_image_and_says_so tests/test_r6_deploy.py::test_a_failed_migration_rolls_back_before_compose_up tests/test_r6_deploy.py::test_first_deploy_failure_has_nothing_to_roll_back tests/test_r6_deploy.py::test_deploy_with_an_image_skips_the_build
+    pass: tests pass
+  - id: R6-D03
+    feature: F-R6-06
+    layer: guardrails
+    what: deploy twice is idempotent - the second deploy ends "deploy ok", no container restarts, the sheet smoke passes
+    tool: ci
+    command: ci R6-D03
+    pass: the CI step succeeded for HEAD
+  - id: R6-D04
+    feature: F-R6-06
+    layer: guardrails
+    what: rollback works - a broken web image is refused, the previous image runs again and is healthy
+    tool: ci
+    command: ci R6-D04
+    pass: the CI step succeeded for HEAD
+  - id: R6-D05
+    feature: F-R6-07
+    layer: unit
+    what: saley db-roles - three logins from the .env URLs, create or set password, saley_admin member of saley, database, grants; refuses a wrong or missing URL without the value
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_db_roles_creates_or_updates_and_runs_the_grants tests/test_r6_server.py::test_db_roles_refuses_bad_urls_without_printing_them
+    pass: tests pass
+  - id: R6-B01
+    feature: F-R6-08
+    layer: guardrails
+    what: backup.sh gzip, 14 days, BACKUP_S3_URL refused (Q-N8); restore.sh into a scratch database, then sheet verify
+    tool: pytest
+    command: pytest tests/test_r6_deploy.py::test_backup_writes_gzip_keeps_14_days_and_refuses_an_s3_url tests/test_r6_deploy.py::test_restore_uses_a_scratch_database_and_runs_sheet_verify tests/test_r6_server.py::test_raw_file_sync_and_verify_refused_in_prod
+    pass: tests pass
+  - id: R6-B02
+    feature: F-R6-08
+    layer: sheet
+    what: backup then restore passes sheet verify (compose stack, saved sheet)
+    tool: ci
+    command: ci R6-B02
+    pass: the CI step succeeded for HEAD
+  - id: R6-S01
+    feature: F-R6-09
+    layer: unit
+    what: smoke.py - healthz, sign-in page 200, /api 401, one sheet sync done, bot pong; --skip for CI
+    tool: pytest
+    command: pytest tests/test_r6_deploy.py::test_smoke_checks_health_signin_api_sheet_and_bot tests/test_r6_deploy.py::test_smoke_sheet_waits_then_fails tests/test_r6_server.py::test_last_run_needs_a_fresh_ok_run
+    pass: tests pass
+  - id: R6-S02
+    feature: F-R6-09
+    layer: bot
+    what: the ping round trip posts "@Saley ping" to the TEST channel, finds the bot's "[TEST] pong", deletes both
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_ping_roundtrip_finds_pong_and_deletes_both tests/test_r6_server.py::test_ping_roundtrip_without_pong_fails_and_still_deletes
+    pass: tests pass
+  - id: R6-P01
+    feature: F-R6-10
+    layer: guardrails
+    what: SALEY_ENV is dev, ci or prod; anything else stops the process
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_saley_env_takes_dev_ci_prod_only
+    pass: test passes
+  - id: R6-P02
+    feature: F-R6-10
+    layer: guardrails
+    what: saley web refuses to start in prod with mock sign-in, Google not set up, a plain-http PUBLIC_URL, a wrong redirect URL or a short session secret
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_web_start_problems_in_prod tests/test_r6_server.py::test_saley_web_refuses_a_half_set_server
+    pass: tests pass
+  - id: R6-P03
+    feature: F-R6-10
+    layer: guardrails
+    what: mock sign-in only in dev from this machine or in ci on https://localhost; never in prod; DEV_USER_EMAIL ignored outside dev
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_mock_signin_dev_loopback_or_ci_localhost_only tests/test_r6_server.py::test_dev_user_email_ignored_outside_dev
+    pass: tests pass
+  - id: R6-P04
+    feature: F-R6-10
+    layer: guardrails
+    what: the busy-port check is off in a container and on elsewhere; bot --no-gateway refused in prod
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_port_check_skipped_in_container tests/test_r6_server.py::test_bot_no_gateway_refused_in_prod
+    pass: tests pass
+  - id: R6-P05
+    feature: F-R6-10
+    layer: guardrails
+    what: outside dev the session cookie is Secure and /api without a session is 401
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_prod_cookie_secure_and_api_needs_session
+    pass: test passes
+  - id: R6-H01
+    feature: F-R6-11
+    layer: unit
+    what: heartbeat files - fresh beat is alive, an old or missing beat is not; saley alive exit codes
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_alive_beat_and_age tests/test_r6_server.py::test_saley_alive_command
+    pass: tests pass
+  - id: R6-G01
+    feature: F-R6-12
+    layer: unit
+    what: verify --ci reads the compose step results for HEAD, refuses a changed tree, and ci rows pass only on success
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_ci_step_results_and_refusals tests/test_r6_server.py::test_matrix_ci_rows tests/test_r6_deploy.py::test_compose_workflow_has_one_step_per_ci_row
+    pass: tests pass
+  - id: R6-G02
+    feature: F-R6-12
+    layer: browser
+    what: browser smoke through caddy on https://localhost:8443 with mock sign-in - every view, zero console errors, HSTS added, app CSP intact
+    tool: ci
+    command: ci R6-G02
+    pass: the CI step succeeded for HEAD
+  - id: R6-M01
+    feature: F-R6-13
+    layer: guardrails
+    what: memory under limits for 10 min of load - no OOM kill, no restart, each peak under 90 % of its limit
+    tool: ci
+    command: ci R6-M01
+    pass: the CI step succeeded for HEAD
+  - id: R6-R01
+    feature: F-R6-14
+    layer: unit
+    what: 0026 - a partial index on decision (act_txid) where act_txid is not null
+    tool: pytest
+    command: pytest tests/test_r6_schema.py::test_decision_act_txid_partial_index
+    pass: test passes
+  - id: R6-R02
+    feature: F-R6-14
+    layer: unit
+    what: the lock heartbeat - a running job renews its lock; a lost lock is flagged and logged
+    tool: pytest
+    command: pytest tests/test_r6_server.py::test_lock_kept_renews_while_the_job_runs tests/test_r6_server.py::test_lock_kept_flags_a_lost_lock
+    pass: tests pass
+  - id: R6-R03
+    feature: F-R6-14
+    layer: unit
+    what: the verify.py and schemas.py split changes no behaviour - every test passes
+    tool: gate
+    command: step 2
+    pass: step 2 passes
+  - id: R6-X01
+    feature: F-R6-15
+    layer: guardrails
+    what: docs - runbook for a non-developer, docs/11, README, STATUS env rows (step 11)
+    tool: gate
+    command: step 11
+    pass: step 11 passes
+  - id: R6-X02
+    feature: F-R6-15
+    layer: unit
+    what: .env.example lists every variable, uncommented, with its default; the RETIRED block
+    tool: pytest
+    command: pytest tests/test_env_example.py
+    pass: tests pass

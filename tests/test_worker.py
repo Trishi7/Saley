@@ -470,8 +470,10 @@ def test_run_forever_queues_the_news_start_after_the_first_runs(
     monkeypatch.setattr(sched, "run_job", lambda name: order.append(f"run:{name}"))
     monkeypatch.setattr(sched.signal, "signal", lambda *_a: None)
     monkeypatch.setattr(sched, "start_job_names", lambda: ["news_start", "news_topic_backfill"])
+    monkeypatch.setattr(sched.alive, "beat", lambda *_a, **_k: None)
     sched.run_forever()
     assert order == [
+        "add:alive_worker",  # R6 D245: the health-check heartbeat comes first
         "run:heartbeat",
         "add:first_news_start",
         "add:first_news_topic_backfill",

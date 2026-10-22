@@ -572,7 +572,15 @@ def seeded_person_problems(item: Mapping, facts: Mapping) -> list[str]:
 
 # ---------------------------------------------------------------- T15: Signals, Suggestions, Events
 
-CATEGORY_NAMES = ("Hiring", "Funding", "Product launch", "Research", "Partnership", "Event")
+CATEGORY_NAMES = (
+    "Hiring",
+    "Funding",
+    "Product launch",
+    "Research",
+    "Partnership",
+    "Opportunity",  # D239
+    "Event",
+)
 ALL_CHIP = "All"
 SOURCE_LETTER = re.compile(r"^[A-L]$")  # the registry source groups (D156): never a chip
 CITY_NAMES = frozenset({"Bangalore", "London", "Other"})  # D160
@@ -639,7 +647,7 @@ def seen_post_problems(
 
 
 def category_chip_problems(chips: Iterable[str]) -> list[str]:
-    """R5-N05: the chips are exactly All + the six names (D156), never a source letter."""
+    """R5-N05: the chips are exactly All + the seven names (D156, D239), never a source letter."""
     found = [str(c).strip() for c in chips]
     problems = []
     if found != [ALL_CHIP, *CATEGORY_NAMES]:

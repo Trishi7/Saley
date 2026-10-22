@@ -8,6 +8,8 @@ Run:
   uv run python scripts/tidy.py              steps a, b, e: lists, cache clean, dead-code report
   uv run python scripts/tidy.py --move --yes steps c, d: move the scratch list, check, undo on fail
   uv run python scripts/tidy.py --check      gate (/verify step 1): fail on a stray file
+  uv run python scripts/tidy.py --commit-note  the "safe to commit" note: tracked files that now
+                                             match a by-product pattern, for `git rm` (D255)
 """
 
 from __future__ import annotations
@@ -122,6 +124,16 @@ def untracked(root: Path) -> list[str]:
 def ignored(root: Path) -> list[str]:
     out = git(root, "status", "--porcelain", "--ignored", "--untracked-files=normal")
     return sorted(line[3:].strip('"') for line in out.splitlines() if line.startswith("!! "))
+
+
+def tracked_byproducts(root: Path) -> list[str]:
+    """D255: tracked files that match a .gitignore pattern now (gate run records, for example).
+
+    A commit made before the tidy "yes" would keep them in git for ever, so the "safe to commit"
+    note lists them for `git rm`. Never removed here: the human runs `git rm`.
+    """
+    out = git(root, "ls-files", "-ci", "--exclude-standard")
+    return sorted(line.strip() for line in out.splitlines() if line.strip())
 
 
 def tracked(root: Path) -> set[str]:
@@ -355,6 +367,9 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     parser.add_argument("--check", action="store_true", help="Gate: fail on a stray file.")
     parser.add_argument("--move", action="store_true", help="Move the scratch list to .scratch/.")
     parser.add_argument("--yes", action="store_true", help="The human said yes to the move.")
+    parser.add_argument(
+        "--commit-note", action="store_true", help="List tracked by-products for git rm (D255)."
+    )
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -367,6 +382,15 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
                 print(f"  {p}")
             return 1
         print("tidy --check: no stray file")
+        return 0
+    if args.commit_note:
+        old = tracked_byproducts(root)
+        if not old:
+            print("safe to commit: no tracked by-product")
+            return 0
+        print(f"safe to commit after `git rm` of {len(old)} tracked by-product(s) (D255):")
+        for p in old:
+            print(f"  git rm {p}")
         return 0
     if args.move:
         if not args.yes:
@@ -382,6 +406,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     lists = classify(root)
     show("keep (belongs in git)", summarize_keep(lists.keep))
     show("by-product (ignored by .gitignore)", lists.byproduct)
+    show("tracked by-products (git rm before the commit, D255)", tracked_byproducts(root))
     show("scratch (one-off; moves to .scratch/ after a yes)", lists.scratch)
     show("protected (looks one-off, never moved)", lists.protected)
     removed = clean_caches(root)

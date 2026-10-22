@@ -39,6 +39,11 @@ d. On "yes": `uv run python scripts/tidy.py --move --yes`
      Else prints `tidy: nothing broke`. The moves are in `.scratch/tidy-moves.json`.
 f. `uv run python scripts/tidy.py --check` changes nothing. It exits non-zero and lists every
    untracked file outside the keep patterns. `/verify` step 1 runs it first.
+g. Every "safe to commit" note (D255, the human, 22 Oct): `uv run python scripts/tidy.py --commit-note`
+   lists the TRACKED files that match a by-product pattern now (gate run records: `R*-gate.json`,
+   `R*-matrix.json`, dated run reports, `tidy-*.md`, …; see `.gitignore`). Put each one in the note
+   as `git rm <file>`, so a commit before the tidy "yes" cannot keep them. The script never removes
+   them itself; the human runs `git rm`.
 
 ## Keep patterns
 `src/`, `tests/`, `scripts/`, `migrations/`, `deploy/`, `docs/`, `.claude/`, `.github/`, and the

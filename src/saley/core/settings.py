@@ -10,12 +10,16 @@ from __future__ import annotations
 import re
 from datetime import time
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
 REQUIRED_PREFIX = "<REQUIRED"
+ENVS = ("dev", "ci", "prod")  # D242
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
+MIN_SESSION_SECRET = 32
 
 # Which settings each service needs before it may start. Checked by `Settings.require()`.
 SERVICE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
@@ -111,7 +115,23 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- core ---
+    # D242: dev (laptop), ci (the compose checks: prod rules plus mock sign-in on localhost),
+    # prod (the server). Any other value stops the process.
     saley_env: str = "dev"
+    # D242: the address people open. Prod needs https; ci needs https on localhost.
+    public_url: str = "http://localhost:8090"
+    # D243: the image sets true. A container has its own network, so the busy-port check is off.
+    saley_in_container: bool = False
+    # D242 (security review M1): ci also needs this marker, set only by deploy/compose.ci.yml.
+    saley_ci_runner: bool = False
+    # D244: the Postgres superuser password; only `saley db-roles` reads it (server).
+    postgres_password: str = ""
+    # Server only, read by docker-compose.yml and deploy/*.sh from the same env file. Listed
+    # here so the .env.example contract (tests/test_env_example.py) covers them too.
+    http_port: int = Field(default=80, ge=1, le=65535)
+    https_port: int = Field(default=443, ge=1, le=65535)
+    google_service_account_host_file: str = "/srv/saley/secrets/google-sa.json"
+    backup_s3_url: str = ""  # Q-N8, D253: empty = local backups only
     saley_tz: str = "Asia/Kolkata"
     log_level: str = "INFO"
     database_url: str = "postgresql+psycopg://saley:saley@localhost:5432/saley"
@@ -219,6 +239,9 @@ class Settings(BaseSettings):
     web_port: int = Field(default=8090, ge=1, le=65535)
     # D113: the gate's own web, against the saley_test database; never WEB_PORT.
     gate_port: int = Field(default=8091, ge=1, le=65535)
+    # D254 (security review H1): the proxy whose X-Forwarded-For uvicorn trusts. Server: caddy's
+    # fixed address on saley_net (docker-compose.yml). Never "*".
+    forwarded_allow_ips: str = "127.0.0.1"
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     # D115: `short=email,...`. The entry names the user, so Saley never guesses (D35).
@@ -256,6 +279,21 @@ class Settings(BaseSettings):
     apollo_enabled: bool = False
     apollo_api_key: str = ""
     apollo_monthly_credit_cap: int = 0
+
+    @field_validator("saley_env")
+    @classmethod
+    def _check_env(cls, value: str) -> str:
+        env = value.strip().lower()
+        if env not in ENVS:
+            raise ValueError(f"SALEY_ENV must be one of {', '.join(ENVS)}")
+        return env
+
+    @field_validator("forwarded_allow_ips")
+    @classmethod
+    def _check_forwarded(cls, value: str) -> str:
+        if "*" in value:
+            raise ValueError("FORWARDED_ALLOW_IPS must name the proxy, never *")
+        return value
 
     @field_validator("user_hours")
     @classmethod
@@ -312,6 +350,40 @@ class Settings(BaseSettings):
     @property
     def is_dev(self) -> bool:
         return self.saley_env.strip().lower() == "dev"
+
+    @property
+    def public_host(self) -> str:
+        return (urlsplit(self.public_url).hostname or "").lower()
+
+    @property
+    def is_ci(self) -> bool:
+        """D242: the compose checks. Only on an https localhost address, so a server that is
+        set to ci by mistake still allows no mock sign-in from the internet."""
+        url = urlsplit(self.public_url)
+        local = url.scheme == "https" and self.public_host in LOCAL_HOSTS
+        return self.saley_env == "ci" and self.saley_ci_runner and local
+
+    def web_start_problems(self) -> list[str]:
+        """D242: what stops `saley web` on the server (prod), and the secret check in ci."""
+        if self.saley_env == "ci" and len(self.web_session_secret) < MIN_SESSION_SECRET:
+            return [f"WEB_SESSION_SECRET needs {MIN_SESSION_SECRET}+ random characters"]
+        if self.saley_env != "prod":
+            return []
+        problems = []
+        if self.auth_provider == "mock":
+            problems.append("AUTH_PROVIDER=mock: the server signs in with Google only")
+        google = ("google_oauth_client_id", "google_oauth_client_secret", "web_allowed_emails")
+        unset = [name.upper() for name in google if is_missing(getattr(self, name))]
+        if unset:
+            problems.append(f"Google sign-in needs {', '.join(unset)}")
+        if urlsplit(self.public_url).scheme != "https" or self.public_host in LOCAL_HOSTS:
+            problems.append("PUBLIC_URL must be the https address of the server")
+        callback = self.public_url.rstrip("/") + "/auth/callback"
+        if self.google_oauth_redirect_url != callback:
+            problems.append(f"GOOGLE_OAUTH_REDIRECT_URL must be {callback}")
+        if len(self.web_session_secret) < MIN_SESSION_SECRET or is_missing(self.web_session_secret):
+            problems.append(f"WEB_SESSION_SECRET needs {MIN_SESSION_SECRET}+ random characters")
+        return problems
 
     @property
     def admin_database_url(self) -> str:

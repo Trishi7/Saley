@@ -65,7 +65,8 @@ v2 is a fresh build. The design lives in `docs/`. Read the docs before you write
 - Docker Compose: caddy, web, bot, worker, news, egress, postgres. Same file on laptop and server.
 
 ## Local development and testing (laptop, VS Code)
-- `docker compose up -d postgres` then `uv run alembic upgrade head`.
+- The laptop uses its own PostgreSQL 17 on 5432. The compose postgres is for the server and CI only.
+  Then `uv run alembic upgrade head`.
 - `uv run saley <service>` runs one service in the foreground. `uv run pytest -q` runs tests.
 - Discord: a separate TEST channel and a dev bot token live in `.env`. The CLI
   `uv run saley discord send --test "<text>"` and `uv run saley discord read --test --last 20`

@@ -18,6 +18,7 @@ from saley.bot.deliver import deliver_ready
 from saley.bot.identity import sync_user_map
 from saley.bot.instruct import instruct_reply
 from saley.bot.ping import TEST_TAG, Incoming, Question, decide, question
+from saley.core import alive
 from saley.core.db import session_scope
 from saley.core.logging import get_logger
 from saley.core.settings import get_settings
@@ -56,7 +57,11 @@ class SaleyBot(discord.Client):
 
     @tasks.loop(seconds=DELIVER_SECONDS)
     async def deliver_loop(self) -> None:
-        """Send ready rows. A failure is logged and the loop keeps going."""
+        """Send ready rows. A failure is logged and the loop keeps going.
+
+        D245: each turn also writes the heartbeat file; the loop waits for the gateway to be
+        ready, so a fresh file means a connected bot."""
+        alive.beat("bot")
         try:
             stats = await asyncio.to_thread(deliver_ready)
         except Exception:
@@ -133,6 +138,23 @@ class SaleyBot(discord.Client):
             if done is not None:
                 return done
             return discord_reply(session, asked.author_id, asked.text, settings)
+
+
+def run_offline() -> None:
+    """D247: CI has no Discord token. The bot container checks its settings and the database,
+    then only writes the heartbeat. The server smoke proves the real gateway (ping, pong)."""
+    import time
+
+    from sqlalchemy import text
+
+    from saley.core.db import rw_engine
+
+    with rw_engine().connect() as conn:
+        conn.execute(text("select 1"))
+    log.warning("bot_offline", reason="--no-gateway: no Discord connection")
+    while True:
+        alive.beat("bot")
+        time.sleep(alive.BEAT_SECONDS)
 
 
 def run() -> None:

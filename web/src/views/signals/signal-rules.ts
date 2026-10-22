@@ -1,5 +1,5 @@
 // Signals: the filters and the query (R5 T15). Pure functions, no DOM.
-// D156: categories are the six real names (`cat=Hiring`), never the A–L source letters. "Other"
+// D156, D239: categories are the seven real names (`cat=Hiring`), never the A–L source letters. "Other"
 // is a topic but never a chip. The filters live in the hash (`#signals?tab=linked&cat=Funding`),
 // so a link from the news funnel or Today opens the same list (legacy params kept: tab, range,
 // day, min_importance, linked_only).
@@ -8,13 +8,14 @@ import { fmt, W } from "@/words";
 
 export type Category = { id: string; label: string; tag: string; tone: Tone };
 
-/** The six names in the API's spelling (saley.news.topic.TOPIC_NAMES). */
+/** The seven names in the API's spelling (saley.news.topic.TOPIC_NAMES). */
 export const CATEGORIES: Category[] = [
   { id: "Hiring", label: W.catHiring, tag: "cat-hiring", tone: "cat-1" },
   { id: "Funding", label: W.catFunding, tag: "cat-funding", tone: "cat-2" },
   { id: "Product launch", label: W.catLaunch, tag: "cat-launch", tone: "cat-3" },
   { id: "Research", label: W.catResearch, tag: "cat-research", tone: "cat-4" },
   { id: "Partnership", label: W.catPartner, tag: "cat-partner", tone: "cat-5" },
+  { id: "Opportunity", label: W.catOpportunity, tag: "cat-opportunity", tone: "cat-7" },
   { id: "Event", label: W.catEvent, tag: "cat-event", tone: "cat-6" },
 ];
 export const ALL = "all";

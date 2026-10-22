@@ -146,7 +146,8 @@ def run_job(name: str, engine: Engine | None = None) -> JobResult:
     run_id: int | None = None
     try:
         run_id = _start_row(engine, name)
-        note = spec.func()
+        with locks.kept(engine, spec.lock, holder):  # D246: long runs keep their lock
+            note = spec.func()
     except Exception as exc:
         log.exception("job_failed", job=name)
         if run_id is not None:

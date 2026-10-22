@@ -2,6 +2,20 @@
 
 (newest first)
 
+## Q-R6-2 · 2026-10-22 · R6 · Security review fix D254
+- decision needed: the sign-in limit behind caddy (review H1: every person had caddy's address, so one bucket for the team); took: caddy gets the fixed address 172.30.0.2 on saley_net (172.30.0.0/24) and the web trusts X-Forwarded-For from it only (`FORWARDED_ALLOW_IPS`); why: caddy replaces any X-Forwarded-For a client sends, so trusting caddy alone is safe. Confirm D254. Nothing waits on it.
+
+## Q-R6-docker · 2026-10-22 · R6 · Docker Desktop is missing on the laptop
+- decision needed: where the compose checks run; took: GitHub Actions (`.github/workflows/compose.yml`, on every push to main), and `verify.py --release R6 --ci` reads its step results for HEAD (D241); why: your brief's fallback. Docker Desktop is not installed and free RAM was 2.4 GB.
+- needed from you: commit and push the R6 tree. The compose run takes about 30 minutes (10 of them are the memory load). Then say "rerun the gate" (or I run it when I see the push). Until then the eight `ci` rows read "no CI result".
+
+## Q-R6-1 · 2026-10-22 · R6 · Decisions taken while building (D240-D253) (resolved)
+- **Answer (Trishi, 22 Oct, chat):** D240–D253 confirmed; D239 docs yes (seven topics); CLAUDE.md line changed; the tidy rule lists tracked run records for `git rm` (D255). **Resolved.**
+- decision needed: D240-D253 (see docs/DECISIONS.md); took: as written there; why: the brief says build around and record. The main ones: D242 (SALEY_ENV dev/ci/prod; prod start checks), D243 (compose shape), D244 (`saley db-roles` from .env on every deploy), D248 (pre-deploy backup; image-only rollback), D253 (off-server copy not built; a set BACKUP_S3_URL fails the backup). Confirm, or name the ones to change.
+- D239 docs: docs/04 (topic list) and docs/08 (Signals legend, filter chips) name six topics. Update them to seven (Opportunity before Event)? Edit only on a yes.
+- CLAUDE.md "Local development" still says `docker compose up -d postgres`. Since D243 the compose postgres publishes no port; the laptop uses its own PostgreSQL (README updated). Change the CLAUDE.md line? (Your file: I did not edit it.)
+- for the server, from you: `/srv/saley/.env` (runbook section 1, step 3), the key at `/srv/saley/secrets/google-sa.json`, and `https://saley.membrane.social/auth/callback` in the Google OAuth client. You run `install.sh` and `deploy.sh` as root over SSH (Q-N7; exact commands in docs/14).
+
 ## Q-R5-17 · 2026-10-21 · R5 gate · Discord test channel equals the sales channel (resolved)
 - **Answer (Trishi, 21 Oct, chat):** `DISCORD_SALES_CHANNEL_ID` is empty in the laptop `.env` again; rerun the gate (D238). **Resolved.**
 - Gate rows R4-P03 and R4-Q02 (live Discord round trips in the test channel) now stop with "Refused: DISCORD_TEST_CHANNEL_ID equals the live sales channel." They passed in the R4 gate, so a value in `.env` changed since 21 Oct morning. The guard is right (CLAUDE.md: never post to a live channel from a laptop); Claude Code never reads `.env`.

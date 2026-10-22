@@ -6,7 +6,7 @@ Sales lead and chief-of-staff system for Membrane's sales team. Dashboard first,
 - Rules for Claude Code and humans: `CLAUDE.md`.
 - Status: `docs/STATUS.md`. Plan for the current release: `docs/plans/`.
 
-## What runs (release R5)
+## What runs (release R6)
 | Service | Command | Does |
 | --- | --- | --- |
 | dev | `uv run saley dev` | Web in this process and the worker as a child process (`saley worker`) on http://localhost:8090 (`WEB_PORT`; laptop only, D43, D46). Ctrl+C stops both. R5 (D151): the dev worker (slot `worker:main`) also runs news: one edition at start when the last run is over 6 h old (`NEWS_RUN_AT_START`, default true), "Run news now" requests and the topic backfill |
@@ -16,10 +16,9 @@ Sales lead and chief-of-staff system for Membrane's sales team. Dashboard first,
 | news | `uv run saley news` | R3 editions at 06:30, 12:00, 17:00, 22:00 IST; OpenAlex 07:30; arXiv 10:00; cleanup 03:00. The only news scheduler in production (D70); on the laptop the dev worker runs news too (D151) |
 
 ## Run on a laptop
-1. Install Python 3.12, `uv`, and Docker (or use an existing PostgreSQL 16+).
+1. Install Python 3.12, `uv`, and PostgreSQL 16+.
 2. Copy `.env.example` to `.env`. Fill the `<REQUIRED>` values. Keep the key file outside the repo.
-3. Start PostgreSQL: `docker compose up -d postgres`.
-   If a local PostgreSQL service already uses port 5432, stop it first or point `DATABASE_URL*` at it.
+3. Start your local PostgreSQL on 127.0.0.1:5432. (Since R6 the compose `postgres` is the server's: it publishes no port, so a laptop uses its own PostgreSQL.)
 4. Create the roles and the databases once, as the Postgres superuser, with plain psql:
    ```
    psql -h 127.0.0.1 -U postgres -f deploy/sql/roles.sql
@@ -108,6 +107,7 @@ Every release ends with `/verify <release>` (`.claude/commands/verify.md`). GATE
   If the port is in use, step 7 fails and names the program that holds it.
   Static checks, tests with coverage, STE lint (`uv run python -m saley.qa.ste_lint`), sheet robustness,
   API abuse suite, `uv run saley sheet verify` (sheet copy vs API), `saley dev`, browser QA and click-path check.
+- R6 (D241, Q-R6-docker): the compose checks run in GitHub Actions (`.github/workflows/compose.yml`, on every push to main). After the push, `uv run python scripts/verify.py --release R6 --low-memory --ci` reads their step results for HEAD (matrix rows of tool `ci`). The tree must equal HEAD outside `docs/`.
 - Steps 10–11 (reviewers, docs) are recorded with `--record 10 PASS "…"`; step 12 is `--finalize`.
   The finalize fails step 11 when `docs/STATUS.md` has no NEW, CHANGED-default or RETIRED env row for the release,
   or (from R5) when `uv run python scripts/impeccable_report.py --check --release <id>` fails (D236).
@@ -135,8 +135,13 @@ uv run saley discord read --test --last 5
 ```
 `--as <id>` tags a message with a test user id from `DISCORD_TEST_USER_IDS`. The bot needs the Message Content intent in the Discord developer portal.
 
-## Server (later)
-`docker compose up -d` runs postgres, web, bot, worker, news and caddy from one image. Set `SALEY_DOMAIN`, `SALEY_*_PASSWORD` and `GOOGLE_SERVICE_ACCOUNT_HOST_FILE` in the server environment. The web refuses every `/api` call without a session, in every mode (D116).
+## Server (R6)
+The droplet runs caddy, web, worker, bot, news and postgres from one image with Docker Compose (profile `prod`), behind https://saley.membrane.social. Every step, for a non-developer, is in `docs/14-runbook.md`:
+- once: `sudo bash /srv/saley/app/deploy/install.sh` (firewall 22/80/443, fail2ban, folders, network, start on boot, nightly backup);
+- secrets: `/srv/saley/.env` (from `.env.example`, `SALEY_ENV=prod`) and `/srv/saley/secrets/google-sa.json`;
+- each deploy: `sudo bash /srv/saley/app/deploy/deploy.sh` (pull, build, roles from `.env`, backup, migrate, up, healthy, smoke, "deploy ok <sha>"; a failure rolls back to the previous image);
+- checks: `python3 deploy/smoke.py`; backups `bash deploy/backup.sh`, `bash deploy/restore.sh` (into a scratch database, then `saley sheet verify`).
+In prod, `saley web` refuses to start with mock sign-in, a plain-http `PUBLIC_URL`, a redirect URL other than `PUBLIC_URL/auth/callback`, or a short `WEB_SESSION_SECRET` (D242). v1 keeps running under PM2 (docs/11).
 
 ## Claude Code setup (once per laptop)
 1. `npx @vectorize-io/hindsight-coding-agents install claude-code --server daemon` — project memory across sessions.

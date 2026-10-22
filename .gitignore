@@ -24,6 +24,16 @@ saley-v2.json
 
 # Gate run logs: saley dev output during /verify
 docs/test-reports/*-dev.log
+# Gate run records (D255): by-products of a gate run. Only <release>-final.md (the PASS report),
+# <release>-files.txt (the coverage baseline) and <release>-impeccable.json stay in git.
+docs/test-reports/R*-gate.json
+docs/test-reports/R*-gate.tree
+docs/test-reports/R*-matrix.json
+docs/test-reports/R*-compose.json
+docs/test-reports/R*-api-abuse.md
+docs/test-reports/R*-sheet-verify.md
+docs/test-reports/R*-20[0-9][0-9]-[0-9][0-9]-[0-9][0-9].md
+docs/test-reports/tidy-*.md
 
 # Repo hygiene (/tidy): caches, build output, scratch, editor and OS files
 .mypy_cache/

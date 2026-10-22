@@ -714,7 +714,7 @@ def test_server_error_keeps_security_headers(
 # Since the cut-over (R5 T16b, D224) the page is the app in web/ (built to dist/, served at /).
 # These read its sources: the same guards the R4 tests kept on the legacy static files.
 
-WEB_SRC = Path(schemas.__file__).parents[3] / "web" / "src"
+WEB_SRC = Path(schemas.__file__).parents[4] / "web" / "src"
 
 
 def web_text(name: str) -> str:

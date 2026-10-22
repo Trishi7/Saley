@@ -28,7 +28,9 @@ COPY --from=web --chown=saley:saley /app/src/saley/web/dist ./src/saley/web/dist
 COPY --chown=saley:saley alembic.ini ./
 COPY --chown=saley:saley migrations ./migrations
 COPY --chown=saley:saley docs/DECISIONS.md docs/goal-deliverable-map.yaml ./docs/
-ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+# SALEY_IN_CONTAINER (D243): the busy-port check is for laptops; a container has its own network.
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
+    SALEY_IN_CONTAINER=true
 USER saley
 EXPOSE 8090
 CMD ["saley", "web"]

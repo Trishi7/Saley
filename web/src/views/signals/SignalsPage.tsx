@@ -1,6 +1,6 @@
 // Signals (R5 T15; docs/08 view 6). Order: legend (ViewPage), the New / Seen earlier tabs with
 // their counts (the page's numbers), the filters, then the list, 10 a page (Gmail model, D157).
-// Filters: All news or Linked to us, the six categories by name (D156), the time window, the
+// Filters: All news or Linked to us, the seven categories by name (D156, D239), the time window, the
 // tag, the source text and (Linked) the company or person. Hooks: `[data-sig-tabs]`,
 // `[data-cat-chips] [data-filter]`, `[data-range-chips] [data-filter]`, `#sig-tag`, `#sig-src`,
 // `#sig-entity`, `#sig-list`.

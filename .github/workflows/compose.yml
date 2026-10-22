@@ -1,0 +1,153 @@
+name: compose
+
+# The R6 compose checks (Q-R6-docker, D241): the laptop has no Docker, so the server stack is
+# proved here, on a fresh runner, with the real deploy scripts. One step per matrix row: the
+# step name starts with the row id, and `scripts/verify.py --ci` reads the step results of this
+# workflow for the commit under test. CI has no secrets: random passwords, mock sign-in on
+# https://localhost:8443 (SALEY_ENV=ci, deploy/compose.ci.yml), the sheet from a saved file
+# (D249), and the bot without the Discord gateway (D247).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SALEY_APP_DIR: ${{ github.workspace }}
+      SALEY_ENV_FILE: ${{ runner.temp }}/saley/.env
+      SALEY_BACKUP_DIR: ${{ runner.temp }}/saley/backups
+      SALEY_STATE_DIR: ${{ runner.temp }}/saley/state
+      SALEY_COMPOSE_FILES: docker-compose.yml deploy/compose.ci.yml
+      GOOGLE_SERVICE_ACCOUNT_HOST_FILE: ${{ runner.temp }}/saley/secrets/google-sa.json
+      SAMPLE_SHEET: ${{ runner.temp }}/saley/sample-sheet.json
+      BASE: https://localhost:8443
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.13.1"
+      - run: uv sync --frozen
+      - name: Browser for the smoke
+        run: uv run playwright install --with-deps chromium
+
+      - name: CI env file (random passwords, mock sign-in on https://localhost:8443)
+        run: |
+          set -eu
+          mkdir -p "$(dirname "$SALEY_ENV_FILE")" "$(dirname "$GOOGLE_SERVICE_ACCOUNT_HOST_FILE")"
+          pw() { openssl rand -hex 24; }
+          ADMIN_PW="$(pw)" RW_PW="$(pw)" RO_PW="$(pw)"
+          {
+            echo "PUBLIC_URL=$BASE"
+            echo "HTTP_PORT=8080"
+            echo "HTTPS_PORT=8443"
+            echo "POSTGRES_PASSWORD=$(pw)"
+            echo "DATABASE_URL_ADMIN=postgresql+psycopg://saley_admin:$ADMIN_PW@postgres:5432/saley"
+            echo "DATABASE_URL=postgresql+psycopg://saley:$RW_PW@postgres:5432/saley"
+            echo "DATABASE_URL_RO=postgresql+psycopg://saley_ro:$RO_PW@postgres:5432/saley"
+            echo "AUTH_PROVIDER=mock"
+            echo "WEB_SESSION_SECRET=$(openssl rand -hex 32)"
+            echo "GOOGLE_OAUTH_REDIRECT_URL=$BASE/auth/callback"
+            echo "OPENALEX_MAILTO=ci@example.com"
+            echo "GTM_SHEET_ID=ci-saved-sheet"
+            echo "GOOGLE_SERVICE_ACCOUNT_HOST_FILE=$GOOGLE_SERVICE_ACCOUNT_HOST_FILE"
+            echo "SHEET_SYNC_SECONDS=3600"
+            echo "SCORER_BACKEND=rules"
+            echo "NEWS_EDITIONS=03:00"
+            echo "DISCORD_BOT_TOKEN=ci-no-gateway"
+            echo "DISCORD_GUILD_ID=100000000000000001"
+            echo "DISCORD_TEST_CHANNEL_ID=100000000000000002"
+            echo "TEST_MODE=true"
+          } > "$SALEY_ENV_FILE"
+          chmod 600 "$SALEY_ENV_FILE"
+          echo '{}' > "$GOOGLE_SERVICE_ACCOUNT_HOST_FILE"
+          uv run python scripts/ci/sample_sheet.py "$SAMPLE_SHEET"
+
+      - name: R6-C02 compose up healthy from clean (first deploy)
+        run: |
+          set -eu
+          SALEY_HEALTH_WAIT=300 bash deploy/deploy.sh --no-pull --skip sheet,bot | tee "$RUNNER_TEMP/deploy1.log"
+          grep -q "deploy ok" "$RUNNER_TEMP/deploy1.log"
+          for svc in postgres web worker bot news caddy; do
+            cid="$(docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod ps -q "$svc")"
+            test "$(docker inspect -f '{{.State.Health.Status}}' "$cid")" = healthy
+          done
+          test -z "$(docker ps --filter label=com.docker.compose.project=saley --format '{{.Ports}}' | grep -v -e '8080->80' -e '8443->8443' | grep -- '->' || true)"
+
+      - name: Sync the saved sheet (worker, D249)
+        run: |
+          docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod \
+            run --rm --no-deps -v "$SAMPLE_SHEET:/run/raw/sheet.json:ro" worker saley sync --raw-file /run/raw/sheet.json
+
+      - name: R6-D03 deploy twice is idempotent
+        run: |
+          set -eu
+          dc() { docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod "$@"; }
+          before="$(for s in web worker bot news caddy; do docker inspect -f '{{.Id}} {{.State.StartedAt}}' "$(dc ps -q $s)"; done)"
+          bash deploy/deploy.sh --no-pull --skip bot | tee "$RUNNER_TEMP/deploy2.log"
+          grep -q "deploy ok" "$RUNNER_TEMP/deploy2.log"
+          grep -q "OK   sheet" "$RUNNER_TEMP/deploy2.log"
+          after="$(for s in web worker bot news caddy; do docker inspect -f '{{.Id}} {{.State.StartedAt}}' "$(dc ps -q $s)"; done)"
+          test "$before" = "$after"
+
+      - name: R6-C05 caddy redirects http to https
+        run: |
+          set -eu
+          out="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' http://localhost:8080/today)"
+          echo "$out"
+          case "$out" in 30[18]\ https://localhost:8443/today) ;; *) exit 1 ;; esac
+
+      - name: R6-C06 /api without a session is 401 through caddy
+        run: |
+          set -eu
+          for path in /api/me /api/today /api/people /api/signals; do
+            code="$(curl -sk -o /dev/null -w '%{http_code}' "$BASE$path")"
+            echo "$path $code"
+            test "$code" = 401
+          done
+          curl -sk -D - -o /dev/null "$BASE/healthz" | grep -i '^strict-transport-security: max-age='
+
+      - name: R6-G02 browser smoke through caddy
+        run: uv run python scripts/ci/browser_smoke.py "$BASE"
+
+      - name: R6-B02 backup then restore passes sheet verify
+        run: |
+          set -eu
+          bash deploy/backup.sh --tag ci | tee "$RUNNER_TEMP/backup.log"
+          grep -q "backup ok" "$RUNNER_TEMP/backup.log"
+          bash deploy/restore.sh --raw-file "$SAMPLE_SHEET" | tee "$RUNNER_TEMP/restore.log"
+          grep -q "restore ok: sheet verify PASS" "$RUNNER_TEMP/restore.log"
+
+      - name: R6-M01 memory under limits for 10 min of load
+        run: uv run python scripts/ci/load_memory.py "$BASE" --minutes 10
+
+      - name: R6-D04 rollback works
+        run: |
+          set -eu
+          good="$(docker image inspect -f '{{.Id}}' saley:current)"
+          docker build -t saley:broken -f scripts/ci/broken.Dockerfile scripts/ci
+          set +e
+          SALEY_HEALTH_WAIT=90 bash deploy/deploy.sh --no-pull --skip bot --image saley:broken > "$RUNNER_TEMP/rollback.log" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/rollback.log"
+          test "$code" != 0
+          grep -q "ROLLED BACK" "$RUNNER_TEMP/rollback.log"
+          test "$(docker image inspect -f '{{.Id}}' saley:current)" = "$good"
+          python3 deploy/smoke.py --skip sheet,bot
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod ps -a || true
+          docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod logs --no-color --tail 300 || true

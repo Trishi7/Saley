@@ -675,6 +675,9 @@ def test_service_run_forever_starts_and_stops(monkeypatch: pytest.MonkeyPatch) -
         def get_jobs(self) -> list[Any]:
             return []
 
+        def add_job(self, *_a: Any, **kw: Any) -> None:
+            started.append(kw["id"])  # R6 D245: the heartbeat job of the health check
+
         def shutdown(self, wait: bool = False) -> None:
             pass
 
@@ -684,8 +687,9 @@ def test_service_run_forever_starts_and_stops(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(service, "build_scheduler", lambda: Fake())
     monkeypatch.setattr(service.signal, "signal", lambda *_a: None)
+    monkeypatch.setattr("saley.core.alive.beat", lambda *_a, **_k: None)
     service.run_forever()
-    assert started == ["start"]
+    assert started == ["alive_news", "start"]
     for name in [n for n in REGISTRY if n.startswith("news_")]:
         del REGISTRY[name]
 
@@ -1166,7 +1170,16 @@ def test_funnel_is_monotone_and_clickable(synced: Session, set_env: Callable[...
 
 # ------------------------------------------------------------------ R5 T7: topics and seen tabs
 
-TOPIC_NAMES = {"Hiring", "Funding", "Product launch", "Research", "Partnership", "Event", "Other"}
+TOPIC_NAMES = {
+    "Hiring",
+    "Funding",
+    "Product launch",
+    "Research",
+    "Partnership",
+    "Opportunity",
+    "Event",
+    "Other",
+}
 ACT = {"X-Saley-Act": "1"}
 
 
@@ -1193,6 +1206,55 @@ def test_topic_rules_table(title: str, summary: str, kind: str, expected: str) -
     from saley.news.topic import topic_for
 
     assert topic_for(title, summary, kind) == expected
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Acme announces a big investment in Pune", "Funding"),
+        ("Fund invests in a speech start-up", "Funding"),
+        ("Acme closes a $10M round", "Funding"),
+        ("Acme closes its seed round", "Funding"),
+        ("Acme and Beta agree a merger", "Funding"),
+        ("Bolt acquired by Acme", "Funding"),
+        ("Priya joins as CTO of Acme", "Hiring"),
+        ("Acme appointed a new board", "Hiring"),
+        ("Acme names a head of speech", "Hiring"),
+        ("Ravi is the new VP of sales at Acme", "Hiring"),
+        ("Layoffs at Acme hit 200 people", "Hiring"),
+        ("Acme voice API in beta", "Product launch"),
+        ("Acme speech API reaches general availability", "Product launch"),
+        ("Acme speech API is now GA", "Product launch"),
+        ("Acme shares its model as open source", "Product launch"),
+        ("Bhashini call for proposals on speech data", "Opportunity"),
+        ("CFP: Indic NLP workshop 2027", "Opportunity"),  # Opportunity before Event
+        ("State issues an RFP for call-centre AI", "Opportunity"),
+        ("Tender for a Kannada speech corpus", "Opportunity"),
+        ("New grant for low-resource ASR", "Opportunity"),
+        ("City opens a pilot programme for voice bots", "Opportunity"),
+        ("Expression of interest: AI for courts", "Opportunity"),
+        ("Applications open for the speech summit", "Opportunity"),
+        ("Speech AI summit in Bengaluru next week", "Event"),
+        ("A gala night for Acme", "Other"),  # "ga" in lower case is not "GA"
+    ],
+)
+def test_d239_keyword_sets(title: str, expected: str) -> None:
+    """D239: the human's review of the D177 sets. Opportunity is checked just before Event."""
+    from saley.news.topic import topic_for
+
+    assert topic_for(title) == expected
+
+
+def test_artpark_evals_call_is_tagged_opportunity() -> None:
+    """R6-O01 (D239): the ARTPARK evals call is an Opportunity, not an Event or Other."""
+    from saley.news.topic import TOPIC_NAMES, topic_for
+
+    assert topic_for("ARTPARK opens a call for proposals for Indic speech model evals") == (
+        "Opportunity"
+    )
+    summary = "ARTPARK at IISc invites applications. Applications open till 30 Nov."
+    assert topic_for("ARTPARK evals call", summary) == "Opportunity"
+    assert TOPIC_NAMES.index("Opportunity") == TOPIC_NAMES.index("Event") - 1
 
 
 def test_category_name_takes_names_in_any_case_and_no_letters() -> None:
@@ -1242,11 +1304,11 @@ def test_topic_backfill_sets_topics_and_is_idempotent(db: Session) -> None:
     from saley.news.topic import backfill_topics
 
     ids = {
-        "funding": add_story("Beta raises $5M seed round"),
+        "funding": add_story("Bolt raises $5M seed round"),
         "paper": add_story("A paper on ASR", kind="paper"),
-        "other": add_story("Beta changes its logo"),
+        "other": add_story("Bolt changes its logo"),
     }
-    done = add_story("Beta launches a thing", topic="Hiring")  # a set topic is never touched
+    done = add_story("Bolt launches a thing", topic="Hiring")  # a set topic is never touched
     with session_scope() as s:
         assert backfill_topics(s, batch=2) == 3  # two rounds of at most 2 rows
     got = {s.id: s.topic for s in stories(db)}

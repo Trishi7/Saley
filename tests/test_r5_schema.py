@@ -201,11 +201,20 @@ def test_two_concurrent_email_adds_write_one_decision(synced: Session, engine) -
 
 # ------------------------------------------------------------------ 0024: the story topic (T7)
 
-TOPICS = ["Hiring", "Funding", "Product launch", "Research", "Partnership", "Event", "Other"]
+TOPICS = [
+    "Hiring",
+    "Funding",
+    "Product launch",
+    "Research",
+    "Partnership",
+    "Opportunity",
+    "Event",
+    "Other",
+]
 
 
 def test_topic_column_check_and_index(db: Session) -> None:
-    """0024 (D156): a nullable `topic` with a check of 7 values and an index."""
+    """0024 (D156): a nullable `topic` with a check and an index. 0025 adds Opportunity (D239)."""
     col = db.execute(
         text(
             "select data_type, is_nullable from information_schema.columns "
