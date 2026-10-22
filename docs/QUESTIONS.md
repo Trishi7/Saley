@@ -2,10 +2,18 @@
 
 (newest first)
 
-## Q-R6-2 · 2026-10-22 · R6 · Security review fix D254
+## Q-R6-3 · 2026-10-22 · R6 gate · The compose run of 7eda591 failed at R6-C02 (resolved)
+- **Answer (Trishi, 22 Oct, chat):** the log: the build failed, `ghcr.io/astral-sh/uv:0.13.1-python3.12-bookworm-slim: not found`; and "cannot give google-sa.json to uid 10001". Fix: no uv base image (python base + `pip install uv==0.13.1`), pin python and node by digest, deploy.sh makes the key readable by the worker user or stops early. **Resolved** (done; postgres and caddy pinned too).
+- What happened: compose run 39735950349 (commit 7eda591) failed in its first row step, "R6-C02 compose up healthy from clean (first deploy)", and skipped the rest. The public API shows only "Process completed with exit code 1". GitHub job logs need a token, so Claude Code cannot read why.
+- needed from you: open https://github.com/Trishi7/Saley/actions/runs/39735950349, then paste the last ~40 lines of the step "R6-C02 …" and the step "Logs on failure" into the chat.
+- took meanwhile: the "Logs on failure" step now writes the last 40 lines of every script log and service log as annotations, which the public API shows. With that in the next commit, Claude Code reads any later failure without you. Not committed yet: it goes in the same commit as the fix.
+
+## Q-R6-2 · 2026-10-22 · R6 · Security review fix D254 (resolved)
+- **Answer (Trishi, 22 Oct, chat):** D254 confirmed. **Resolved.**
 - decision needed: the sign-in limit behind caddy (review H1: every person had caddy's address, so one bucket for the team); took: caddy gets the fixed address 172.30.0.2 on saley_net (172.30.0.0/24) and the web trusts X-Forwarded-For from it only (`FORWARDED_ALLOW_IPS`); why: caddy replaces any X-Forwarded-For a client sends, so trusting caddy alone is safe. Confirm D254. Nothing waits on it.
 
-## Q-R6-docker · 2026-10-22 · R6 · Docker Desktop is missing on the laptop
+## Q-R6-docker · 2026-10-22 · R6 · Docker Desktop is missing on the laptop (resolved)
+- **Answer (Trishi, 22 Oct, chat):** the R6 tree is pushed (1ffeccf, 7eda591); run the gate with --ci on the compose run of the latest commit, finalize and ping without waiting. **Resolved.**
 - decision needed: where the compose checks run; took: GitHub Actions (`.github/workflows/compose.yml`, on every push to main), and `verify.py --release R6 --ci` reads its step results for HEAD (D241); why: your brief's fallback. Docker Desktop is not installed and free RAM was 2.4 GB.
 - needed from you: commit and push the R6 tree. The compose run takes about 30 minutes (10 of them are the memory load). Then say "rerun the gate" (or I run it when I see the push). Until then the eight `ci` rows read "no CI result".
 

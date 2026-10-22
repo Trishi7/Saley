@@ -483,3 +483,37 @@ def test_workflow_job_env_uses_only_allowed_contexts() -> None:
             for key, value in (job.get("env") or {}).items():
                 used = set(re.findall(r"\$\{\{\s*([a-z_]+)\.", str(value)))
                 assert used <= allowed, f"{path.name} {name} env {key}: {used - allowed}"
+
+
+def test_every_image_is_pinned_by_digest() -> None:
+    """Q-R6-3: a tag that does not exist (the uv base image) failed the first real build. Every
+    base image is pinned by a digest checked on the registry; the app image is built locally."""
+    froms = [
+        line.split()[1]
+        for line in (ROOT / "Dockerfile").read_text(encoding="utf-8").splitlines()
+        if line.upper().startswith("FROM ")
+    ]
+    assert froms and all(re.search(r"@sha256:[0-9a-f]{64}$", ref) for ref in froms), froms
+    assert not any("astral-sh/uv" in ref for ref in froms)
+    assert "pip install --no-cache-dir uv==0.13.1" in (ROOT / "Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    for name, svc in services().items():
+        image = svc.get("image", "")
+        if image and image != "saley:current":
+            assert re.search(r"@sha256:[0-9a-f]{64}$", image), f"{name}: {image}"
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="needs Unix file owners and a non-root user (CI test job)",
+)
+@needs_bash
+def test_deploy_stops_when_the_key_cannot_go_to_the_worker(server: dict[str, Any]) -> None:
+    """Q-R6-3: a key the worker cannot read stops the deploy before the build, with a plain
+    message (before: a warning and a worker that failed later)."""
+    env = {k: v for k, v in server["env"].items() if k != "SALEY_SKIP_MODE_CHECK"}
+    (server["tmp"] / ".env").chmod(0o600)
+    code, out, calls = run_script({**server, "env": env}, "deploy.sh", "--no-pull")
+    assert code != 0 and "cannot give" in out and "sudo chown 10001:10001" in out, out
+    assert not any("build" in c for c in calls)

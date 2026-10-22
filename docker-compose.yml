@@ -40,7 +40,7 @@ x-alive: &alive
 
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97 # checked 22 Oct
     restart: unless-stopped
     mem_limit: 512m
     memswap_limit: 512m
@@ -176,7 +176,7 @@ services:
       <<: *alive
 
   caddy:
-    image: caddy:2
+    image: caddy:2@sha256:3095ad245c353e3bdb27a38f22a095c1cfa9e295ab21c0214c3e72b0e2960525 # checked 22 Oct
     restart: unless-stopped
     profiles: ["prod"]
     mem_limit: 64m

@@ -70,13 +70,27 @@ check_key_file() {
 	[ -f "$KEY_FILE" ] || die "no service account key at $KEY_FILE (runbook: first install, step 4)"
 }
 
-# The image runs as uid 10001; a key file owned by root would be unreadable in the container.
+# The image runs as uid 10001 and reads the key through a bind mount. Docker opens the host path
+# as root, so the secrets folder may stay root-only (700); the FILE itself must belong to uid
+# 10001 with mode 400 or 600. A deploy that cannot make it so stops here, before the build, with
+# a plain message (Q-R6-3: CI got only a warning and a worker that cannot read the key).
 fix_key_owner() {
-	if [ -f "$KEY_FILE" ]; then
+	local owner mode
+	[ "${SALEY_SKIP_MODE_CHECK:-0}" = 1 ] && return 0 # tests on NTFS: no Unix owners or modes
+	[ -f "$KEY_FILE" ] || return 0                     # check_key_file names a missing key
+	owner="$(stat -c %u "$KEY_FILE")"
+	if [ "$owner" != "$APP_UID" ]; then
 		chown "$APP_UID:$APP_UID" "$KEY_FILE" 2>/dev/null ||
-			say "warning: cannot give $KEY_FILE to uid $APP_UID; the worker may not read it"
-		chmod 400 "$KEY_FILE" 2>/dev/null || true
+			die "cannot give $KEY_FILE to uid $APP_UID (the worker). Run deploy.sh as root, or: sudo chown $APP_UID:$APP_UID $KEY_FILE && sudo chmod 400 $KEY_FILE"
 	fi
+	mode="$(stat -c %a "$KEY_FILE")"
+	case "$mode" in
+	400 | 600) ;;
+	*)
+		chmod 400 "$KEY_FILE" 2>/dev/null ||
+			die "cannot set mode 400 on $KEY_FILE. Run deploy.sh as root, or: sudo chmod 400 $KEY_FILE"
+		;;
+	esac
 }
 
 # The health of one service: healthy, starting, unhealthy, or "missing".

@@ -11,15 +11,20 @@ RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts
 COPY web/ ./
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv:0.13.1-python3.12-bookworm-slim AS build
+# Python 3.12 slim (bookworm), pinned by the multi-arch index digest (checked on Docker Hub,
+# 22 Oct). The build and run stages use the SAME image, so the venv's python link is valid in
+# both. The uv base image tag did not exist (the R6 compose run failed at the build, Q-R6-3), so
+# uv comes from PyPI at the version of the CI workflows.
+FROM python:3.12-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70 AS build
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+RUN pip install --no-cache-dir uv==0.13.1
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
 
-FROM python:3.12-slim-bookworm AS run
+FROM python:3.12-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70 AS run
 RUN useradd --create-home --uid 10001 saley
 WORKDIR /app
 COPY --from=build --chown=saley:saley /app/.venv /app/.venv

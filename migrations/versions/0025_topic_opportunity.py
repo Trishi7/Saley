@@ -55,7 +55,11 @@ def upgrade() -> None:
     op.execute(AS_OWNER)
     op.execute(f"alter table news_stories drop constraint if exists {CHECK}")
     op.execute(_check(TOPICS))
-    op.execute(f"update news_stories set topic = null where kind is distinct from '{PAPER_KIND}'")
+    # Only rows that have a topic: an untagged row needs no new row version (DB review).
+    op.execute(
+        "update news_stories set topic = null "
+        f"where kind is distinct from '{PAPER_KIND}' and topic is not null"
+    )
     op.execute("reset role")
 
 

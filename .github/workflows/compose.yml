@@ -77,6 +77,10 @@ jobs:
           } > "$SALEY_ENV_FILE"
           chmod 600 "$SALEY_ENV_FILE"
           echo '{}' > "$GOOGLE_SERVICE_ACCOUNT_HOST_FILE"
+          # As on the server (runbook step 1.4): the key belongs to the worker user, mode 400.
+          # deploy.sh stops when it cannot make that so (Q-R6-3).
+          sudo chown 10001:10001 "$GOOGLE_SERVICE_ACCOUNT_HOST_FILE"
+          sudo chmod 400 "$GOOGLE_SERVICE_ACCOUNT_HOST_FILE"
           uv run python scripts/ci/sample_sheet.py "$SAMPLE_SHEET"
 
       - name: R6-C02 compose up healthy from clean (first deploy)
@@ -152,8 +156,23 @@ jobs:
           test "$(docker image inspect -f '{{.Id}}' saley:current)" = "$good"
           python3 deploy/smoke.py --skip sheet,bot
 
+      # Job logs need a GitHub token to read; annotations do not. So a failure also leaves the
+      # last lines of each script log and each service log as annotations, which the gate's
+      # machine can read over the public API (passwords are random per run and never printed).
       - name: Logs on failure
         if: failure()
         run: |
-          docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod ps -a || true
-          docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod logs --no-color --tail 300 || true
+          dc() { docker compose -f docker-compose.yml -f deploy/compose.ci.yml --env-file "$SALEY_ENV_FILE" --profile prod "$@"; }
+          note() { # title, then the text on stdin -> one error annotation (last 40 lines)
+            body="$(tail -n 40 | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')"
+            echo "::error title=$1::$body"
+          }
+          dc ps -a || true
+          dc ps -a 2>&1 | note "compose ps" || true
+          for f in deploy1 deploy2 backup restore rollback; do
+            [ -f "$RUNNER_TEMP/$f.log" ] && note "$f.log" < "$RUNNER_TEMP/$f.log"
+          done
+          for svc in migrate web worker bot news caddy; do
+            dc logs --no-color --tail 40 "$svc" 2>&1 | note "logs $svc" || true
+          done
+          dc logs --no-color --tail 300 || true
