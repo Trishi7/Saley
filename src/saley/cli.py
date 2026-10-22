@@ -184,7 +184,9 @@ def bot(
 @app.command()
 def alive(
     service: Annotated[str, typer.Argument(help="worker, news or bot.")],
-    max_age: Annotated[int, typer.Option(help="Seconds a beat stays fresh.")] = 120,
+    max_age: Annotated[
+        int, typer.Option(help="Seconds a beat stays fresh.")
+    ] = 120,  # alive.MAX_AGE_SECONDS
 ) -> None:
     """D245: the compose health check. Exit 0 when the service wrote its heartbeat lately."""
     from saley.core import alive as heartbeat

@@ -146,8 +146,10 @@ def run_job(name: str, engine: Engine | None = None) -> JobResult:
     run_id: int | None = None
     try:
         run_id = _start_row(engine, name)
-        with locks.kept(engine, spec.lock, holder):  # D246: long runs keep their lock
+        with locks.kept(engine, spec.lock, holder) as lost:  # D246: long runs keep their lock
             note = spec.func()
+        if lost.is_set():  # another run may have started beside this one: say so in the row
+            note = f"{note or ''} · lock lost during the run".strip(" ·")
     except Exception as exc:
         log.exception("job_failed", job=name)
         if run_id is not None:

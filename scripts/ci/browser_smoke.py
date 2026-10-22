@@ -64,6 +64,7 @@ def run(base: str) -> list[str]:
             found.append(f"request: {response.status} {path}")
 
         page.on("response", on_response)
+        page.on("requestfailed", lambda r: found.append(f"request failed: {urlparse(r.url).path}"))
 
         anon = page.request.get(f"{base}/api/me")
         if anon.status != 401:

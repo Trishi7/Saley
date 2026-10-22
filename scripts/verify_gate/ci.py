@@ -47,7 +47,7 @@ def compose_path(release: str) -> Path:
 def _git(*args: str) -> str:
     return subprocess.run(  # noqa: S603 - fixed git arguments
         [GIT, *args], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.strip()
+    ).stdout.rstrip("\n")  # never lstrip: porcelain lines start with a status column
 
 
 def repo_slug(remote: str) -> str:
@@ -59,7 +59,11 @@ def repo_slug(remote: str) -> str:
 
 
 def dirty_deploy_paths(porcelain: str) -> list[str]:
-    paths = [line[3:].strip() for line in porcelain.splitlines() if line.strip()]
+    """Changed paths outside docs/. A rename `R a -> b` counts both paths."""
+    paths = []
+    for line in porcelain.splitlines():
+        if len(line) > 3:
+            paths += [p.strip().strip('"') for p in line[3:].split(" -> ")]
     return [p for p in paths if not p.startswith(NOT_DEPLOY)]
 
 
@@ -89,7 +93,10 @@ def step_results(slug: str, sha: str, get: GetJson = get_json) -> dict[str, Any]
         for step in job.get("steps", []):
             match = ROW_ID.match(str(step.get("name", "")))
             if match:
-                steps[match.group(1)] = str(step.get("conclusion") or step.get("status"))
+                # Two steps with one id (a retry, a second job): the worst result counts.
+                got = str(step.get("conclusion") or step.get("status"))
+                if steps.get(match.group(1), "success") == "success":
+                    steps[match.group(1)] = got
     return {
         "sha": sha,
         "run": {k: run.get(k) for k in ("id", "html_url", "conclusion", "updated_at")},
@@ -121,4 +128,7 @@ def load(release: str) -> dict[str, str] | None:
     path = compose_path(release)
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8")).get("steps", {})
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("steps", {})
+    except (ValueError, AttributeError):
+        return None  # the ci rows then read "no CI result"

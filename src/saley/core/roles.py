@@ -64,7 +64,8 @@ def logins(settings: Settings) -> tuple[list[Login], URL]:
             raise RolesRefused(f"{field.upper()} names another server or database.")
         target = target or url
         found.append(Login(role, str(url.password)))
-    assert target is not None  # ROLE_URLS is not empty
+    if target is None:  # pragma: no cover - ROLE_URLS is not empty
+        raise RolesRefused("no database URL")
     return found, target
 
 

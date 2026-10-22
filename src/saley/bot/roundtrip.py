@@ -167,7 +167,7 @@ def _wait_for_pong(
     want = f"{TEST_TAG} pong"
     waited = 0.0
     while True:
-        params = {"after": after, "limit": 10}
+        params = {"after": after, "limit": 50}  # a busy test channel must not hide the pong
         found = _json(egress.request(http, "GET", url, headers=_headers(token), params=params))
         for msg in found:
             author = str((msg.get("author") or {}).get("id", ""))

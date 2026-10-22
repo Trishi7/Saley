@@ -66,6 +66,8 @@ main() {
 	if command -v flock >/dev/null 2>&1; then
 		exec 9>"$STATE_DIR/deploy.lock"
 		flock -n 9 || die "another deploy is running"
+	else
+		say "note: no flock on this machine, so two deploys at once are not stopped"
 	fi
 
 	if [ "$pull" = 1 ]; then
@@ -89,11 +91,12 @@ main() {
 	fi
 
 	say "postgres"
-	dc up -d postgres || rollback "postgres did not start"
+	# --wait: a fresh volume runs initdb first; db-roles must not race it (review HIGH).
+	dc up -d --wait postgres || rollback "postgres did not become healthy"
 	say "roles (saley db-roles)"
 	dc run --rm --no-deps migrate saley db-roles || rollback "db-roles"
 	say "backup before the migration"
-	bash "$HERE/backup.sh" --tag "pre-$SHA" || rollback "backup"
+	bash "$HERE/backup.sh" --tag "pre-$SHA" --local-only || rollback "backup"
 	say "migrate (alembic upgrade head as saley_admin)"
 	dc run --rm --no-deps migrate || rollback "migrate"
 	dc run --rm --no-deps migrate saley db-roles >/dev/null || rollback "grants after the migration"

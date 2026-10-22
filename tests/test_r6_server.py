@@ -129,8 +129,12 @@ def test_web_trusts_forwarded_for_from_the_named_proxy_only(
     assert runner.invoke(app, ["web"]).exit_code == 0
     assert seen["proxy_headers"] is True and seen["forwarded_allow_ips"] == "172.30.0.2"
     assert Settings.model_fields["forwarded_allow_ips"].default == "127.0.0.1"
-    with pytest.raises(ValidationError):
-        Settings(_env_file=None, forwarded_allow_ips="*")
+    for bad in ("*", "0.0.0.0/0", "::/0", "10.0.0.0/4", "caddy"):
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, forwarded_allow_ips=bad)
+    assert Settings(
+        _env_file=None, forwarded_allow_ips="172.30.0.2,10.1.0.0/24"
+    ).forwarded_allow_ips
 
 
 def test_two_forwarded_clients_get_two_limit_buckets() -> None:
@@ -362,6 +366,30 @@ def test_lock_kept_renews_while_the_job_runs(engine: Engine, db: Session) -> Non
     locks.release(engine, "r6_long", holder)
 
 
+def test_run_job_notes_a_lost_lock(
+    engine: Engine, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review M7: a run whose lock was lost on the way says so in its job_runs note."""
+    import contextlib
+    import threading
+
+    from saley.worker import locks, registry
+
+    @contextlib.contextmanager
+    def lost_lock(*_a: Any, **_k: Any) -> Any:
+        event = threading.Event()
+        event.set()
+        yield event
+
+    monkeypatch.setattr(locks, "kept", lost_lock)
+    registry.register("r6_lost_note", "interval", seconds=60)(lambda: "did work")
+    try:
+        result = registry.run_job("r6_lost_note", engine)
+    finally:
+        registry.REGISTRY.pop("r6_lost_note", None)
+    assert result == "ok" and result.note == "did work · lock lost during the run"
+
+
 def test_lock_kept_flags_a_lost_lock(engine: Engine, db: Session) -> None:
     from saley.worker import locks
 
@@ -458,8 +486,23 @@ def test_ci_step_results_and_refusals(ci_mod: Any) -> None:
         )
     assert ci_mod.repo_slug("https://github.com/Trishi7/Saley") == "Trishi7/Saley"
     assert ci_mod.repo_slug("git@github.com:Trishi7/Saley.git") == "Trishi7/Saley"
-    porcelain = " M docs/STATUS.md\n?? deploy/x.sh\n M src/saley/cli.py\n"
-    assert ci_mod.dirty_deploy_paths(porcelain) == ["deploy/x.sh", "src/saley/cli.py"]
+    porcelain = " M docs/STATUS.md\n?? deploy/x.sh\n M src/saley/cli.py\nR  a.py -> b.py\n"
+    assert ci_mod.dirty_deploy_paths(porcelain) == [
+        "deploy/x.sh",
+        "src/saley/cli.py",
+        "a.py",
+        "b.py",
+    ]
+    assert ci_mod.dirty_deploy_paths(" M docs/x.md\n") == []  # the status column is kept
+    twice = [
+        *steps,
+        {"name": "R6-C02 again (retry)", "conclusion": "success"},
+        {"name": "R6-C05 http", "conclusion": "failure"},
+        {"name": "R6-C05 http", "conclusion": "success"},
+    ]
+    pages[JOBS] = {"jobs": [{"steps": twice}]}
+    worst = ci_mod.step_results("Trishi7/Saley", sha, get)["steps"]
+    assert worst["R6-C05"] == "failure" and worst["R6-D04"] == "failure"  # never a later success
 
 
 def test_matrix_ci_rows() -> None:

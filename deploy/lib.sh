@@ -73,7 +73,8 @@ check_key_file() {
 # The image runs as uid 10001; a key file owned by root would be unreadable in the container.
 fix_key_owner() {
 	if [ -f "$KEY_FILE" ]; then
-		chown "$APP_UID:$APP_UID" "$KEY_FILE" 2>/dev/null || true
+		chown "$APP_UID:$APP_UID" "$KEY_FILE" 2>/dev/null ||
+			say "warning: cannot give $KEY_FILE to uid $APP_UID; the worker may not read it"
 		chmod 400 "$KEY_FILE" 2>/dev/null || true
 	fi
 }

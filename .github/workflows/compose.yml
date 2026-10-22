@@ -23,16 +23,22 @@ jobs:
   compose:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # The `runner` context is not allowed in job-level env (the first push had a workflow with
+    # 0 jobs for that reason); the temp paths are set by the first step through $GITHUB_ENV.
     env:
       SALEY_APP_DIR: ${{ github.workspace }}
-      SALEY_ENV_FILE: ${{ runner.temp }}/saley/.env
-      SALEY_BACKUP_DIR: ${{ runner.temp }}/saley/backups
-      SALEY_STATE_DIR: ${{ runner.temp }}/saley/state
       SALEY_COMPOSE_FILES: docker-compose.yml deploy/compose.ci.yml
-      GOOGLE_SERVICE_ACCOUNT_HOST_FILE: ${{ runner.temp }}/saley/secrets/google-sa.json
-      SAMPLE_SHEET: ${{ runner.temp }}/saley/sample-sheet.json
       BASE: https://localhost:8443
     steps:
+      - name: Paths in the runner temp folder
+        run: |
+          {
+            echo "SALEY_ENV_FILE=$RUNNER_TEMP/saley/.env"
+            echo "SALEY_BACKUP_DIR=$RUNNER_TEMP/saley/backups"
+            echo "SALEY_STATE_DIR=$RUNNER_TEMP/saley/state"
+            echo "GOOGLE_SERVICE_ACCOUNT_HOST_FILE=$RUNNER_TEMP/saley/secrets/google-sa.json"
+            echo "SAMPLE_SHEET=$RUNNER_TEMP/saley/sample-sheet.json"
+          } >> "$GITHUB_ENV"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:

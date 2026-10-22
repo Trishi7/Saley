@@ -15,9 +15,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KEEP_DAYS=14
 
 main() {
-	local tag="" db file
+	local tag="" db file local_only=0
 	while [ $# -gt 0 ]; do
 		case "$1" in
+		--local-only) local_only=1 ;; # deploy.sh: the pre-migration copy never needs the S3 check
 		--tag)
 			tag="${2:?--tag needs a name}"
 			shift
@@ -43,7 +44,7 @@ main() {
 	find "$BACKUP_DIR" -maxdepth 1 -name 'saley-*.sql.gz' -mtime +$((KEEP_DAYS - 1)) -delete
 	say "backup ok $file ($(du -h "$file" | cut -f1))"
 
-	if [ -n "$(env_value BACKUP_S3_URL)" ]; then
+	if [ "$local_only" = 0 ] && [ -n "$(env_value BACKUP_S3_URL)" ]; then
 		die "BACKUP_S3_URL is set, but the off-server copy is not built (Q-N8, D253). Local copy: $file"
 	fi
 }

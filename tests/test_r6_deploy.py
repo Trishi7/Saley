@@ -228,7 +228,7 @@ def run_script(
 def step_order(calls: list[str]) -> list[str]:
     marks = {
         "build migrate": "build",
-        "up -d postgres": "postgres",
+        "up -d --wait postgres": "postgres",  # review HIGH: healthy before db-roles
         "run --rm --no-deps migrate saley db-roles": "roles",
         "pg_dump": "backup",
         "run --rm --no-deps migrate": "migrate",
@@ -461,3 +461,25 @@ def test_compose_workflow_has_one_step_per_ci_row() -> None:
     text = json.dumps(flow)
     assert "secrets." not in text  # CI needs no secret
     assert "compose.ci.yml" in text and "--skip" in text
+
+
+@needs_bash
+def test_a_set_s3_url_does_not_fail_a_deploy(server: dict[str, Any]) -> None:
+    """Review M4: the pre-migration backup is local only; a config value never rolls back."""
+    with server["env_file"].open("a", encoding="utf-8") as f:
+        f.write("BACKUP_S3_URL=s3://bucket/x\n")
+    code, out, _ = run_script(server, "deploy.sh", "--no-pull", STUB_PREV_ID="sha256:old")
+    assert code == 0 and "deploy ok abc123def456" in out, out
+
+
+def test_workflow_job_env_uses_only_allowed_contexts() -> None:
+    """The first R6 push: `${{ runner.temp }}` in a job-level env made GitHub reject the whole
+    compose workflow (a run with 0 jobs). Job env may use github, inputs, matrix, needs,
+    secrets, strategy and vars only (actionlint rule)."""
+    allowed = {"github", "inputs", "matrix", "needs", "secrets", "strategy", "vars"}
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        flow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for name, job in flow["jobs"].items():
+            for key, value in (job.get("env") or {}).items():
+                used = set(re.findall(r"\$\{\{\s*([a-z_]+)\.", str(value)))
+                assert used <= allowed, f"{path.name} {name} env {key}: {used - allowed}"

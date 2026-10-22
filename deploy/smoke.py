@@ -22,6 +22,7 @@ valid.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import ssl
@@ -107,15 +108,16 @@ def check_http(base: str, get: Get) -> list[Result]:
     out = []
     try:
         status, body = get(f"{base}/healthz")
-        ok = status == 200 and json.loads(body or b"{}").get("status") == "ok"
+        data = json.loads(body or b"{}")
+        ok = status == 200 and isinstance(data, dict) and data.get("status") == "ok"
         out.append(Result("healthz", ok, f"HTTP {status}"))
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, http.client.HTTPException) as exc:
         out.append(Result("healthz", False, f"no answer ({exc.__class__.__name__})"))
     for name, path, want in (("signin", "/signin", 200), ("api", "/api/me", 401)):
         try:
             status, _ = get(f"{base}{path}")
             out.append(Result(name, status == want, f"HTTP {status}, want {want}"))
-        except OSError as exc:
+        except (OSError, http.client.HTTPException) as exc:
             out.append(Result(name, False, f"no answer ({exc.__class__.__name__})"))
     return out
 

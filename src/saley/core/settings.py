@@ -7,6 +7,7 @@ per service with `require()`, never at import, so one service never fails on ano
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from datetime import time
 from functools import lru_cache
@@ -20,6 +21,7 @@ REQUIRED_PREFIX = "<REQUIRED"
 ENVS = ("dev", "ci", "prod")  # D242
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
 MIN_SESSION_SECRET = 32
+MIN_PROXY_PREFIX = {4: 16, 6: 48}  # D254: a proxy network, never 0.0.0.0/0
 
 # Which settings each service needs before it may start. Checked by `Settings.require()`.
 SERVICE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
@@ -291,8 +293,13 @@ class Settings(BaseSettings):
     @field_validator("forwarded_allow_ips")
     @classmethod
     def _check_forwarded(cls, value: str) -> str:
-        if "*" in value:
-            raise ValueError("FORWARDED_ALLOW_IPS must name the proxy, never *")
+        for part in split_csv(value):
+            try:
+                net = ipaddress.ip_network(part, strict=False)
+            except ValueError as exc:
+                raise ValueError("FORWARDED_ALLOW_IPS lists proxy addresses, never *") from exc
+            if net.prefixlen < MIN_PROXY_PREFIX[net.version]:
+                raise ValueError(f"FORWARDED_ALLOW_IPS {part} trusts too many addresses")
         return value
 
     @field_validator("user_hours")

@@ -105,6 +105,8 @@ The last line says **`deploy ok <code version>`**. If any step fails, the script
 
 Run it again at any time. A second run changes nothing.
 
+If Discord or Google is down, the bot check or the sheet check in the smoke fails, and the deploy rolls back. In that case, check the dashboard by hand, then deploy without that check: `bash /srv/saley/app/deploy/deploy.sh --skip bot` (or `--skip sheet`).
+
 Check the site at any time, without changing anything:
 
 ```
