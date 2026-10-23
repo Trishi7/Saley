@@ -179,7 +179,7 @@ def m15_health(d: Mapping[str, Any], card_id: str) -> dict[str, Any]:
 
     d: day, jobs_ok, jobs_failed, llm, cap, egress, sent, held, failed, presses {ok, already,
     refused}, listen (the last card sync, or "—"), dms_off."""
-    good = not d["jobs_failed"] and not d["failed"]
+    good = not d["jobs_failed"] and not d["failed"] and not d.get("skipped")
     presses = d["presses"]
     fields = [
         c.field(
@@ -201,6 +201,7 @@ def m15_health(d: Mapping[str, Any], card_id: str) -> dict[str, Any]:
             ),
         ),
         c.field(bw.FIELD_LISTEN, str(d["listen"])),
+        c.field(bw.FIELD_SKIPPED, str(d.get("skipped", 0))),
     ]
     if d.get("dms_off"):
         fields.append(c.field(bw.FIELD_DMS, bw.DMS_OFF))

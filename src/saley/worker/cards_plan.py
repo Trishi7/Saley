@@ -70,11 +70,12 @@ TOUCH_LABELS = {
 @dataclass
 class PlanStats:
     queued: dict[str, int] = field(default_factory=dict)
+    skipped: list[str] = field(default_factory=list)  # producers that failed this run
 
     def note(self) -> str:
-        if not self.queued:
-            return "no new cards"
-        return " · ".join(f"{t} {n}" for t, n in sorted(self.queued.items()))
+        parts = [f"{t} {n}" for t, n in sorted(self.queued.items())]
+        parts += [f"{name} skipped" for name in self.skipped]
+        return " · ".join(parts) or "no new cards"
 
 
 @dataclass(frozen=True)
@@ -507,7 +508,7 @@ def suggestions(
             continue
         picked.append(
             {
-                "proposal_id": s.ref_id,
+                "ref_id": s.ref_id,  # the v_suggest_warm column (the Suggestions page)
                 "name": s.name,
                 "company": s.company or s.name,
                 "reason": item["reason"],
@@ -645,19 +646,19 @@ PRODUCERS: tuple[Callable[[Session, datetime, dict[str, Person], PlanStats], Non
 
 
 def plan_cards(session: Session, now: datetime | None = None) -> PlanStats:
-    """Run every producer. One producer that fails is logged; the others still run."""
+    """Run every producer. One that fails is logged and skipped: the other producers' cards
+    are still queued, and the note says "<producer> skipped" (the health line counts it).
+    Only when every producer fails does the job fail."""
     moment = (now or clock.now_ist()).astimezone(clock.tz())
     people = team(session)
     stats = PlanStats()
-    failed: list[str] = []
     for producer in PRODUCERS:
         try:
             with session.begin_nested():
                 producer(session, moment, people, stats)
         except Exception:
             log.exception("cards_plan_producer_failed", producer=producer.__name__)
-            failed.append(producer.__name__)
-    if failed:
-        session.commit()  # keep the cards of the producers that worked
-        raise RuntimeError(f"cards_plan: {', '.join(failed)} failed")
+            stats.skipped.append(producer.__name__)
+    if len(stats.skipped) == len(PRODUCERS):
+        raise RuntimeError(f"cards_plan: every producer failed ({', '.join(stats.skipped)})")
     return stats

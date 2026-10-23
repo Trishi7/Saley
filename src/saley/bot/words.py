@@ -27,6 +27,7 @@ HEALTH_JOBS = "Jobs in 24 h: {ok} ok, {failed} failed"
 HEALTH_LLM = "LLM calls today: {n} of {cap}"
 HEALTH_EGRESS = "Egress errors today: {n}"
 HEALTH_POSTS = "Bot posts: {dropped} dropped in 24 h, {waiting} waiting over 30 min"
+HEALTH_SKIPPED = "Card runs with a skipped part in 24 h: {n}"
 
 # A DM that dev mode sends to the test channel instead (the person gets nothing).
 REDIRECT_PREFIX = "to {who}: "
@@ -314,6 +315,7 @@ FIELD_CARDS_VALUE = "{sent} sent · {held} held · {failed} failed"
 FIELD_PRESSES = "Presses today"
 FIELD_PRESSES_VALUE = "{ok} ok · {already} already · {refused} refused"
 FIELD_LISTEN = "Card sync"
+FIELD_SKIPPED = "Card runs with a skipped part"
 FIELD_DMS = "DMs"
 LINK_HEALTH = "Sources & health"
 

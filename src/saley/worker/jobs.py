@@ -214,7 +214,8 @@ def cards_plan() -> str:
     """One card per dashboard notification (D259). The caps decide when each goes (bot_plan)."""
     with session_scope() as session:
         stats = cards_planner.plan_cards(session)
-    return stats.note() if stats.queued else QUIET_NOTE
+    # A skipped producer keeps its job_runs row, so the health line can count it.
+    return stats.note() if stats.queued or stats.skipped else QUIET_NOTE
 
 
 def chat_summary() -> str:

@@ -138,9 +138,12 @@ def test_one_producer_that_fails_does_not_stop_the_others(
         raise ValueError("boom")
 
     monkeypatch.setattr(cards_plan, "PRODUCERS", (broken, cards_plan.asks))
-    with pytest.raises(RuntimeError, match="broken"):
-        cards_plan.plan_cards(db, now)
+    stats = cards_plan.plan_cards(db, now)  # hotfix: one failing producer is skipped
+    assert stats.skipped == ["broken"] and "broken skipped" in stats.note()
     assert any(c["card_type"] == "M14" for c in _cards(db).values())
+    monkeypatch.setattr(cards_plan, "PRODUCERS", (broken, broken))
+    with pytest.raises(RuntimeError, match="every producer failed"):
+        cards_plan.plan_cards(db, now)
 
 
 def test_m2_holds_the_stories_that_matter_once(synced: Session) -> None:

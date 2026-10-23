@@ -172,6 +172,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
         "held": 2,
         "failed": 0,
         "presses": {"ok": 4, "already": 1, "refused": 0},
+        "skipped": 0,
         "listen": "23:40",
         "dms_off": True,
     },

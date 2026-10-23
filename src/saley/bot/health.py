@@ -34,6 +34,17 @@ class HealthStats:
         return f"{self.queued} health line queued"
 
 
+skipped_sql = (
+    "select count(*) from job_runs where job = 'cards_plan' "
+    "and started_at >= now() - interval '24 hours' and note like '%skipped%'"
+)
+
+
+def skipped_producers(session: Session) -> int:
+    """cards_plan runs of the last 24 h in which a producer failed and was skipped."""
+    return int(session.execute(text(skipped_sql)).scalar_one())
+
+
 def health_text(session: Session, now: datetime) -> str:
     """The lines of the health post."""
     settings = get_settings()
@@ -65,6 +76,7 @@ def health_text(session: Session, now: datetime) -> str:
         w.fill(bw.HEALTH_LLM, n=calls, cap=settings.llm_daily_call_cap),
         w.fill(bw.HEALTH_EGRESS, n=errors),
         w.fill(bw.HEALTH_POSTS, dropped=dropped, waiting=count_waiting(session, now)),
+        w.fill(bw.HEALTH_SKIPPED, n=skipped_producers(session)),
     ]
     if not settings.dm_enabled:
         lines.append(bw.DMS_OFF)
@@ -108,6 +120,7 @@ def health_data(session: Session, now: datetime) -> dict[str, object]:
         "sent": bot.sent_today,
         "held": bot.held,
         "failed": bot.failed_today,
+        "skipped": skipped_producers(session),
         "presses": {
             "ok": bot.presses_ok,
             "already": bot.presses_already,
