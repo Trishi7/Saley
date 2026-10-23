@@ -29,6 +29,7 @@ from qa_browser.core import (
     NARROW,
     QA_USER,
     SETTLE_MS,
+    TIMEOUT_MS,
     WIDE,
     Run,
     api_items,
@@ -63,6 +64,10 @@ def views(page: Page, base: str, run: Run, shots: Path, width: int) -> None:
     for name in [*names, "money"]:
         page.goto(f"{base}/#{name}")
         settle(page)
+        # A lazy page can render after `settle` on a slow machine (R6 gate, 390: "decisions:
+        # view not shown" with 2 GB free). Wait for it; the count below still decides.
+        with contextlib.suppress(PlaywrightTimeout):
+            page.wait_for_selector(f"#v-{name}.on", timeout=TIMEOUT_MS)
         shown = page.locator(f"#v-{name}.on").count()
         run.expect(shown == 1, f"{width} {name}: view not shown")
         no_error_box(page, run, f"{width} {name}")
@@ -144,6 +149,12 @@ def searches(page: Page, base: str, run: Run, shots: Path, terms: list[str]) -> 
         page.fill("#gsearch", term)
         page.press("#gsearch", "Enter")
         settle(page)
+        # Results or the empty-state line: either may come after `settle` on a slow machine
+        # (R6 gate: "search 'london': an empty box"). The counts below still decide.
+        with contextlib.suppress(PlaywrightTimeout):
+            page.wait_for_selector(
+                "#search-results .hit, #search-results .empty-state", timeout=TIMEOUT_MS
+            )
         hits = page.locator("#search-results .hit").count()
         zero = page.locator("#search-results .empty-state").count()
         run.expect(hits > 0 or zero == 1, f"search {term!r}: an empty box")

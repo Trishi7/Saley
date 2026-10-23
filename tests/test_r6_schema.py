@@ -141,16 +141,21 @@ def superuser_url(tmp_path: Path) -> Iterator[str]:
 
     def run(*args: str) -> None:
         # No pipes: `pg_ctl start` hands its output handles to the server it starts, so a
-        # captured run waits for ever on Windows (it hung the first local run). The server's
-        # log goes to pg.log; a failure still raises through check=True.
-        subprocess.run(  # noqa: S603 - our own Postgres binaries
-            [str(pg / args[0]), *args[1:]],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-            timeout=120,
-        )
+        # captured run waits for ever on Windows (it hung the first local run). Output goes to
+        # a file instead; a failure raises with the end of that file.
+        log = tmp_path / "tools.log"
+        with log.open("a", encoding="utf-8") as out:
+            done = subprocess.run(  # noqa: S603 - our own Postgres binaries
+                [str(pg / args[0]), *args[1:]],
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=out,
+                check=False,
+                timeout=120,
+            )
+        if done.returncode != 0:
+            tail = log.read_text(encoding="utf-8", errors="replace")[-800:]
+            raise RuntimeError(f"{args[0]} exited {done.returncode}: {tail}")
 
     run("initdb", "-D", str(data), "-U", "postgres", "--auth=trust", "-E", "UTF8")
     run("pg_ctl", "-D", str(data), "-o", f"-p {port} -c listen_addresses=127.0.0.1",

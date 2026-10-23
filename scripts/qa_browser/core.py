@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Locator, Page, Request, Response, Route
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
@@ -66,7 +67,15 @@ class Run:
         A group that ran no check proves nothing (a skipped body looks like a pass), so it fails.
         """
         before, ran = len(self.findings), self.checks
-        fn()
+        try:
+            fn()
+        except PlaywrightError as exc:
+            # R6 gate: a page script that threw ended the whole run with no JSON and only a
+            # stack tail, so nobody knew which check. Now it is a finding of THIS check (the
+            # verdict is BLOCK) and the other checks still run.
+            first = (str(exc).strip().splitlines() or ["?"])[0][:200]
+            self.checks += 1
+            self.findings.append(f"{name}: raised {type(exc).__name__}: {first}")
         if self.checks == ran:
             self.findings.append(f"{name}: no check ran")
         self.named[name] = len(self.findings) == before

@@ -201,6 +201,6 @@ jobs:
             [ -f "$RUNNER_TEMP/$f.log" ] && note "$f.log" < "$RUNNER_TEMP/$f.log"
           done
           for svc in migrate web worker bot news caddy; do
-            dc logs --no-color --tail 40 "$svc" 2>&1 | note "logs $svc" || true
+            dc logs --no-color --tail 60 "$svc" 2>&1 | grep -viE 'session|cookie|token|password' | note "logs $svc" || true
           done
           dc logs --no-color --tail 300 || true

@@ -55,7 +55,7 @@ ensure_network() {
 	fi
 	got="$(docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{.IPRange}}{{end}}' saley_net)"
 	[ "$got" = "$NET_SUBNET $NET_RANGE" ] ||
-		die "network saley_net is '$got', want '$NET_SUBNET $NET_RANGE' (runbook: the dashboard is down, step 3)"
+		die "network saley_net is '$got', want '$NET_SUBNET $NET_RANGE'. Once (short downtime): cd $APP_DIR && docker compose --env-file $ENV_FILE --profile prod down && docker network rm saley_net, then deploy again"
 }
 
 # The env file holds every secret: root only (review M4). Tests on Windows skip it.

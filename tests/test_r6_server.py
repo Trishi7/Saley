@@ -686,7 +686,9 @@ def test_user_map_error_names_the_entry_never_the_id() -> None:
     for line, want in (
         ("sid:729178203930755132,trishi:76363810017", "entry 2 (trishi:<11 characters>)"),
         ("sid:729178203930755132,Kushal:948671815276957808", "entry 2 (Kushal:<18 characters>)"),
-        ("sid:729178203930755132,kushal", "entry 2 ('kushal')"),
+        ("sid:729178203930755132,kushal", "entry 2 (kushal)"),
+        ("948671815276957808:kushal", "entry 1 (<18 characters>:<6 characters>)"),
+        ("sid:729178203930755132,948671815276957808", "entry 2 (<18 characters>)"),
     ):
         with pytest.raises(ValueError) as err:
             parse_user_map(line)
@@ -723,3 +725,69 @@ def test_llm_error_carries_the_api_reason_not_only_the_class() -> None:
     assert reason.startswith(" (invalid_request_error: xxx") and len(reason) <= 204
     assert _reason(SimpleNamespace(body=None)) == ""  # type: ignore[arg-type]
     assert _reason(SimpleNamespace(body={"error": "oops"})) == ""  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------------- cli_server coverage (gate step 2)
+
+
+def test_sync_from_a_saved_sheet_runs_the_real_sheet_sync(
+    db: Session, tmp_path: Path, sheet_today: Any
+) -> None:
+    """D249: `saley sync --raw-file` runs sheet_sync under its lock with a job_runs row."""
+    import json
+
+    from tests.conftest import default_sheet
+
+    raw = tmp_path / "sheet.json"
+    raw.write_text(json.dumps(default_sheet(sheet_today)), encoding="utf-8")
+    result = runner.invoke(app, ["sync", "--raw-file", str(raw)])
+    assert result.exit_code == 0, result.output
+    assert "sheet_sync: ok · saved sheet" in result.output
+    assert runner.invoke(app, ["last-run", "sheet_sync"]).exit_code == 0
+    contacts = db.execute(text("select count(*) from contact")).scalar_one()
+    assert contacts > 0
+
+
+def test_a_missing_saved_sheet_is_refused(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["sync", "--raw-file", str(tmp_path / "nope.json")])
+    assert result.exit_code == 1 and "cannot read nope.json" in result.output
+
+
+def test_use_database_swaps_only_the_database_name(set_env: Callable[..., None]) -> None:
+    from saley import cli_server
+    from saley.core.settings import get_settings
+
+    set_env(
+        DATABASE_URL="postgresql+psycopg://saley:pw@db:5432/saley",
+        DATABASE_URL_RO="postgresql+psycopg://saley_ro:pr@db:5432/saley",
+    )
+    cli_server.use_database("saley_restore_check")
+    settings = get_settings()
+    assert settings.database_url == "postgresql+psycopg://saley:pw@db:5432/saley_restore_check"
+    assert settings.database_url_ro.endswith("@db:5432/saley_restore_check")
+    assert "saley_ro:pr@" in settings.database_url_ro
+
+
+def test_db_roles_prints_each_step_and_roles_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    from saley.core import roles
+
+    monkeypatch.setattr(roles, "apply", lambda settings: ["role saley created", "grants applied"])
+    result = runner.invoke(app, ["db-roles"])
+    assert result.exit_code == 0
+    assert result.output.splitlines() == ["role saley created", "grants applied", "roles ok"]
+
+
+def test_db_owners_command_names_breaks_and_says_ok(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On the test database (owned by `saley`, like a laptop before R6) it names the breaks;
+    with no break it says ok with the counts."""
+    from saley.qa import db_owners
+
+    result = runner.invoke(app, ["db-owners"])
+    assert result.exit_code == 1 and "FAIL " in result.output
+    assert "want saley_admin" in result.output
+    monkeypatch.setattr(db_owners, "problems", lambda conn: [])
+    result = runner.invoke(app, ["db-owners"])
+    assert result.exit_code == 0
+    assert result.output.startswith("db owners ok: ") and "(docs/01 section 11)" in result.output

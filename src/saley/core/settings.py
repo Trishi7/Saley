@@ -109,7 +109,11 @@ def parse_user_map(value: str) -> dict[str, str]:
         short, sep, ident = entry.partition(":")
         short, ident = short.strip(), ident.strip()
         if not sep or not _SHORT.fullmatch(short) or not _DISCORD_ID.fullmatch(ident):
-            shown = f"{short or '?'}:<{len(ident)} characters>" if sep else f"{short[:20]!r}"
+            # A name is shown as text only when it cannot be an id (a valid short name, or
+            # letters only, as "Kushal"); anything with digits shows only its length.
+            plain = _SHORT.fullmatch(short) or (short.isalpha() and len(short) <= 30)
+            name = short if plain else f"<{len(short)} characters>"
+            shown = f"{name}:<{len(ident)} characters>" if sep else name
             raise ValueError(
                 f"DISCORD_USER_MAP entry {place} ({shown}) must look like short:<discord id>, "
                 "a short name in lower case and an id of 17 to 20 digits, "

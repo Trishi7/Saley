@@ -927,3 +927,24 @@ def test_open_request_waives_the_press_only_with_the_button_off(team_rules: Modu
     assert team_rules.missing_kinds(pressed) == ["run-news"]
     waived = {"run-news": team_rules.OPEN_REQUEST_NOTE}
     assert team_rules.missing_kinds(pressed, waived) == []
+
+
+def test_a_check_that_raises_is_a_named_finding_not_a_crash() -> None:
+    """R6 gate: a thrown page script crashed browser QA with no verdict; now it is a finding."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from playwright.sync_api import Error as PlaywrightError
+    from qa_browser.core import Run
+
+    run = Run()
+
+    def boom() -> None:
+        raise PlaywrightError(
+            "TypeError: Cannot read properties of null (reading 'dataset')\n at eval"
+        )
+
+    run.group("pagers", boom)
+    run.group("themes", lambda: run.expect(True, "never"))
+    assert run.findings == [
+        "pagers: raised Error: TypeError: Cannot read properties of null (reading 'dataset')"
+    ]
+    assert run.named == {"pagers": False, "themes": True}
