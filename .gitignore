@@ -65,3 +65,6 @@ src/saley/web/dist/
 
 # Impeccable engine binary (D183): fetched per machine, checked by sha256, never committed.
 .claude/skills/impeccable/scripts/bin/
+
+# graphify (R7): the code graph is a laptop by-product, rebuilt by `graphify update .`.
+graphify-out/

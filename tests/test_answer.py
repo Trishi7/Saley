@@ -217,7 +217,7 @@ def test_compose_drops_lines_that_do_not_fit() -> None:
 
 
 def test_fetchers_share_one_signature() -> None:
-    assert set(bot_answer.FETCHERS) == {"who", "working", "p1", "news", "due"}
+    assert set(bot_answer.FETCHERS) == {"who", "working", "p1", "news", "due", "chat"}  # R7 D262
     for name, fetcher in bot_answer.FETCHERS.items():
         params = list(inspect.signature(fetcher).parameters)
         assert params == ["conn", "parsed", "now", "user"], name

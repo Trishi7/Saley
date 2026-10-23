@@ -13,6 +13,7 @@ import { ViewPage } from "@/components/saley/ViewPage";
 import { useApi } from "@/hooks/use-api";
 import { useKeptPage, useOffset } from "@/hooks/use-kept";
 import { useRoute } from "@/hooks/use-route";
+import { openId } from "@/lib/card-focus";
 import { go } from "@/lib/route";
 import { fmt, W } from "@/words";
 import { DEFAULT_FILTER, peopleFilters, peoplePath } from "./people-rules";
@@ -21,7 +22,8 @@ import type { PeopleData } from "./types";
 
 export function PeoplePage({ view }: { view: ViewDef }) {
   const toast = useToast();
-  const filter = useRoute().params.filter || DEFAULT_FILTER;
+  const params = useRoute().params;
+  const filter = params.filter || DEFAULT_FILTER;
   const [q, setQ] = useState("");
   const [offset, setOffset] = useOffset(`${filter}|${q}`);
   const { data, error, loading, reload } = useApi<PeopleData>(peoplePath(filter, q, offset));
@@ -30,6 +32,13 @@ export function PeoplePage({ view }: { view: ViewDef }) {
 
   const [person, setPerson] = useState<DrawerPerson | null>(null);
   const [opener, setOpener] = useState<HTMLElement | null>(null); // gets the focus on close
+  // D261: `#people?open=412` (a Discord card's link) opens that person's drawer.
+  const linked = openId(params.open);
+  const [opened, setOpened] = useState<number | null>(null);
+  if (linked !== null && linked !== opened) {
+    setOpened(linked); // React: state that follows the route is set during render, once
+    setPerson({ contactId: linked, name: null, company: null });
+  }
   const pick = (next: string) => go("people", next === DEFAULT_FILTER ? undefined : { filter: next });
   const onSaved = useCallback(
     (saved: SavedEmail) => {

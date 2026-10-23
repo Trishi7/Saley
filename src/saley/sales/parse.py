@@ -10,6 +10,9 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
+# Moved to core.text in R7 (the bot may not import sales); the sync code still imports them here.
+from saley.core.text import clean_text, norm_name  # noqa: F401
+
 SHEETS_EPOCH = date(1899, 12, 30)
 # Columns are 32-bit integers. A phone number in a money cell must not crash the sync.
 MAX_INT = 2_000_000_000
@@ -40,21 +43,6 @@ _TEXT_DATE_FORMATS = (
     "%d-%b-%Y",
     "%d %b, %Y",
 )
-
-
-def clean_text(value: object) -> str | None:
-    """Trimmed text, or None for empty cells. Numbers keep a plain form (12.0 → '12')."""
-    if value is None or isinstance(value, bool):
-        return None if value is None else ("TRUE" if value else "FALSE")
-    if isinstance(value, float) and value.is_integer():
-        value = int(value)
-    text = re.sub(r"\s+", " ", str(value)).strip()
-    return text or None
-
-
-def norm_name(value: object) -> str:
-    """Name key for matching: trimmed, single spaces, case folded. Never fuzzy (C09)."""
-    return (clean_text(value) or "").casefold()
 
 
 def is_error_cell(value: object) -> bool:

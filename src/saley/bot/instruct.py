@@ -35,7 +35,7 @@ from saley.bot import words as bw
 from saley.core import clock
 from saley.core.logging import get_logger
 from saley.core.settings import Settings
-from saley.sales.parse import norm_name
+from saley.core.text import norm_name
 
 log = get_logger("saley.bot.instruct")
 

@@ -200,7 +200,10 @@ def test_migrations_as_saley_admin_give_the_owner_model(superuser_url: str) -> N
             conn.execute(grants)
             head = conn.execute("select version_num from alembic_version").fetchone()
             found = problems(conn)
-        assert head == ("0026",)
+        from alembic.script import ScriptDirectory
+
+        cfg = alembic_config(admin_url.render_as_string(hide_password=False))
+        assert head == (ScriptDirectory.from_config(cfg).get_current_head(),)  # every migration
         assert found == []
     finally:
         dispose_engines()

@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from saley.bot import cards, queue
 from saley.bot import words as bw
 from saley.bot.caps import WEEKEND_FROM
 from saley.bot.queue import count_waiting
@@ -70,6 +71,53 @@ def health_text(session: Session, now: datetime) -> str:
     return "\n".join(lines)
 
 
+# docs/17 §10: the same row as Sources & health · Discord and `saley bot status`.
+discord_sql = (
+    "select sent_today, held, failed_today, presses_ok, presses_already, presses_refused, "
+    "last_sync from v_bot_health"
+)
+
+
+def health_data(session: Session, now: datetime) -> dict[str, object]:
+    """The numbers of the M15 card (docs/09 M15): the health line plus the Discord block."""
+    settings = get_settings()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    jobs = {
+        status: n
+        for status, n in session.execute(
+            text(
+                "select status, count(*) from job_runs "
+                "where started_at >= now() - interval '24 hours' "
+                "and status in ('ok', 'failed') group by status"
+            )
+        )
+    }
+    bot = session.execute(text(discord_sql)).one()
+    return {
+        "day": clock.day_label(now),
+        "jobs_ok": jobs.get("ok", 0),
+        "jobs_failed": jobs.get("failed", 0),
+        "llm": session.execute(
+            text("select count(*) from llm_calls where at >= :t and not cached"), {"t": midnight}
+        ).scalar_one(),
+        "cap": settings.llm_daily_call_cap,
+        "egress": session.execute(
+            text("select coalesce(sum(errors), 0) from egress_log where day = :d"),
+            {"d": now.date()},
+        ).scalar_one(),
+        "sent": bot.sent_today,
+        "held": bot.held,
+        "failed": bot.failed_today,
+        "presses": {
+            "ok": bot.presses_ok,
+            "already": bot.presses_already,
+            "refused": bot.presses_refused,
+        },
+        "listen": clock.hhmm(bot.last_sync) if bot.last_sync else "—",
+        "dms_off": not settings.dm_enabled,
+    }
+
+
 def queue_health_line(session: Session) -> HealthStats:
     """Queue today's health post for the test channel. One a day, weekdays only."""
     now = clock.now_ist()
@@ -83,14 +131,15 @@ def queue_health_line(session: Session) -> HealthStats:
     ).first()
     if done:
         return stats
-    inserted = session.execute(
-        text(
-            "insert into bot_post (kind, shape, channel, mentions, body, rank, due_at, state, "
-            "item_type, item_id, is_meeting, is_reconnect) values "
-            "(:k, :k, 'test', '{}', :b, 0, :t, 'queued', :k, :d, false, false) "
-            "on conflict do nothing"
-        ),
-        {"k": SHAPE, "b": health_text(session, now), "t": now, "d": day_key},
+    payload = cards.render("M15", health_data(session, now), f"m15-{day_key}")
+    inserted = queue.insert_card(
+        session,
+        payload,
+        due_at=now,
+        channel="test",
+        item=(SHAPE, day_key),
+        shape=SHAPE,
+        body=health_text(session, now),
     )
-    stats.queued = 1 if inserted.rowcount else 0
+    stats.queued = 1 if inserted else 0
     return stats

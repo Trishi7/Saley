@@ -22,8 +22,15 @@ v1 keeps running until the human decides the cut-over. The two bots are differen
 - v2 reads the live sheet only when a decision says so. Until then, it reads the copy.
 - When v2 takes over a v1 rule in prod, the v1 rule is switched off in the v1 config. Each rule has one owner.
 
-**Cut-over (not planned yet; needs a decision):**
-- stop the v1 PM2 process
-- point v2 at API Sales and at the live sheet
-- set `TEST_MODE=false`
-- one release with its own gate
+**Cut-over of the bot to API Sales (R7 rollout, docs/17 §11; each step needs the human's go):**
+1. R7 has GATE: PASS on the laptop with `TEST_MODE=true`. The human commits, pushes and deploys (docs/14 section 2). On the server `TEST_MODE=true` stays.
+2. One week in the v2 test channel. The team presses real buttons there. Check every day: `dc exec bot saley bot status`.
+3. When the human says go (a decision in DECISIONS.md):
+   - on the droplet, stop the v1 bot: `pm2 stop sales-bot`, then `pm2 save`;
+   - in `/srv/saley/.env` set `DISCORD_SALES_CHANNEL_ID=<the API Sales channel id>` and `TEST_MODE=false`;
+   - deploy again; the bot refuses to start when the test channel equals the sales channel;
+   - check one card in API Sales, and the health card in the test channel at 23:45.
+4. DMs stay off until Trishi says on (`DM_ENABLED`, `DM_USERS`).
+5. Back out: set `TEST_MODE=true` and `DISCORD_SALES_CHANNEL_ID=` again, deploy, then `pm2 start sales-bot`.
+
+The live sheet is a separate decision: v2 reads and writes the copy until then.

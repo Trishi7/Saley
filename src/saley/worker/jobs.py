@@ -1,7 +1,7 @@
 """The jobs: sheet_sync, metrics_snapshot, parity_check, heartbeat, sheet_push, and the R2
 intelligence jobs facts_refresh, proposals_refresh, commitments_scan, mail_poll,
-notes_sync, reminders_tick (docs/01 §05), and the R4 jobs weekly_pack (D134), bot_plan,
-daily_brief and health_line (D128, D132, D133)."""
+notes_sync, reminders_tick (docs/01 §05), the R4 jobs weekly_pack (D134), bot_plan,
+daily_brief and health_line (D128, D132, D133), and the R7 job cards_plan (D259)."""
 
 from __future__ import annotations
 
@@ -30,6 +30,8 @@ from saley.sales.outbox import count_due, hold_pending, push_pending
 from saley.sales.sheet import read_sheet
 from saley.sales.sync import run_sync
 from saley.sales.writer import build_write_sheet
+from saley.worker import cards_plan as cards_planner
+from saley.worker import chat_jobs
 from saley.worker.registry import QUIET_NOTE, register
 
 log = get_logger("saley.worker.jobs")
@@ -40,9 +42,12 @@ MISSED_RUN_GRACE_SECONDS = 3600
 # The pack is safe to run late (one per week), so a worker that was down at 14:00 still builds it.
 PACK_MISFIRE_GRACE_SECONDS = 6 * 3600
 BOT_PLAN_MINUTES = 5
+CARDS_PLAN_MINUTES = 5  # docs/17 §5
+ANSWER_INTENT_SECONDS = 2  # the bot waits BOT_INTENT_TIMEOUT_S (10) for the intent step
 # The brief and the health line are one per day, so a late start is still worth running.
 BRIEF_MISFIRE_GRACE_SECONDS = 6 * 3600
 HEALTH_HOUR, HEALTH_MINUTE = 23, 45  # D133
+CHAT_HOUR, CHAT_MINUTE = 23, 30  # D262: before the health card, so it counts tonight's run
 WEEKDAYS = "mon-fri"
 PACK_CATCHUP_MINUTES = 60
 SNAPSHOT_DAY_CUTOFF_HOUR = 6  # a 23:50 run that starts before 06:00 belongs to the day before
@@ -205,6 +210,26 @@ def bot_plan() -> str:
     return stats.note() if stats.changed else QUIET_NOTE
 
 
+def cards_plan() -> str:
+    """One card per dashboard notification (D259). The caps decide when each goes (bot_plan)."""
+    with session_scope() as session:
+        stats = cards_planner.plan_cards(session)
+    return stats.note() if stats.queued else QUIET_NOTE
+
+
+def chat_summary() -> str:
+    """D262: retention, then one summary per channel-day (LLM_MID, DATA blocks, checked facts)."""
+    with session_scope() as session:
+        return chat_jobs.run_chat_summary(session).note()
+
+
+def answer_intent() -> str:
+    """The intent step for @Saley answers (docs/17 §5): the bot waits at most 10 s for it."""
+    with session_scope() as session:
+        done = chat_jobs.run_answer_intents(session)
+    return f"{done} intents" if done else QUIET_NOTE
+
+
 def daily_brief() -> str:
     """Queue one DM brief per person in DM_USERS. With DM_ENABLED=false it sends nothing (D128)."""
     with session_scope() as session:
@@ -293,6 +318,18 @@ def register_all() -> None:
     register("bot_plan", "interval", lock="bot_post", quiet=True, minutes=BOT_PLAN_MINUTES)(
         bot_plan
     )
+    # D259: cards_plan shares the bot_post lock with bot_plan; card ids make it idempotent.
+    register("cards_plan", "interval", lock="bot_post", quiet=True, minutes=CARDS_PLAN_MINUTES)(
+        cards_plan
+    )
+    register(
+        "chat_summary",
+        "cron",
+        hour=CHAT_HOUR,
+        minute=CHAT_MINUTE,
+        misfire_grace_time=BRIEF_MISFIRE_GRACE_SECONDS,
+    )(chat_summary)
+    register("answer_intent", "interval", quiet=True, seconds=ANSWER_INTENT_SECONDS)(answer_intent)
     # D128: the brief goes out at DAILY_BRIEF_TIME on weekdays. It is idempotent per day.
     register(
         "daily_brief",

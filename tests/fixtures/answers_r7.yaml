@@ -1,0 +1,193 @@
+# R7-A01: 30 answer cases (docs/09 §8, docs/17 §5 and §9 "answers").
+# `intent` is what the LLM answered in the worker (it passes the worker's word filter, then
+# bot/intent.to_parsed). `intent: null` means the step gave nothing in time: the grammar answers.
+# kind: respond (answer.respond), split (the thread rule), guard (an invented value), worker
+# (the worker job and the bot's wait). The test data is the conftest sheet plus three chat lines
+# (tests/test_answer_r7.py). Expected text is a part of the answer, never the whole answer.
+cases:
+  # --- the intent step names each lookup
+  - id: intent-who
+    kind: respond
+    question: who do we know at Google that does research
+    intent: {kind: who, company: Google, topic: research}
+    used: who
+    contains: ["Dinesh Tewari at Google DeepMind", "[sheet: Dinesh Tewari]", "Window: sheet as of"]
+  - id: intent-working
+    kind: respond
+    question: tell me what Dinesh Tewari is up to these days
+    intent: {kind: working, person: Dinesh Tewari}
+    used: working
+    contains: ["Dinesh Tewari at Google DeepMind", "[sheet: Dinesh Tewari]"]
+  - id: intent-p1
+    kind: respond
+    question: any P1 people we still have no email for?
+    intent: {kind: p1}
+    used: p1
+    contains: ["Alex Search at Google, stage", "[sheet: Alex Search]"]
+  - id: intent-due
+    kind: respond
+    question: anything due for me this week
+    intent: {kind: due}
+    used: due
+    contains: ["Window:"]
+  - id: intent-news
+    kind: respond
+    question: news since yesterday please
+    intent: {kind: news, window: yesterday}
+    used: news
+    contains: ["Window:"]
+  - id: intent-chat
+    kind: respond
+    question: what has the team said lately about the NDA
+    intent: {kind: chat, topic: NDA}
+    used: chat
+    contains: ["ARTPARK wants the NDA signed first [Vaishnavi, Tue 12:40]", "NDA draft is with legal [Kushal, Tue 12:55]"]
+  - id: intent-chat-person
+    kind: respond
+    question: what did Vaishnavi say about the NDA
+    intent: {kind: chat, topic: NDA, person: Vaishnavi}
+    used: chat
+    contains: ["[Vaishnavi, Tue 12:40]"]
+    not_contains: ["[Kushal"]
+  # --- the step gave nothing in time (or no LLM): the fixed grammar answers the same
+  - id: grammar-who
+    kind: respond
+    question: who at Google works on research
+    intent: null
+    used: who
+    contains: ["Dinesh Tewari at Google DeepMind"]
+  - id: grammar-working
+    kind: respond
+    question: what is Dinesh Tewari working on
+    intent: null
+    used: working
+    contains: ["[sheet: Dinesh Tewari]"]
+  - id: grammar-p1
+    kind: respond
+    question: which P1 have no email
+    intent: null
+    used: p1
+    contains: ["[sheet: Alex Search]"]
+  - id: grammar-due
+    kind: respond
+    question: what's due this week
+    intent: null
+    used: due
+    contains: ["Window:"]
+  - id: grammar-news
+    kind: respond
+    question: news since yesterday
+    intent: null
+    used: news
+    contains: ["Window:"]
+  - id: grammar-chat
+    kind: respond
+    question: what did we say about the NDA
+    intent: null
+    used: chat
+    contains: ["[Vaishnavi, Tue 12:40]", "[Kushal, Tue 12:55]"]
+  # --- the LLM added a value that is not in the question: the worker drops it
+  - id: invented-company
+    kind: respond
+    question: who works on research there
+    intent: {kind: who, company: Google, topic: research}
+    used: unknown
+    contains: ["I do not have that."]
+  - id: invented-person
+    kind: respond
+    question: tell me what she is up to
+    intent: {kind: working, person: Dinesh Tewari}
+    used: unknown
+    contains: ["I do not have that."]
+  - id: invented-day
+    kind: respond
+    question: any news lately
+    intent: {kind: news, window: yesterday}
+    used: unknown
+    contains: ["I do not have that."]
+  # --- the LLM said unknown, or a lookup without its words: the grammar decides
+  - id: unknown-kind-grammar-ok
+    kind: respond
+    question: which P1 have no email
+    intent: {kind: unknown}
+    used: p1
+    contains: ["[sheet: Alex Search]"]
+  - id: who-without-topic
+    kind: respond
+    question: who at Google works on research
+    intent: {kind: who, company: Google}
+    used: who
+    contains: ["Dinesh Tewari at Google DeepMind"]
+  - id: chat-without-topic
+    kind: respond
+    question: what did the team say
+    intent: {kind: chat}
+    used: unknown
+    contains: ["I do not have that."]
+  # --- chat citations and personal data
+  - id: chat-mask-email-phone
+    kind: respond
+    question: what did we say about the pilot
+    intent: null
+    used: chat
+    contains: ["(not shown in the channel)", "[Sid, Tue 13:05]"]
+    not_contains: ["sid.personal@", "98765"]
+  - id: chat-no-match
+    kind: respond
+    question: what did we say about the unicorn budget
+    intent: null
+    used: chat
+    contains: ["Nothing found."]
+  - id: chat-no-row-ids
+    kind: respond
+    question: what did we say about the NDA
+    intent: null
+    used: chat
+    not_contains: ["message", "Outreach PoCs:"]
+  - id: chat-window-line-last
+    kind: respond
+    question: what did we say about legal
+    intent: null
+    used: chat
+    last_line_starts: "Window:"
+  # --- unknown questions, never a guess
+  - id: unknown-question
+    kind: respond
+    question: what is the weather in Bangalore
+    intent: null
+    used: unknown
+    contains: ["I do not have that.", "I can search the web, or ask the team. Which?"]
+  - id: unknown-llm-unknown
+    kind: respond
+    question: tell me a joke
+    intent: {kind: unknown}
+    used: unknown
+    contains: ["I do not have that."]
+  - id: more-after-chat
+    kind: respond
+    question: more
+    intent: null
+    used: chat
+    before: what did we say about the NDA
+    contains: ["Nothing new for you."]
+  # --- the thread rule (> ANSWER_THREAD_LINES = 12 lines)
+  - id: thread-13-lines
+    kind: split
+    lines: 13
+    head_lines: 4
+    rest_lines: 10
+  - id: thread-12-lines
+    kind: split
+    lines: 12
+    head_lines: 12
+    rest_lines: 0
+  # --- the validator refuses a line with an invented value
+  - id: guard-invented-number
+    kind: guard
+    question: what did we say about the NDA
+    contains: ["I could not check that answer."]
+  # --- the worker's step end to end, and the bot's wait
+  - id: worker-step
+    kind: worker
+    question: who do we know at Google that does research
+    intent: {kind: who, company: Google, topic: research}

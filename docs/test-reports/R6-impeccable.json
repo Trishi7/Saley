@@ -1,0 +1,575 @@
+{
+ "release": "R6",
+ "method": "R6 (deploy release): the only UI change is the seventh Signals topic, Opportunity (D239): one filter chip, one legend line, one colour token. Every other page has the same code as R5, so it carries its R5 scores. Signals is scored again from the R6 gate screenshots (docs/test-reports/R6-screens: 1440, 1024, 390) and docs/test-reports/R6-screens/audit (both themes, 1440 and 390, 23 Oct). Impeccable text guidance only (D196, D200); no engine. R5 method: Impeccable text guidance only (D196, D200): reference/audit.md, critique.md, polish.md, craft.md, layout.md, typeset.md, colorize.md, harden.md read by hand; scores per reference/audit.md (5 dimensions x 0-4). The bundled detector step is skipped (no engine). R5 T17: scored from the gate screenshots of every page, both themes, 1440 and 390 px (docs/test-reports/R5-screens/audit/), plus the code; replaces the code-only scores.",
+ "pages": {
+  "today": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 3,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed P1: at 390 the Find people badge squeezed each Saley suggests line to one word a row; the badge now sits under the line.",
+     "Fixed: the four tiles are two per row on the phone (were one tall column).",
+     "P2 open: the legend has 21 tags; on the phone it fills the first screen before the numbers. The brief asks a legend at the top; a folded legend needs a decision (D230).",
+     "P3 open: the funnel's last stages are thin slivers; the counts under each stage carry it.",
+     "P3 open: --touch-meet is 2.8:1 on the light card; a dot next to a written kind.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 3,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed P1: at 390 the Find people badge squeezed each Saley suggests line to one word a row; the badge now sits under the line.",
+     "Fixed: the four tiles are two per row on the phone (were one tall column).",
+     "P2 open: the legend has 21 tags; on the phone it fills the first screen before the numbers. The brief asks a legend at the top; a folded legend needs a decision (D230).",
+     "P3 open: the funnel's last stages are thin slivers; the counts under each stage carry it.",
+     "P3 open: --touch-meet is 2.8:1 on the light card; a dot next to a written kind.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "goals": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed P1: at 390 the people table clipped the stage badge ('Qualifie') and the note; on the phone the note now sits under the name and the badge keeps its width.",
+     "P3 open: blocker titles truncate hard at 390 (tooltip and focus show the full text).",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed P1: at 390 the people table clipped the stage badge ('Qualifie') and the note; on the phone the note now sits under the name and the badge keeps its width.",
+     "P3 open: blocker titles truncate hard at 390 (tooltip and focus show the full text).",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "accounts": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 3
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: the filter buttons were in the mono face and read as code.",
+     "P2 open: at 390 the table scrolls sideways; the Tags column is cut at the card edge with no scroll hint.",
+     "P2 open: the legend lists 'Qualified' twice (account tag and stage) with two meanings.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 3
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: the filter buttons were in the mono face and read as code.",
+     "P2 open: at 390 the table scrolls sideways; the Tags column is cut at the card edge with no scroll hint.",
+     "P2 open: the legend lists 'Qualified' twice (account tag and stage) with two meanings.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "people": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: filter buttons and the count line were in the mono face.",
+     "P2 open: at 390 the table scrolls sideways and the Stage column starts off screen.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: filter buttons and the count line were in the mono face.",
+     "P2 open: at 390 the table scrolls sideways and the Stage column starts off screen.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "suggestions": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 3
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: kind filters and the window line were in the mono face.",
+     "P2 open: no number tiles; the count shows only in the New tab badge (numbers first).",
+     "P2 open: the evidence line shows a raw sheet key ('Sheet row Outreach PoCs:634:...'); PRODUCT.md says no table names on the page. API text (words.py), not changed here.",
+     "P3 open: the API cuts the one-line suggestion at about 60 characters even at 1440.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 3
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: kind filters and the window line were in the mono face.",
+     "P2 open: no number tiles; the count shows only in the New tab badge (numbers first).",
+     "P2 open: the evidence line shows a raw sheet key ('Sheet row Outreach PoCs:634:...'); PRODUCT.md says no table names on the page. API text (words.py), not changed here.",
+     "P3 open: the API cuts the one-line suggestion at about 60 characters even at 1440.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "signals": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Calm 'Nothing new since your last visit'; filters wrap cleanly at 390.",
+     "Fixed: category and time filters were in the mono face.",
+     "Light: warm paper and ink; tags and stage marks read on the card.",
+     "R6 (23 Oct, Signals re-scored): the Opportunity chip, legend line and cyan dot read in both themes and wrap cleanly at 390. Minor, not critical: the cyan Opportunity dot is near the teal Ours dot; each dot has its name beside it, so meaning never depends on colour. Scores unchanged."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Calm 'Nothing new since your last visit'; filters wrap cleanly at 390.",
+     "Fixed: category and time filters were in the mono face.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen.",
+     "R6 (23 Oct, Signals re-scored): the Opportunity chip, legend line and cyan dot read in both themes and wrap cleanly at 390. Minor, not critical: the cyan Opportunity dot is near the teal Ours dot; each dot has its name beside it, so meaning never depends on colour. Scores unchanged."
+    ]
+   }
+  },
+  "events": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 3
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "P2 open: no number tiles (the count is in the New tab badge only).",
+     "P2 open: at 390 the table scrolls sideways; the counts are off screen.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 3
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "P2 open: no number tiles (the count is in the New tab badge only).",
+     "P2 open: at 390 the table scrolls sideways; the counts are off screen.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "blockers": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed P1: at 390 'Late by' was off screen; it is now the second column. In Packages, Complete is now the second column.",
+     "Fixed: the three tiles are 2 + 1 on the phone (were three tall rows).",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed P1: at 390 'Late by' was off screen; it is now the second column. In Packages, Complete is now the second column.",
+     "Fixed: the three tiles are 2 + 1 on the phone (were three tall rows).",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "inbox": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "P3 open: the kind filters repeat the four tile counts.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "P3 open: the kind filters repeat the four tile counts.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "commitments": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: tiles 2 + 1 on the phone; filters in the sans face.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: tiles 2 + 1 on the phone; filters in the sans face.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "decisions": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: tiles 2 + 1 on the phone; native selects are 44 px on the phone.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed: tiles 2 + 1 on the phone; native selects are 44 px on the phone.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "pack": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed P0 (critical): on a fresh server GET /api/pack answered 404 and the browser logged a console error (the gate needs zero). It is now 200 with empty: true (D229).",
+     "Fixed: the empty state is a card with an icon, as on the other pages; the words name the first build time (Monday 14:00).",
+     "Fixed: the week picker moves only to weeks that have a pack (prev_week / next_week).",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 4,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "Fixed P0 (critical): on a fresh server GET /api/pack answered 404 and the browser logged a console error (the gate needs zero). It is now 200 with empty: true (D229).",
+     "Fixed: the empty state is a card with an icon, as on the other pages; the words name the first build time (Monday 14:00).",
+     "Fixed: the week picker moves only to weeks that have a pack (prev_week / next_week).",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "scorecard": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "P2 open: at 390 the table scrolls sideways.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 4
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "P2 open: at 390 the table scrolls sideways.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  },
+  "health": {
+   "light": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 3
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "P2 open: 'Sent to Discord: no digest until R4' and 'sheet writes off: Q-R2-1' show a release id and a question id on the page (words.py; a news test pins the R4 line).",
+     "P2 open: wide tables scroll sideways at 390.",
+     "Light: warm paper and ink; tags and stage marks read on the card."
+    ]
+   },
+   "dark": {
+    "scores": {
+     "accessibility": 3,
+     "performance": 4,
+     "theming": 4,
+     "responsive": 3,
+     "integrity": 3
+    },
+    "critical_open": 0,
+    "notes": [
+     "Detector skipped: Impeccable is text guidance only (D196, D200); no engine, no binary.",
+     "Scored from the gate screenshots (1440 and 390 px, this theme, 21 Oct) and the code.",
+     "Shared fixes in T17: 44 px touch floor on the phone layout for every Button, field and select; per-page code split (main chunk 684 to 436 kB, the Vite warning is gone); filters, stamps, dates and 'N more' use the sans face with tabular figures (mono only for lone numbers).",
+     "P2 open: 'Sent to Discord: no digest until R4' and 'sheet writes off: Q-R2-1' show a release id and a question id on the page (words.py; a news test pins the R4 line).",
+     "P2 open: wide tables scroll sideways at 390.",
+     "Dark: its own palette; tags, badges and charts keep their meaning; no hard-coded colour seen."
+    ]
+   }
+  }
+ },
+ "other_pages": {
+  "money": {
+   "scores": {
+    "accessibility": 3,
+    "performance": 4,
+    "theming": 4,
+    "responsive": 3,
+    "integrity": 4
+   },
+   "critical_open": 0,
+   "notes": [
+    "Not one of the 14 rail pages (Blockers opens it). Fixed: Value is now next to Deal, so it shows at 390; tiles 2 + 1 on the phone."
+   ]
+  },
+  "signin": {
+   "scores": {
+    "accessibility": 3,
+    "performance": 4,
+    "theming": 4,
+    "responsive": 4,
+    "integrity": 4
+   },
+   "critical_open": 0,
+   "notes": [
+    "Before T17: serif heading and the R4 colours; it looked like the old app.",
+    "Fixed: signin.css copies the app tokens (both themes), the sans face (Geist when installed, else the system sans; CSS only, no build link, CSP unchanged), a 44 px primary Button, the back link as an outline Button, never underlined."
+   ]
+  }
+ }
+}

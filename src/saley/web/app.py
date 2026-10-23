@@ -717,6 +717,7 @@ def create_app() -> FastAPI:
             "writes": writes_state(conn),
             "mail": mail_state(conn),
             "notes": notes_health.notes_state(conn),
+            "discord": notes_health.discord_state(conn),
             "llm_cap": get_settings().llm_daily_call_cap,
             "news": signals.news_health(conn),
             "news_note": w.NEWS_NOTE,
@@ -733,10 +734,11 @@ def create_app() -> FastAPI:
         return {"q": q, **queries.search(conn, q), **meta(conn)}
 
     # Late import: the routers need this module.
-    from saley.web import act, admin, ask, next_app, pack, signals, team, today
+    from saley.web import act, admin, ask, deeplink, next_app, pack, signals, team, today
 
     auth.install(app)
     next_app.install(app)  # `/` is the built app; /static serves only signin.css (D224)
+    deeplink.install(app)  # D261: /<page>/<id>?card=<id> from a Discord card
     app.include_router(act.router)
     app.include_router(admin.router)
     app.include_router(ask.router)

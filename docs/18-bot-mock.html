@@ -1,0 +1,376 @@
+<title>Saley Bot Messages</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a Discord channel column, dark theme only (Discord's own look), one message per card type */
+:root{--bg:#313338;--embed:#2b2d31;--line:#3f4147;--fg:#dbdee1;--muted:#949ba4;--head:#f2f3f5;--link:#00a8fc;--blurple:#5865f2;--grey:#4e5058;--green:#248046;--red:#da373c;--mention:#3c4270;--mention-fg:#c9cdfb;--code:#1e1f22;
+--c-news:#3b82f6;--c-event:#a855f7;--c-blocker:#ef4444;--c-sugg:#22c55e;--c-meet:#eab308;--c-pack:#94a3b8;--c-ok:#23a559;
+--font:"Noto Sans","gg sans",system-ui,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.375;padding-block:24px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:760px;margin:0 auto}
+h1{font-size:18px;color:var(--head);margin:0 0 4px;font-weight:600}
+.sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+.day{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;font-weight:600;margin:26px 0 12px}
+.day::before,.day::after{content:"";flex:1;border-top:1px solid var(--line)}
+.msg{display:grid;grid-template-columns:40px 1fr;gap:14px;margin:0 0 20px;min-width:0}
+.av{width:40px;height:40px;border-radius:50%;background:#5865f2;display:grid;place-items:center;font-weight:700;color:#fff;font-size:14px}
+.av.n{background:var(--c-news)}.av.e{background:var(--c-event)}.av.m{background:var(--c-meet);color:#1e1f22}.av.s{background:var(--c-sugg)}.av.b{background:var(--c-blocker)}.av.p{background:var(--c-pack);color:#1e1f22}
+.who{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.who b{color:var(--head);font-weight:500}
+.app{background:var(--blurple);color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;letter-spacing:.02em}
+.who small{color:var(--muted);font-size:12px}
+.text{margin:2px 0 6px;min-width:0}
+.text p{margin:0 0 4px}
+.m{background:var(--mention);color:var(--mention-fg);padding:0 2px;border-radius:3px;font-weight:500}
+.embed{background:var(--embed);border-left:4px solid var(--c-pack);border-radius:4px;padding:10px 14px 12px 12px;max-width:560px;margin:6px 0;display:grid;grid-template-columns:1fr auto;gap:4px 14px;min-width:0}
+.embed.news{border-color:var(--c-news)}.embed.event{border-color:var(--c-event)}.embed.blocker{border-color:var(--c-blocker)}.embed.sugg{border-color:var(--c-sugg)}.embed.meet{border-color:var(--c-meet)}.embed.ok{border-color:var(--c-ok)}
+.embed>*{grid-column:1}
+.embed .thumb{grid-column:2;grid-row:1/span 4;width:72px;height:72px;border-radius:6px;background:#1e1f22;display:grid;place-items:center;font-size:28px}
+.eauthor{font-size:12px;font-weight:600;color:var(--head);display:flex;gap:6px;align-items:center}
+.etitle{font-size:15px;font-weight:600;color:var(--head);margin:2px 0}
+.etitle a{color:var(--link);text-decoration:none}
+.edesc{font-size:14px;color:var(--fg)}
+.edesc ul{margin:4px 0 0;padding-left:18px}
+.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;margin-top:8px}
+.fields.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.f b{display:block;font-size:12px;color:var(--head);font-weight:600;margin-bottom:2px}
+.f span{font-size:14px}
+.full{grid-column:1/-1}
+.efoot{font-size:12px;color:var(--muted);margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.efoot i{width:3px;height:3px;border-radius:50%;background:var(--muted);display:inline-block}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 2px}
+.btn{font:inherit;font-size:14px;font-weight:500;color:#fff;background:var(--grey);border:0;border-radius:3px;padding:7px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:32px}
+.btn.p{background:var(--blurple)}.btn.g{background:var(--green)}.btn.d{background:var(--red)}
+.btn.l::after{content:"↗";font-size:12px;opacity:.8}
+.btn[disabled]{opacity:.5;cursor:default}
+.sel{width:min(400px,100%);background:#1e1f22;border:1px solid var(--line);border-radius:3px;padding:8px 12px;color:var(--muted);font-size:14px;display:flex;justify-content:space-between;align-items:center;margin:6px 0}
+.eph{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;margin-top:4px}
+.eph a{color:var(--link);text-decoration:none}
+.thread{display:inline-flex;align-items:center;gap:8px;background:var(--embed);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--muted);margin-top:6px}
+.thread b{color:var(--head);font-weight:500}
+.thread a{color:var(--link);text-decoration:none;font-weight:500}
+.react{display:inline-flex;gap:6px;margin-top:6px}
+.react span{background:var(--embed);border:1px solid var(--line);border-radius:8px;padding:1px 8px;font-size:13px}
+.note{color:var(--muted);font-size:12px;margin:-10px 0 18px 54px}
+code{background:var(--code);padding:1px 5px;border-radius:3px;font-size:13px}
+.quote{border-left:4px solid var(--line);padding-left:10px;color:var(--fg);margin:6px 0;font-size:14px}
+.v2{background:var(--embed);border:1px solid var(--line);border-radius:8px;padding:12px 14px;max-width:560px;margin:6px 0}
+.v2 .sec{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:8px 0}
+.v2 .sep{border-top:1px solid var(--line);margin:4px 0}
+.v2 .ttl{font-size:16px;font-weight:600;color:var(--head)}
+.v2 .mini{font-size:12px;color:var(--muted)}
+.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
+.gal div{height:54px;border-radius:6px;background:#1e1f22;display:grid;place-items:center;font-size:12px;color:var(--muted);text-align:center;padding:4px}
+.modal{background:var(--embed);border-radius:6px;max-width:440px;padding:16px;margin:8px 0 0 54px;border:1px solid var(--line)}
+.modal h4{margin:0 0 10px;color:var(--head);font-size:16px}
+.modal label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px}
+.modal .in{background:#1e1f22;border-radius:3px;padding:8px 10px;font-size:14px;min-height:36px}
+@media(max-width:600px){.fields{grid-template-columns:repeat(2,minmax(0,1fr))}.embed .thumb{display:none}.note,.modal{margin-left:0}}
+</style>
+
+<div class="wrap">
+<h1># api-sales · how Saley speaks</h1>
+<div class="sub">Mock. Every card: a fact, why it matters, the buttons that act, one link to the dashboard (↗ opens the exact page or card, after sign-in if needed). Colour bar = type. Max 5 people or 5 stories per card; the rest in a thread. One row of buttons; more actions go in a select menu. Email drafts come next week.</div>
+
+<div class="day">Thursday 23 October 2026</div>
+
+<!-- 1 Needs a look -->
+<div class="msg">
+  <div class="av n">S</div>
+  <div>
+    <div class="who"><b>Saley · News</b><span class="app">APP</span><small>09:30</small></div>
+    <div class="text"><p>Good morning, team. 🌤️ Two stories this morning touch people we are talking to. The rest is on the dashboard.</p></div>
+    <div class="embed news">
+      <div class="eauthor">🗞️ Needs a look · linked to our pipeline</div>
+      <div class="etitle"><a href="#">Sarvam AI raises USD 40M Series B</a></div>
+      <div class="edesc">Ananya K and Priya Rao are in our pipeline. A funding round is a good moment to get back in touch with Ananya.</div>
+      <div class="thumb">💰</div>
+      <div class="fields">
+        <div class="f"><b>Topic</b><span>Funding</span></div>
+        <div class="f"><b>People</b><span>Ananya K · Priya Rao</span></div>
+        <div class="f"><b>Owner</b><span><span class="m">@Vaishnavi</span></span></div>
+      </div>
+      <div class="efoot">Economic Times · 2 h ago <i></i> score 9 <i></i> 00:00–09:30 IST</div>
+    </div>
+    <div class="row"><button class="btn p">⏰ Remind me to follow up</button><button class="btn l">Ananya's page</button><button class="btn l">Read the article</button></div>
+    <div class="embed news">
+      <div class="eauthor">🗞️ Needs a look · linked to our pipeline</div>
+      <div class="etitle"><a href="#">ARTPARK opens an evals call for proposals</a></div>
+      <div class="edesc">Sujith P is Qualified with us. The deadline is 30 Oct. This fits G1 directly.</div>
+      <div class="thumb">🎯</div>
+      <div class="fields">
+        <div class="f"><b>Topic</b><span>Opportunity</span></div>
+        <div class="f"><b>Person</b><span>Sujith P · Qualified</span></div>
+        <div class="f"><b>Deadline</b><span>Thu 30 Oct</span></div>
+      </div>
+      <div class="efoot">ARTPARK site · yesterday <i></i> score 8</div>
+    </div>
+    <div class="row"><button class="btn p l">Sujith's page</button><button class="btn l">Read the call</button></div>
+    <div class="sel"><span>Pick a story for more context…</span><span>▾</span></div>
+    <div class="text"><p>3 more stories today are on the dashboard, none linked. Let me know if you want anything else from me.</p></div>
+    <div class="react"><span>👀 2</span></div>
+  </div>
+</div>
+
+<!-- 2 Meeting brief, Components v2 -->
+<div class="msg">
+  <div class="av m">S</div>
+  <div>
+    <div class="who"><b>Saley · Meetings</b><span class="app">APP</span><small>15:00</small></div>
+    <div class="text"><p>Hi <span class="m">@Vaishnavi</span>, you meet David Gamez tomorrow at 15:00. Here is everything we have, so you can walk in relaxed. 🙂</p></div>
+    <div class="v2">
+      <div class="sec"><div><div class="ttl">📅 Middlesex University · David Gamez</div><div class="mini">Professor, AI · Qualified · Reconnect was due Thu</div></div><div class="thumb" style="width:56px;height:56px;border-radius:50%;background:#1e1f22;display:grid;place-items:center">🎓</div></div>
+      <div class="sep"></div>
+      <div class="sec"><div><b style="color:var(--head)">Working on</b><br>A student attention study pilot <span class="mini">· from his note of 14 Oct</span></div></div>
+      <div class="sec"><div><b style="color:var(--head)">He said he will</b><br>share the ethics approval form by end of month <span class="mini">· note 14 Oct</span></div></div>
+      <div class="sep"></div>
+      <div class="gal"><div>Email 3<br>1 Oct</div><div>Note<br>14 Oct</div><div>Reply<br>18 Oct</div></div>
+      <div class="sep"></div>
+      <div class="sec"><div><b style="color:var(--head)">Three questions we could ask</b><ul style="margin:4px 0 0;padding-left:18px"><li>Which cohort size does the pilot need?</li><li>Who signs on the Middlesex side?</li><li>Is December still the start date?</li></ul></div></div>
+      <div class="sec"><div>⚠️ <b style="color:var(--head)">One risk:</b> no deal value on the sheet yet.</div></div>
+    </div>
+    <div class="row"><button class="btn p l">Full brief</button><button class="btn">➕ Add a question</button><button class="btn">Remind me at 14:30</button></div>
+  </div>
+</div>
+<div class="note">Built with Components v2: container, sections with a thumbnail, separators, a media gallery for the last three touches.</div>
+
+<!-- 3 After the meeting + modal -->
+<div class="msg">
+  <div class="av m">S</div>
+  <div>
+    <div class="who"><b>Saley · Meetings</b><span class="app">APP</span><small>10:00 · next day</small></div>
+    <div class="text"><p>Hi <span class="m">@Vaishnavi</span>, how did the meeting with David go yesterday? There is no next step on the sheet yet. Could you add one when you can? It would help us keep this moving.</p></div>
+    <div class="row"><button class="btn g">➕ Add next step</button><button class="btn">Nothing yet</button><button class="btn l">David's page</button></div>
+  </div>
+</div>
+<div class="modal">
+  <h4>Add next step · David Gamez</h4>
+  <label>Next step</label><div class="in">Send the pilot proposal with cohort options</div>
+  <label>Date</label><div class="in">2026-10-28</div>
+  <label>Meeting status</label><div class="in">completed</div>
+  <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn">Cancel</button><button class="btn p">Save to the sheet</button></div>
+</div>
+<div class="note">A modal. Saving writes Next Steps, Meeting Status and the date to the sheet with Vaishnavi's signature, same door as the dashboard.</div>
+
+<!-- 4 Saley suggests, Apollo-ready -->
+<div class="msg">
+  <div class="av s">S</div>
+  <div>
+    <div class="who"><b>Saley · Suggestions</b><span class="app">APP</span><small>Tue 11:00</small></div>
+    <div class="text"><p>Two companies look like a fit this week. Your call, as always.</p></div>
+    <div class="embed sugg">
+      <div class="eauthor">💡 Saley suggests · new company</div>
+      <div class="etitle">Yellow.ai</div>
+      <div class="edesc">Launched evaluation tooling last week. Fits G1 by the industry rule. We have nobody there yet.</div>
+      <div class="thumb">🏢</div>
+      <div class="fields"><div class="f"><b>Why</b><span>Product launch · The Ken, 19 Oct</span></div><div class="f"><b>Goal</b><span>G1 · evals project</span></div><div class="f"><b>People known</b><span>0</span></div></div>
+      <div class="efoot">Suggested by the industry rule <i></i> shown once</div>
+    </div>
+    <div class="row"><button class="btn g">➕ Add Yellow.ai</button><button class="btn">Skip</button><button class="btn" disabled>🔎 Find people · coming soon</button></div>
+    <div class="embed sugg">
+      <div class="eauthor">💡 Saley suggests · new person</div>
+      <div class="etitle">Priya Rao · Head of Evals, Sarvam AI</div>
+      <div class="edesc">Posted two days ago about hiring a benchmark team. Sarvam is already an account of ours.</div>
+      <div class="thumb">👤</div>
+      <div class="fields"><div class="f"><b>Why</b><span>Hiring · LinkedIn public post</span></div><div class="f"><b>Account</b><span>Sarvam AI · Engaged</span></div><div class="f"><b>First touch by</b><span><span class="m">@Sid</span></span></div></div>
+      <div class="efoot">Profile link stored, never fetched</div>
+    </div>
+    <div class="row"><button class="btn g">➕ Add to pipeline</button><button class="btn">Skip</button></div>
+  </div>
+</div>
+<div class="note">"Find people" is the Apollo pipeline button. Same card, same place; it turns on when the pipeline lands.</div>
+
+<!-- 5 Action card: approval + edited state -->
+<div class="msg">
+  <div class="av">S</div>
+  <div>
+    <div class="who"><b>Saley</b><span class="app">APP</span><small>11:20</small></div>
+    <div class="text"><p><span class="m">@Sid</span>, it looks like Priya Rao accepted your LinkedIn request. Shall I mark her as connected on the sheet?</p></div>
+    <div class="embed">
+      <div class="eauthor">🔗 Saley's idea · one click</div>
+      <div class="etitle">Priya Rao · Sarvam AI · LinkedIn connected</div>
+      <div class="edesc">LI Connected Date is set to 21 Oct, but the request still says open. One click fixes the sheet; the next step (your LI note) then appears in your tasks.</div>
+      <div class="fields two"><div class="f"><b>Writes</b><span>Sid - LI Addition = Connected</span></div><div class="f"><b>Signature</b><span>Sid · Discord · time</span></div></div>
+      <div class="efoot">Shown once <i></i> undo for 5 min after Yes</div>
+    </div>
+    <div class="row"><button class="btn g">✅ Yes, mark connected</button><button class="btn">Not yet</button><button class="btn l">Priya's page</button></div>
+  </div>
+</div>
+<div class="msg">
+  <div class="av">S</div>
+  <div>
+    <div class="who"><b>Saley</b><span class="app">APP</span><small>11:20</small><small>(edited)</small></div>
+    <div class="embed ok">
+      <div class="eauthor">🔗 Saley's idea · one click</div>
+      <div class="etitle">Priya Rao · Sarvam AI · LinkedIn connected</div>
+      <div class="edesc">✅ Done by Sid on the dashboard at 11:24. Thank you, Sid! The sheet is updated.</div>
+      <div class="efoot">Undo possible until 11:29</div>
+    </div>
+    <div class="row"><button class="btn">↩️ Undo · 4 min left</button><button class="btn l">Priya's page</button></div>
+  </div>
+</div>
+<div class="note">The same card after a dashboard click: buttons change, nobody can act twice. SQL is the record; the message follows it within 5 seconds. Sheet writes accept Sid and Vaishnavi only; anyone else gets "I can ask them for you" with an Ask button.</div>
+
+<!-- 6 @Saley answer + thread + ephemeral -->
+<div class="msg">
+  <div class="av" style="background:#e67e22">V</div>
+  <div>
+    <div class="who"><b>Vaishnavi</b><small>12:02</small></div>
+    <div class="text"><p><span class="m">@Saley</span> who do we know at ARTPARK and where are we with them?</p></div>
+  </div>
+</div>
+<div class="msg">
+  <div class="av">S</div>
+  <div>
+    <div class="who"><b>Saley</b><span class="app">APP</span><small>12:02</small></div>
+    <div class="text"><p>Two people, both in our pipeline. Sujith is the one who replied to us. 🙂</p></div>
+    <div class="embed">
+      <div class="eauthor">🏢 ARTPARK · Bangalore · Research</div>
+      <div class="fields two">
+        <div class="f"><b>Sujith P · Program lead</b><span>Qualified · quote sent 9 Oct · waiting on the NDA</span></div>
+        <div class="f"><b>Meera R · Research associate</b><span>Contacted · email 1 on 3 Oct · no reply yet</span></div>
+        <div class="f full"><b>What blocks it</b><span>NDA · Kushal · 31 days late · blocks G1</span></div>
+      </div>
+      <div class="efoot">Sources: sheet · Sujith P <i></i> sheet · Meera R <i></i> note 9 Oct, ARTPARK <i></i> deliverables tab</div>
+    </div>
+    <div class="row"><button class="btn p l">ARTPARK's page</button><button class="btn">Full history in a thread</button></div>
+    <div class="thread">🧵 <b>ARTPARK · history</b> · private thread with Vaishnavi · 14 messages · <a href="#">Open</a></div>
+  </div>
+</div>
+<div class="note">Long answers (over about 12 lines) go to a private thread with the asker. The channel keeps one card.</div>
+
+<div class="msg">
+  <div class="av" style="background:#e67e22">V</div>
+  <div>
+    <div class="who"><b>Vaishnavi</b><small>12:04</small></div>
+    <div class="text"><p><span class="m">@Saley</span> what's Sujith's email?</p></div>
+  </div>
+</div>
+<div class="msg">
+  <div class="av">S</div>
+  <div>
+    <div class="who"><b>Saley</b><span class="app">APP</span><small>12:04</small></div>
+    <div class="text"><p>Here you go: <code>sujith@artpark.in</code> — on the sheet since 2 Sep. Let me know if you want anything else from me.</p></div>
+    <div class="row"><button class="btn">Copy address</button></div>
+    <div class="eph">👁️ Only you can see this · <a href="#">Dismiss message</a></div>
+  </div>
+</div>
+
+<!-- 7 Daily brief DM -->
+<div class="day">Direct message · 14:00</div>
+<div class="msg">
+  <div class="av">S</div>
+  <div>
+    <div class="who"><b>Saley</b><span class="app">APP</span><small>14:00</small></div>
+    <div class="text"><p>Hi Sid. 👋 Three things today, all quick ones.</p></div>
+    <div class="embed">
+      <div class="eauthor">☀️ Your day · Thu 23 Oct</div>
+      <div class="edesc"><ul>
+        <li><b>Confirm the LinkedIn connection</b> with Priya Rao (Sarvam AI) — request sent 3 days ago.</li>
+        <li><b>LI note to Sujith P</b> (ARTPARK) — due today by the step rule.</li>
+        <li><b>Meeting</b> with Yellow.ai tomorrow 11:00 — brief comes at 11:00 today.</li>
+      </ul></div>
+      <div class="efoot">2 more for later this week <i></i> shown once</div>
+    </div>
+    <div class="row"><button class="btn p l">My tasks</button><button class="btn">✅ Priya connected</button></div>
+  </div>
+</div>
+<div class="note">DM. Built now, off until <code>DM_ENABLED=true</code>. Until then this card is posted in the channel as an ephemeral reply to <code>@Saley my day</code>.</div>
+
+<!-- 8 Weekly pack -->
+<div class="day">Monday 27 October 2026 · 14:00</div>
+<div class="msg">
+  <div class="av p">S</div>
+  <div>
+    <div class="who"><b>Saley · Weekly pack</b><span class="app">APP</span><small>14:00</small><small>📌 pinned</small></div>
+    <div class="text"><p>Hi team, here is where we stand this week. Two good things first: Middlesex is Qualified, and Met went from 27 to 31. 🎉</p></div>
+    <div class="v2">
+      <div class="ttl">📊 Week of 27 Oct</div>
+      <div class="sep"></div>
+      <div class="fields" style="margin-top:0">
+        <div class="f"><b>Deals closed</b><span>1 of 3</span></div>
+        <div class="f"><b>Met</b><span>31 <span class="mini">(27 last week)</span></span></div>
+        <div class="f"><b>Qualified</b><span>9 <span class="mini">(8)</span></span></div>
+        <div class="f"><b>Contacted this week</b><span>14</span></div>
+        <div class="f"><b>LinkedIn connect rate</b><span>27 %</span></div>
+        <div class="f"><b>Meetings per 100 contacted</b><span>2.0</span></div>
+      </div>
+      <div class="sep"></div>
+      <div><b style="color:var(--head)">Top 3 this week</b><ul style="margin:4px 0 0;padding-left:18px">
+        <li><b>ARTPARK</b> — the NDA is the blocker. <span class="m">@Kushal</span>, could you look at it when you can?</li>
+        <li><b>Middlesex</b> — reconnect with David on Thursday. <span class="m">@Vaishnavi</span></li>
+        <li><b>Sarvam AI</b> — Ananya asked for the eval sample set, due today. <span class="m">@Vaishnavi</span></li>
+      </ul></div>
+      <div class="sep"></div>
+      <div>💡 <b style="color:var(--head)">One idea:</b> all three AI-lab conversations stall at the NDA. A shorter NDA could help us.</div>
+    </div>
+    <div class="row"><button class="btn p l">This week's pack</button></div>
+  </div>
+</div>
+
+<!-- 9 Blocker note -->
+<div class="msg">
+  <div class="av b">S</div>
+  <div>
+    <div class="who"><b>Saley · Blockers</b><span class="app">APP</span><small>16:00</small></div>
+    <div class="text"><p>Five items are past their date and hold a goal back. No rush on the ones you already have in hand.</p></div>
+    <div class="embed blocker">
+      <div class="eauthor">🧱 Late items that block goals</div>
+      <div class="fields two">
+        <div class="f"><b>NDA</b><span><span class="m">@Kushal</span> · 31 days · G1</span></div>
+        <div class="f"><b>Client on-boarding T&amp;Cs + 2 policies</b><span><span class="m">@Kushal</span> · 24 days · G1</span></div>
+        <div class="f"><b>Participant T&amp;Cs</b><span><span class="m">@Trishi</span> · 24 days · G1, G2</span></div>
+        <div class="f"><b>Pulse Product Overview Document</b><span><span class="m">@Sid</span> · 19 days · G1</span></div>
+        <div class="f full"><b>DPA</b><span><span class="m">@Kushal</span> · 3 days · G1</span></div>
+      </div>
+      <div class="efoot">≈ USD 40k waits on these <i></i> 5 of 7; 2 more in the thread</div>
+    </div>
+    <div class="row"><button class="btn p l">All blockers</button></div>
+    <div class="thread">🧵 <b>Blockers · 27 Oct</b> · 2 more items · <a href="#">Open</a></div>
+  </div>
+</div>
+
+<!-- 10 Events -->
+<div class="msg">
+  <div class="av e">S</div>
+  <div>
+    <div class="who"><b>Saley · Events</b><span class="app">APP</span><small>Wed 11:00</small></div>
+    <div class="text"><p><span class="m">@Sid</span> <span class="m">@Vaishnavi</span> — three events in the next three weeks. We are registered for the first two.</p></div>
+    <div class="embed event">
+      <div class="eauthor">🎟️ Events · registered first</div>
+      <div class="fields">
+        <div class="f"><b>AI Evals Meetup</b><span>28 Oct · Bangalore ✅</span></div>
+        <div class="f"><b>Bengaluru Tech Summit</b><span>19–21 Nov · Bangalore ✅</span></div>
+        <div class="f"><b>EdTech Europe</b><span>4 Dec · London</span></div>
+        <div class="f full"><b>Who to meet</b><span>4 target companies attend the Summit: Sarvam AI, Yellow.ai, Krisp, Udio</span></div>
+      </div>
+      <div class="efoot">Speaker matches: coming soon</div>
+    </div>
+    <div class="row"><button class="btn p l">All events</button><button class="btn">📆 Put the Summit in Discord events</button></div>
+  </div>
+</div>
+
+<!-- 11 Health -->
+<div class="day">#saley-test-v2 · 23:45</div>
+<div class="msg">
+  <div class="av">S</div>
+  <div>
+    <div class="who"><b>Saley</b><span class="app">APP</span><small>23:45</small></div>
+    <div class="embed ok">
+      <div class="eauthor">🩺 Health · Thu 23 Oct</div>
+      <div class="fields">
+        <div class="f"><b>Jobs 24 h</b><span>2,021 ok · 0 failed</span></div>
+        <div class="f"><b>LLM calls</b><span>212 of 400</span></div>
+        <div class="f"><b>News</b><span>84 → 61 → 12 → 5</span></div>
+        <div class="f"><b>Sheet sync</b><span>23:44 · 0 problems</span></div>
+        <div class="f"><b>Notes</b><span>20 files · last change 17:10</span></div>
+        <div class="f"><b>Egress blocked</b><span>0</span></div>
+      </div>
+      <div class="efoot"><span class="m">@Trishi</span> <span class="m">@Kushal</span> only</div>
+    </div>
+    <div class="row"><button class="btn l">Sources &amp; health</button></div>
+  </div>
+</div>
+
+</div>

@@ -13,7 +13,7 @@ from datetime import time
 from functools import lru_cache
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -228,6 +228,27 @@ class Settings(BaseSettings):
     dm_users: str = "sid,vaishnavi,kushal,trishi"
     # D135: `short:id;...` fills users.discord_id when the bot starts. Empty = leave it alone.
     discord_user_map: str = ""
+    # --- discord v2 (R7, docs/09) ---
+    # D257: only these short names may write the sheet from Discord. Checked again in SQL.
+    discord_write_ids: str = "sid,vaishnavi"
+    # Who gets the Wednesday events card (M4).
+    event_users: str = "sid,vaishnavi,kushal"
+    # D260: people or stories inside one card; the rest go to a thread under it.
+    bot_list_max: int = Field(default=5, ge=1, le=10)
+    # D262: a longer answer goes to a private thread; the first 3 lines stay in the channel.
+    answer_thread_lines: int = Field(default=12, ge=4, le=100)
+    chat_retention_days: int = Field(default=90, ge=1, le=3650)
+    chat_backfill_days: int = Field(default=14, ge=0, le=90)
+    # Channels the bot stores and answers from. Empty = the test channel and the sales channel.
+    chat_channel_ids: str = ""
+    # Card times, IST, weekdays (docs/09 §5).
+    suggestions_time: str = "14:30"
+    events_time: str = "15:00"
+    new_company_time: str = "15:30"
+    # M6 "how did it go" is due this many hours after the meeting day ends (Q-R7-1).
+    after_meeting_hours: int = Field(default=3, ge=0, le=48)
+    # The worker's intent step for an answer (LLM_SMALL); then the fixed grammar answers.
+    bot_intent_timeout_s: int = Field(default=10, ge=1, le=60)
 
     # --- google sheets ---
     gtm_sheet_id: str = ""
@@ -376,18 +397,26 @@ class Settings(BaseSettings):
         parse_user_map(value)
         return value
 
-    @field_validator("daily_brief_time")
+    @field_validator("daily_brief_time", "suggestions_time", "events_time", "new_company_time")
     @classmethod
     def _check_brief_time(cls, value: str) -> str:
         parse_clock(value)
         return value
 
-    @field_validator("dm_users")
+    @field_validator("dm_users", "discord_write_ids", "event_users")
     @classmethod
-    def _check_dm_users(cls, value: str) -> str:
+    def _check_dm_users(cls, value: str, info: ValidationInfo) -> str:
         bad = [short for short in split_csv(value) if not _SHORT.fullmatch(short)]
         if bad:
-            raise ValueError("DM_USERS must list short names such as sid,kushal")
+            name = (info.field_name or "").upper()
+            raise ValueError(f"{name} must list short names such as sid,kushal")
+        return value
+
+    @field_validator("chat_channel_ids")
+    @classmethod
+    def _check_chat_channels(cls, value: str) -> str:
+        if any(not _DISCORD_ID.fullmatch(c) for c in split_csv(value)):
+            raise ValueError("CHAT_CHANNEL_IDS must list Discord ids (17 to 20 digits)")
         return value
 
     # ---------- derived values ----------
@@ -403,6 +432,31 @@ class Settings(BaseSettings):
     @property
     def dm_user_shorts(self) -> list[str]:
         return split_csv(self.dm_users)
+
+    @property
+    def writer_shorts(self) -> list[str]:
+        return split_csv(self.discord_write_ids)
+
+    @property
+    def event_user_shorts(self) -> list[str]:
+        return split_csv(self.event_users)
+
+    def clock_time(self, value: str) -> time:
+        """An HH:MM setting (validated above) as a time."""
+        minutes = parse_clock(value)
+        return time(minutes // 60, minutes % 60)
+
+    @property
+    def chat_channels(self) -> list[str]:
+        """D262: the channels whose messages the bot stores. Empty = test and sales channel."""
+        listed = split_csv(self.chat_channel_ids)
+        if listed:
+            return listed
+        return [
+            c.strip()
+            for c in (self.discord_test_channel_id, self.discord_sales_channel_id)
+            if c.strip()
+        ]
 
     @property
     def user_map(self) -> dict[str, str]:

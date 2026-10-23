@@ -53,7 +53,7 @@ from urllib.parse import urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ for the qa_browser package
 
 from playwright.sync_api import Page, sync_playwright
-from qa_browser import checks_r5
+from qa_browser import checks_r5, checks_r7
 from qa_browser.checks_r1_r4 import *
 from qa_browser.core import *
 from qa_browser.r5_rules import ENTRY
@@ -95,6 +95,8 @@ def check_all(
             run.group(name, lambda: checks_r5.pagers(page, base, run, ENTRY, allow_no_pager))
         else:
             run.group(name, lambda check=check: check(page, base, run, ENTRY))
+    # R7-B01: a Discord card's deep link through sign-in lands on the item, outlined (D261).
+    run.group("deep_link_card", lambda: checks_r7.deep_link_card(page, base, run))
 
 
 # The named R5 checks of the matrix (tests/matrix/R5.yaml, tool browser), in run order.

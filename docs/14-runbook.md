@@ -66,6 +66,8 @@ The services are `caddy`, `web`, `worker`, `bot`, `news` and `postgres`.
    | `GTM_SHEET_ID` | the sheet **copy** |
    | `GOOGLE_SERVICE_ACCOUNT_FILE` | leave it as is (the worker gets the key at its own path) |
    | `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_TEST_CHANNEL_ID` | the v2 bot and the v2 test channel |
+   | `DISCORD_USER_MAP` | `sid:<id>,vaishnavi:<id>,kushal:<id>,trishi:<id>` (Discord user ids) |
+   | `DISCORD_WRITE_IDS` | `sid,vaishnavi` (R7, D257: only they change the sheet from Discord) |
    | `ANTHROPIC_API_KEY` | the API key |
 
    Keep these values as they are:
@@ -215,9 +217,40 @@ bash deploy/deploy.sh
 8. Start everything again: `dc up -d`. If a service still fails, deploy the previous version (section 7).
 9. Still down: write the time, the `dc ps` output and the last error lines to the team.
 
-## 9. Laptop (developers)
+## 9. The Discord bot (R7)
+
+The bot posts one card for each dashboard notification into the test channel (`TEST_MODE=true`, tag `[TEST]`). A press on a card is the same write as a click on the dashboard. A click on the dashboard edits the card within 5 seconds. Only Sid and Vaishnavi (`DISCORD_WRITE_IDS`) change the sheet from Discord; anyone else gets a private "I can ask one of them for you".
+
+The bot container holds only `DISCORD_BOT_TOKEN`, its database login `DATABASE_URL` and `PUBLIC_URL`. The worker writes the card text and does the LLM work.
+
+1. Before the first R7 deploy, add to `/srv/saley/.env`:
+   ```
+   DISCORD_WRITE_IDS=sid,vaishnavi
+   ```
+   The other R7 settings have defaults (`.env.example`, block "discord v2").
+2. Deploy (section 2). The update adds the card tables (migrations 0027 and 0028).
+3. Check the bot:
+   ```
+   dc exec bot saley bot status
+   ```
+   It prints the cards sent and held today, the presses, the last card edit, the chat lines kept and the bot heartbeat.
+4. Check every card type in the test channel (it posts each card, reads it back, edits it, and deletes it; about 4 minutes):
+   ```
+   dc exec bot saley discord roundtrip --test --case all
+   ```
+   Every line must say `ok`.
+5. Read the bot's log: `dc logs -f bot`. Good lines: `bot_ready`, `bot_delivered`, `card_press`, `card_synced`, `chat_backfill`. A line `card_sync_reconnect` means the card sync lost its database connection; it reconnects by itself in 5 seconds and catches up on the last 10 minutes.
+6. A card does not change after a dashboard click: check `card_sync_listening` in the bot log, then `dc restart bot`.
+7. Remove one stored chat line when a person asks (its facts go too):
+   ```
+   dc exec bot saley chat forget <message id>
+   ```
+8. DMs stay off (`DM_ENABLED=false`). The cut-over to API Sales is in docs/11.
+
+## 10. Laptop (developers)
 
 - See README "Run on a laptop".
 - Roles on a laptop: `psql -U postgres -f deploy/sql/roles.sql`.
 - Migrate: `uv run saley db-upgrade`.
 - Check: `uv run saley health`.
+- The bot: `uv run saley bot` next to `uv run saley dev`; `uv run saley bot status`.

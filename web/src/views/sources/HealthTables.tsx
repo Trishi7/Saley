@@ -2,7 +2,7 @@
 // check and the data to fix, plus the connection lines. Long tables page by 10 inside the page
 // (the answer is already here). Every line is the server's own text (words.py) or a number.
 // Hooks (legacy ids kept): `#jobs-table`, `#egress-table`, `#tabs-table`, `#parity-table`,
-// `#dq-table`, `#conn-list`.
+// `#dq-table`, `#conn-list`, and `#discord-table` (R7, docs/17 §10).
 import type { ReactNode } from "react";
 import { OneLine } from "@/components/saley/Links";
 import { Pager } from "@/components/saley/Pager";
@@ -283,6 +283,25 @@ export function Connections({ data }: { data: HealthData }) {
           <li key={`${i}-${line}`}>{line}</li>
         ))}
       </ul>
+    </Card>
+  );
+}
+
+/** R7 (docs/17 §10): cards, presses, card sync and chat memory of today, from v_bot_health.
+ *  The same lines print in `saley bot status`. */
+export function DiscordTable({ rows }: { rows: HealthData["discord"]["rows"] }) {
+  return (
+    <Card id="discord" title={W.discordTitle}>
+      <Table id="discord-table" className="table-fixed">
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.label}>
+              <TableCell className="py-2">{r.label}</TableCell>
+              <TableCell className="tabular w-[40%] py-2 text-right">{r.value}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </Card>
   );
 }

@@ -6,13 +6,13 @@ Sales lead and chief-of-staff system for Membrane's sales team. Dashboard first,
 - Rules for Claude Code and humans: `CLAUDE.md`.
 - Status: `docs/STATUS.md`. Plan for the current release: `docs/plans/`.
 
-## What runs (release R6)
+## What runs (release R7)
 | Service | Command | Does |
 | --- | --- | --- |
 | dev | `uv run saley dev` | Web in this process and the worker as a child process (`saley worker`) on http://localhost:8090 (`WEB_PORT`; laptop only, D43, D46). Ctrl+C stops both. R5 (D151): the dev worker (slot `worker:main`) also runs news: one edition at start when the last run is over 6 h old (`NEWS_RUN_AT_START`, default true), "Run news now" requests and the topic backfill |
 | web | `uv run saley web` | The dashboard app at http://localhost:8090/ (`WEB_PORT`; needs the web build, see R5 run notes); every page and `/api` call needs a sign-in (`/signin`, R4) |
-| worker | `uv run saley worker` | Sheet sync every 60 s, sheet push every 2 s (quiet when empty), parity check hourly, metrics 23:50 IST, heartbeat 5 min, R2 jobs: facts, proposals, commitments scan, mail poll, reminders, R3 job: profile-link search requests (`search_requests`, every 15 s, quiet); R4 jobs: `weekly_pack` (Mon 14:00 IST) with `weekly_pack_catchup` (hourly), `bot_plan` (every 5 min), `daily_brief` (`DAILY_BRIEF_TIME`, weekdays; DMs only when on), `health_line` (23:45 IST weekdays) |
-| bot | `uv run saley bot` | Answers `@Saley` questions and sends the bot queue with the caps (R4). In dev, the TEST channel only (D125) |
+| worker | `uv run saley worker` | Sheet sync every 60 s, sheet push every 2 s (quiet when empty), parity check hourly, metrics 23:50 IST, heartbeat 5 min, R2 jobs: facts, proposals, commitments scan, mail poll, reminders, R3 job: profile-link search requests (`search_requests`, every 15 s, quiet); R4 jobs: `weekly_pack` (Mon 14:00 IST) with `weekly_pack_catchup` (hourly), `bot_plan` (every 5 min), `daily_brief` (`DAILY_BRIEF_TIME`, weekdays; DMs only when on), `health_line` (23:45 IST weekdays); R7 jobs: `cards_plan` (every 5 min: one Discord card per dashboard notification), `answer_intent` (every 2 s, quiet: the intent step of `@Saley` answers), `chat_summary` (23:30 IST: chat retention and the nightly summary) |
+| bot | `uv run saley bot` | R7: sends the cards (embeds, Components v2, thread overflow, the pinned pack), hears presses, selects and modals, edits a card within 5 s after a dashboard act (LISTEN `saley_card`), keeps the chat memory, answers `@Saley` questions. In dev, the TEST channel only (D125). `uv run saley bot status` prints today's numbers |
 | news | `uv run saley news` | R3 editions at 06:30, 12:00, 17:00, 22:00 IST; OpenAlex 07:30; arXiv 10:00; cleanup 03:00. The only news scheduler in production (D70); on the laptop the dev worker runs news too (D151) |
 
 ## Run on a laptop
@@ -95,6 +95,16 @@ The new dashboard lives in `web/` (Vite, React, TypeScript, Tailwind, vendored s
 9. Undo: Done turns into Undo in place for `UNDO_MINUTES`, default 5 (was 10, D143). A `.env` that sets 10 keeps 10.
 10. Off features show "Coming soon": Find people (`FIND_PEOPLE_ENABLED=false`), Add email while `EMAIL_WRITE_ALLOWED=false`, speaker matches, Apollo, mail replies, DMs (D164).
 11. Env changes in R5: NEW `NEWS_RUN_AT_START` (true), `FIND_PEOPLE_ENABLED` (false). CHANGED-default `UNDO_MINUTES` 10 → 5. RETIRED none.
+
+## R7 run notes (the Discord bot v2)
+1. Migrate: `uv run saley db-upgrade` (0027 the card columns, `bot_interaction`, the press door and the card sync; 0028 the chat memory and the intent queue).
+2. `.env`: add `DISCORD_WRITE_IDS=sid,vaishnavi` (D257: only they change the sheet from Discord). The other R7 values have defaults (`.env.example`, "discord v2").
+3. Run `uv run saley dev` (web and worker) and `uv run saley bot` beside it. The worker plans the cards; the bot delivers them to the TEST channel with `[TEST]`.
+4. Round trips in the TEST channel: `uv run saley discord roundtrip --test --case m10` (any card type `m1`…`m15`, `a1`, `a2`) or `--case all`. Each posts one card, reads it back, edits it within 5 s, and deletes it.
+5. `uv run saley bot status`: cards sent and held today, presses, the last card edit, chat lines, the heartbeat. The same lines are on Sources & health (Discord).
+6. `uv run saley chat forget <message_id>` removes one stored chat line and its facts.
+7. A card's link opens `PUBLIC_URL/<page>/<id>?card=<id>`; signed out, sign-in comes first and then the page opens with the item outlined.
+8. The laptop tools for R7 (graphify, ponytail): `docs/tools/SETUP-graphify-ponytail.md`. `graphify-out/` is a by-product (gitignored).
 
 ## Tests
 - `uv run ruff check .` and `uv run pytest -q`. On the laptop, run one file at a time: `uv run pytest -q -x -p no:cacheprovider tests/<file>.py` (D142).

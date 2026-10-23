@@ -141,10 +141,15 @@ services:
     command: ["saley", "bot"]
     mem_limit: 256m
     memswap_limit: 256m
+    # docs/17 §3 (R7): the bot keeps only DISCORD_BOT_TOKEN, the saley-role DATABASE_URL and
+    # PUBLIC_URL. No LLM key, no Google key: the worker builds card text and answer intents.
     environment:
       SALEY_ENV: prod
       DATABASE_URL_ADMIN: ""
+      DATABASE_URL_RO: ""
+      TEST_DATABASE_URL: ""
       POSTGRES_PASSWORD: ""
+      ANTHROPIC_API_KEY: ""
       GOOGLE_OAUTH_CLIENT_SECRET: ""
       WEB_SESSION_SECRET: ""
       GOOGLE_SERVICE_ACCOUNT_FILE: ""

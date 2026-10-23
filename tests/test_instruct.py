@@ -270,7 +270,8 @@ def test_card_buttons_are_do_edit_skip_and_a_dashboard_link() -> None:
         None,
     ]
     assert [b["emoji"]["name"] for b in buttons[:3]] == ["✅", "✏️", "❌"]
-    assert [b["label"] for b in buttons] == ["Do it", "Edit", "Skip", "Open dashboard"]
+    # D261: the link names the thing.
+    assert [b["label"] for b in buttons] == ["Do it", "Edit", "Skip", "The Inbox"]
     assert buttons[3]["style"] == 5 and buttons[3]["url"] == "http://localhost:8090/"
     # The custom_id pattern is the one the gateway registers.
     assert all(re.fullmatch(card.ID_RE, b["custom_id"]) for b in buttons[:3])

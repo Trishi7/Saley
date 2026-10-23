@@ -1,0 +1,384 @@
+# Test matrix R7 (docs/16-verification-standard.md §3). Never edit a row to make it pass.
+# Feature ids match docs/plans/R7.md §2. Claude Code fills `command` for every row at T0
+# and adds rows per card type at T2 and T10. Layers: unit, sql, integration, live, answers,
+# guardrails, browser (docs/17-bot-trd.md §9).
+release: R7
+rows:
+  - id: R7-K01
+    feature: F-R7-02
+    layer: unit
+    what: every card renderer uses row values only, <= 5 items, <= 4 buttons, link text never Open/View/Click, closing line present, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py
+    pass: tests pass for M1..M15, A1, A2
+  - id: R7-K02
+    feature: F-R7-03
+    layer: unit
+    what: caps priority M5>M8>M7>M2>M3>M11>M4; held count line; weekend rule; 00:10 waits, 23:55 sends
+    tool: pytest
+    command: pytest tests/test_bot_caps_r7.py
+    pass: tests pass
+  - id: R7-S01
+    feature: F-R7-04
+    layer: sql
+    what: saley_card_press maps every action to its door; a Discord press and a dashboard click on one item make ONE decision; the second answers already
+    tool: pytest
+    command: pytest tests/test_r7_schema.py::test_card_press_one_door
+    pass: test passes
+  - id: R7-S02
+    feature: F-R7-04
+    layer: sql
+    what: a non-writer (kushal) is refused inside SQL even when the bot check is skipped; nothing written
+    tool: pytest
+    command: pytest tests/test_r7_schema.py::test_non_writer_refused_in_sql
+    pass: test passes
+  - id: R7-S03
+    feature: F-R7-05
+    layer: sql
+    what: decision insert and undo fire NOTIFY saley_card with the card id
+    tool: pytest
+    command: pytest tests/test_r7_schema.py::test_notify_on_decision_and_undo
+    pass: test passes
+  - id: R7-I01
+    feature: F-R7-05
+    layer: integration
+    what: fake Discord - deliver, dashboard act, card edited within 5 s with "on the dashboard" footer; undo brings buttons back
+    tool: pytest
+    command: pytest tests/test_bot_sync.py
+    pass: tests pass
+  - id: R7-I02
+    feature: F-R7-04
+    layer: integration
+    what: "fake Discord - 7 people on one card: 5 in the card, 2 in a thread, none dropped; M12 pinned and the old pin removed"
+    tool: pytest
+    command: pytest tests/test_bot_deliver_r7.py
+    pass: tests pass
+  - id: R7-I03
+    feature: F-R7-06
+    layer: integration
+    what: modal M6 - bad date refused ephemeral, nothing written; good date writes next step and status with signature surface=discord
+    tool: pytest
+    command: pytest tests/test_bot_modals.py
+    pass: tests pass
+  - id: R7-I04
+    feature: F-R7-08
+    layer: integration
+    what: chat memory - capture, backfill 14 days once (second start skips), summary job writes chat_summary and chat_fact, retention deletes day 91
+    tool: pytest
+    command: pytest tests/test_bot_memory.py
+    pass: tests pass
+  - id: R7-A01
+    feature: F-R7-09
+    layer: answers
+    what: 30 fixtures - intent schema, grammar fallback on timeout, citations by name incl. [Name, Tue 12:40], > 12 lines go to a private thread, guard rejects an invented value
+    tool: pytest
+    command: pytest tests/test_answer_r7.py
+    pass: 30 of 30 pass
+  - id: R7-G01
+    feature: F-R7-11
+    layer: guardrails
+    what: the bot compose service and `saley bot` settings hold no ANTHROPIC or GOOGLE key; bot package imports no sales, news or anthropic module (graphify edges)
+    tool: pytest
+    command: pytest tests/test_r7_guardrails.py
+    pass: tests pass
+  - id: R7-G02
+    feature: F-R7-11
+    layer: guardrails
+    what: .env.example lists every new variable uncommented with its default
+    tool: pytest
+    command: pytest tests/test_env_example.py
+    pass: test passes
+  - id: R7-L01
+    feature: F-R7-10
+    layer: live
+    what: every card type to the test channel - send, read back equal, edit within 5 s, delete; one message per case
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case all
+    pass: every case prints ok
+  - id: R7-B01
+    feature: F-R7-07
+    layer: browser
+    what: deep link /people/<id>?card=<id> with no session - sign-in - lands on the page, card outlined; a foreign next is refused
+    tool: browser
+    command: browser deep_link_card
+    pass: check passes
+  - id: R7-X01
+    feature: F-R7-12
+    layer: gate
+    what: docs 09, 12b, 17, 14, 11, README, STATUS, DECISIONS D257-D262 updated
+    tool: gate
+    command: step 11
+    pass: step passes
+  - id: R7-S04
+    feature: F-R7-01
+    layer: sql
+    what: 0027 and 0028 apply and downgrade; new tables owned by saley_admin, saley_card_press owned by saley with PUBLIC revoked; saley_ro reads v_bot_card and v_chat_recent only
+    tool: pytest
+    command: pytest tests/test_r7_schema.py::test_migrations_and_owners
+    pass: test passes
+  - id: R7-K01-M1
+    feature: F-R7-02
+    layer: unit
+    what: card M1 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M1]
+    pass: test passes
+  - id: R7-K01-M2
+    feature: F-R7-02
+    layer: unit
+    what: card M2 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M2]
+    pass: test passes
+  - id: R7-K01-M3
+    feature: F-R7-02
+    layer: unit
+    what: card M3 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M3]
+    pass: test passes
+  - id: R7-K01-M4
+    feature: F-R7-02
+    layer: unit
+    what: card M4 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M4]
+    pass: test passes
+  - id: R7-K01-M5
+    feature: F-R7-02
+    layer: unit
+    what: card M5 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M5]
+    pass: test passes
+  - id: R7-K01-M6
+    feature: F-R7-02
+    layer: unit
+    what: card M6 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M6]
+    pass: test passes
+  - id: R7-K01-M7
+    feature: F-R7-02
+    layer: unit
+    what: card M7 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M7]
+    pass: test passes
+  - id: R7-K01-M8
+    feature: F-R7-02
+    layer: unit
+    what: card M8 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M8]
+    pass: test passes
+  - id: R7-K01-M9
+    feature: F-R7-02
+    layer: unit
+    what: card M9 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M9]
+    pass: test passes
+  - id: R7-K01-M10
+    feature: F-R7-02
+    layer: unit
+    what: card M10 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M10]
+    pass: test passes
+  - id: R7-K01-M11
+    feature: F-R7-02
+    layer: unit
+    what: card M11 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M11]
+    pass: test passes
+  - id: R7-K01-M12
+    feature: F-R7-02
+    layer: unit
+    what: card M12 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M12]
+    pass: test passes
+  - id: R7-K01-M13
+    feature: F-R7-02
+    layer: unit
+    what: card M13 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M13]
+    pass: test passes
+  - id: R7-K01-M14
+    feature: F-R7-02
+    layer: unit
+    what: card M14 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M14]
+    pass: test passes
+  - id: R7-K01-M15
+    feature: F-R7-02
+    layer: unit
+    what: card M15 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[M15]
+    pass: test passes
+  - id: R7-K01-A1
+    feature: F-R7-02
+    layer: unit
+    what: card A1 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[A1]
+    pass: test passes
+  - id: R7-K01-A2
+    feature: F-R7-02
+    layer: unit
+    what: card A2 - row values only, <= 5 items (rest in the thread), <= 4 buttons, link names the thing, closing line rule, no banned word, colour by type
+    tool: pytest
+    command: pytest tests/test_bot_cards.py::test_card_rules[A2]
+    pass: test passes
+  - id: R7-K03
+    feature: F-R7-03
+    layer: unit
+    what: cards_plan makes one card per dashboard item (a second run adds nothing) for each producer, with card_id, card_type, priority and payload keys
+    tool: pytest
+    command: pytest tests/test_cards_plan.py
+    pass: tests pass
+  - id: R7-I05
+    feature: F-R7-04
+    layer: integration
+    what: fake Discord - a writer press calls the door once and edits the card footer "Done by Sid in Discord"; an old card answers already ephemeral; a deleted message makes the row gone with no repost
+    tool: pytest
+    command: pytest tests/test_bot_press.py
+    pass: tests pass
+  - id: R7-U01
+    feature: F-R7-07
+    layer: unit
+    what: deep links are PUBLIC_URL/<page>/<id>?card=<card_id> from a fixed page set; sign-in keeps a same-site next and refuses a foreign one
+    tool: pytest
+    command: pytest tests/test_bot_links.py
+    pass: tests pass
+  - id: R7-H01
+    feature: F-R7-13
+    layer: unit
+    what: M15 health embed green when ok and red on a failed job, with cards sent/held and DMs off; the Sources & health Discord block; saley bot status prints the same numbers
+    tool: pytest
+    command: pytest tests/test_bot_health_r7.py
+    pass: tests pass
+  - id: R7-L01-M1
+    feature: F-R7-10
+    layer: live
+    what: card M1 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m1
+    pass: the case prints ok
+  - id: R7-L01-M2
+    feature: F-R7-10
+    layer: live
+    what: card M2 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m2
+    pass: the case prints ok
+  - id: R7-L01-M3
+    feature: F-R7-10
+    layer: live
+    what: card M3 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m3
+    pass: the case prints ok
+  - id: R7-L01-M4
+    feature: F-R7-10
+    layer: live
+    what: card M4 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m4
+    pass: the case prints ok
+  - id: R7-L01-M5
+    feature: F-R7-10
+    layer: live
+    what: card M5 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m5
+    pass: the case prints ok
+  - id: R7-L01-M6
+    feature: F-R7-10
+    layer: live
+    what: card M6 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m6
+    pass: the case prints ok
+  - id: R7-L01-M7
+    feature: F-R7-10
+    layer: live
+    what: card M7 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m7
+    pass: the case prints ok
+  - id: R7-L01-M8
+    feature: F-R7-10
+    layer: live
+    what: card M8 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m8
+    pass: the case prints ok
+  - id: R7-L01-M9
+    feature: F-R7-10
+    layer: live
+    what: card M9 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m9
+    pass: the case prints ok
+  - id: R7-L01-M10
+    feature: F-R7-10
+    layer: live
+    what: card M10 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m10
+    pass: the case prints ok
+  - id: R7-L01-M11
+    feature: F-R7-10
+    layer: live
+    what: card M11 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m11
+    pass: the case prints ok
+  - id: R7-L01-M12
+    feature: F-R7-10
+    layer: live
+    what: card M12 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m12
+    pass: the case prints ok
+  - id: R7-L01-M13
+    feature: F-R7-10
+    layer: live
+    what: card M13 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m13
+    pass: the case prints ok
+  - id: R7-L01-M14
+    feature: F-R7-10
+    layer: live
+    what: card M14 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m14
+    pass: the case prints ok
+  - id: R7-L01-M15
+    feature: F-R7-10
+    layer: live
+    what: card M15 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case m15
+    pass: the case prints ok
+  - id: R7-L01-A1
+    feature: F-R7-10
+    layer: live
+    what: card A1 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case a1
+    pass: the case prints ok
+  - id: R7-L01-A2
+    feature: F-R7-10
+    layer: live
+    what: card A2 to the test channel - send, read back equal, edit within 5 s, delete; one message
+    tool: shell
+    command: python -m saley.cli discord roundtrip --test --case a2
+    pass: the case prints ok

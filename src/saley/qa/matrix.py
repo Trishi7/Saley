@@ -38,7 +38,20 @@ ROOT = Path(__file__).resolve().parents[3]
 MATRIX_DIR = ROOT / "tests" / "matrix"
 PLANS_DIR = ROOT / "docs" / "plans"
 QUESTIONS = ROOT / "docs" / "QUESTIONS.md"
-LAYERS = ("unit", "sheet", "api", "browser", "bot", "guardrails")
+# R7 adds the layers of docs/17 §9 (sql, integration, live, answers) and `gate`.
+LAYERS = (
+    "unit",
+    "sheet",
+    "api",
+    "browser",
+    "bot",
+    "guardrails",
+    "sql",
+    "integration",
+    "live",
+    "answers",
+    "gate",
+)
 TOOLS = ("pytest", "gate", "browser", "ci", "shell")
 FIELDS = ("id", "feature", "layer", "what", "tool", "command", "pass")
 # D161: the only allowed `writes` value, and the flag its command must carry.

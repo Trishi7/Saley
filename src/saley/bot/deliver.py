@@ -35,7 +35,7 @@ from typing import Any
 import httpx
 from sqlalchemy import text
 
-from saley.bot import card
+from saley.bot import card, card_view
 from saley.bot import words as bw
 from saley.bot.guard import ChannelRefused, Target, resolve
 from saley.bot.ping import TEST_TAG
@@ -117,29 +117,52 @@ def _channel_for(http: httpx.Client, settings: Settings, target: Target) -> str:
     return channel_id
 
 
-def _send_one(
-    http: httpx.Client, settings: Settings, row: Any, people: list[tuple[str, str | None]]
-) -> str | None:
-    """Send one row. Returns the message id, or None when it may have arrived (see module doc).
+def _as_id(value: str | None) -> int | None:
+    """A Discord id as a number for the bigint columns; anything else stays None."""
+    return int(value) if value and value.isdigit() else None
 
-    `people` are (short, discord_id) pairs of the @mentions. Raises ChannelRefused or httpx
-    errors that are certain not to have sent anything.
-    """
-    target = resolve(row.channel, settings, discord_id=row.discord_id, short=row.short)
+
+@dataclass(frozen=True)
+class Sent:
+    message_id: str | None
+    channel_id: str
+
+
+def _head(
+    settings: Settings, target: Target, people: list[tuple[str, str | None]], body: str = ""
+) -> tuple[str, list[str]]:
+    """`body` with the tag, the redirect note and the mentions in front; and the ids pinged."""
     real_ping = not settings.test_mode and not settings.is_dev and not target.redirected_for
     ids = [i for _, i in people if i] if real_ping else []
     names = tuple(s for s, _ in people) if not real_ping else ()
-    content = render(
-        row.body,
+    text_ = render(
+        body,
         test_mode=settings.test_mode,
         mention_ids=ids,
         redirected_for=target.redirected_for,
         plain_names=names,
     )
-    allowed = {"users": ids} if ids else {"parse": []}
-    payload: dict[str, Any] = {"content": content, "allowed_mentions": allowed}
-    if row.shape == card.SHAPE and row.item_type == card.ITEM_TYPE and row.item_id:
-        payload["components"] = card.components(int(row.item_id))  # D129: the card's buttons
+    return text_, ids
+
+
+def _send_one(
+    http: httpx.Client, settings: Settings, row: Any, people: list[tuple[str, str | None]]
+) -> Sent:
+    """Send one row. The message id is None when it may have arrived (see module doc).
+
+    `people` are (short, discord_id) pairs of the @mentions. Raises ChannelRefused or httpx
+    errors that are certain not to have sent anything. A card row (R7) sends its payload.
+    """
+    target = resolve(row.channel, settings, discord_id=row.discord_id, short=row.short)
+    if row.payload is not None:
+        head, ids = _head(settings, target, people)
+        payload: dict[str, Any] = card_view.view(row, head=head)
+    else:
+        content, ids = _head(settings, target, people, row.body)
+        payload = {"content": content}
+        if row.shape == card.SHAPE and row.item_type == card.ITEM_TYPE and row.item_id:
+            payload["components"] = card.components(int(row.item_id))  # D129: the card's buttons
+    payload["allowed_mentions"] = {"users": ids} if ids else {"parse": []}
     channel_id = _channel_for(http, settings, target)
     try:
         response = egress.request(
@@ -153,12 +176,12 @@ def _send_one(
         raise
     except httpx.TransportError as exc:
         log.warning("bot_send_unconfirmed", post=row.id, error=type(exc).__name__)
-        return None
+        return Sent(None, channel_id)
     response.raise_for_status()
     message_id = _read_id(response)
     if message_id is None:
         log.warning("bot_send_unconfirmed", post=row.id, error="no message id in reply")
-    return message_id
+    return Sent(message_id, channel_id)
 
 
 def _people(session: Any, mentions: list[int] | None) -> list[tuple[str, str | None]]:
@@ -230,7 +253,8 @@ def _deliver_next(
         row = session.execute(
             text(
                 "select b.id, b.channel, b.body, b.mentions, b.shape, b.item_type, b.item_id, "
-                "u.short, u.discord_id "
+                "b.card_id, b.card_type, b.payload, b.held_reason, b.done_at, b.done_by, "
+                "b.done_surface, b.done_write_id, b.undo_until, u.short, u.discord_id "
                 "from bot_post b left join users u on u.id = b.for_user "
                 "where b.state = 'ready' and b.id > :last order by b.id limit 1 "
                 "for update of b skip locked"
@@ -240,7 +264,7 @@ def _deliver_next(
         if row is None:
             return -1
         try:
-            msg_id = _send_one(http, settings, row, _people(session, row.mentions))
+            sent = _send_one(http, settings, row, _people(session, row.mentions))
         except ChannelRefused as exc:
             _set(session, row.id, "dropped")
             stats.dropped += 1
@@ -255,10 +279,21 @@ def _deliver_next(
             log.error("bot_post_error", post=row.id, error=type(exc).__name__)
         else:
             session.execute(
-                text("update bot_post set state = 'sent', sent_at = :t, msg_id = :m where id = :i"),
-                {"t": now, "m": msg_id, "i": row.id},
+                text(
+                    "update bot_post set state = 'sent', sent_at = :t, msg_id = :m, "
+                    "discord_message_id = :mi, discord_channel_id = :c where id = :i"
+                ),
+                {
+                    "t": now,
+                    "m": sent.message_id,
+                    "mi": _as_id(sent.message_id),
+                    "c": _as_id(sent.channel_id),
+                    "i": row.id,
+                },
             )
             stats.sent += 1
+            if row.payload is not None and sent.message_id:
+                _after_send(http, settings, session, row, sent)
         return int(row.id)
 
 
@@ -266,3 +301,133 @@ def _set(session: Any, post_id: int, state: str) -> None:
     session.execute(
         text("update bot_post set state = :s where id = :i"), {"s": state, "i": post_id}
     )
+
+
+# ------------------------------------------------------------------ R7 cards: thread, pin, edit
+
+THREAD_NAME_MAX = 100
+THREAD_ARCHIVE_MINUTES = 1440
+
+
+def api(
+    http: httpx.Client, settings: Settings, method: str, path: str, **kw: Any
+) -> httpx.Response:
+    response = egress.request(http, method, f"{API}{path}", headers=_headers(settings), **kw)
+    response.raise_for_status()
+    return response
+
+
+def _after_send(http: httpx.Client, settings: Settings, session: Any, row: Any, sent: Sent) -> None:
+    """The overflow thread and the pin. The card is already sent: a failure here is logged and
+    never sends the card again (at most once, see the module doc)."""
+    payload = row.payload
+    try:
+        if payload.get("thread"):
+            thread_id = post_thread(http, settings, sent, payload["thread"])
+            session.execute(
+                text("update bot_post set thread_id = :t where id = :i"),
+                {"t": _as_id(thread_id), "i": row.id},
+            )
+        if payload.get("pin"):
+            pin(http, settings, session, row.id, sent)
+    except (httpx.HTTPError, egress.EgressBlocked) as exc:
+        log.warning("bot_card_extra_failed", post=row.id, error=type(exc).__name__)
+
+
+def post_thread(http: httpx.Client, settings: Settings, sent: Sent, thread: dict[str, Any]) -> str:
+    """D260: the items over BOT_LIST_MAX, in a public thread under the card, in the same order."""
+    made = api(
+        http,
+        settings,
+        "POST",
+        f"/channels/{sent.channel_id}/messages/{sent.message_id}/threads",
+        json={
+            "name": thread["name"][:THREAD_NAME_MAX],
+            "auto_archive_duration": THREAD_ARCHIVE_MINUTES,
+        },
+    )
+    thread_id = _read_id(made)
+    if thread_id is None:
+        raise httpx.HTTPError("Discord made a thread without an id")
+    tag = f"{TEST_TAG} " if settings.test_mode else ""
+    posts = thread["posts"] if "posts" in thread else [thread["content"]]
+    for post in posts:
+        api(
+            http,
+            settings,
+            "POST",
+            f"/channels/{thread_id}/messages",
+            json={"content": (tag + post)[:MAX_CONTENT], "allowed_mentions": {"parse": []}},
+        )
+    return thread_id
+
+
+def pin(http: httpx.Client, settings: Settings, session: Any, post_id: int, sent: Sent) -> None:
+    """docs/09 §6: only the weekly pack is pinned; the bot unpins its previous pack first."""
+    old = session.execute(
+        text(
+            "select id, discord_channel_id, discord_message_id from bot_post "
+            "where pinned and card_type = 'M12' and id <> :i"
+        ),
+        {"i": post_id},
+    ).all()
+    for o in old:
+        try:
+            api(
+                http,
+                settings,
+                "DELETE",
+                f"/channels/{o.discord_channel_id}/pins/{o.discord_message_id}",
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != httpx.codes.NOT_FOUND:  # a human unpinned it already
+                raise
+        session.execute(text("update bot_post set pinned = false where id = :i"), {"i": o.id})
+    api(http, settings, "PUT", f"/channels/{sent.channel_id}/pins/{sent.message_id}")
+    session.execute(text("update bot_post set pinned = true where id = :i"), {"i": post_id})
+
+
+edit_sql = (
+    "select b.id, b.channel, b.card_id, b.card_type, b.payload, b.held_reason, b.done_at, "
+    "b.done_by, b.done_surface, b.done_write_id, b.undo_until, b.mentions, b.state, "
+    "b.discord_channel_id, b.discord_message_id, u.short, u.discord_id "
+    "from bot_post b left join users u on u.id = b.for_user where b.card_id = :c"
+)
+
+
+def edit_card(card_id: str, client: httpx.Client | None = None, now: datetime | None = None) -> str:
+    """Edit a sent card in place to its current state. Returns edited, gone, skipped or failed.
+
+    docs/17 §6: a message a human deleted answers 404; the row becomes `gone` and is never
+    posted again. The bot never reposts a card to change its state (docs/09 §6).
+    """
+    settings = get_settings()
+    own = client is None
+    http = client or egress.make_client()
+    try:
+        with session_scope() as session:
+            row = session.execute(text(edit_sql), {"c": card_id}).first()
+            if row is None or row.state != "sent" or not row.discord_message_id:
+                return "skipped"
+            target = resolve(row.channel, settings, discord_id=row.discord_id, short=row.short)
+            head, _ = _head(settings, target, _people(session, row.mentions))
+            body = {**card_view.view(row, head=head, now=now), "allowed_mentions": {"parse": []}}
+            path = f"/channels/{row.discord_channel_id}/messages/{row.discord_message_id}"
+            try:
+                api(http, settings, "PATCH", path, json=body)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == httpx.codes.NOT_FOUND:
+                    session.execute(
+                        text("update bot_post set state = 'gone' where id = :i"), {"i": row.id}
+                    )
+                    log.info("bot_card_gone", card=card_id)
+                    return "gone"
+                log.warning("bot_card_edit_failed", card=card_id, status=exc.response.status_code)
+                return "failed"
+            except (httpx.HTTPError, egress.EgressBlocked) as exc:
+                log.warning("bot_card_edit_failed", card=card_id, error=type(exc).__name__)
+                return "failed"
+            return "edited"
+    finally:
+        if own:
+            http.close()

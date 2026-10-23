@@ -247,6 +247,12 @@ def test_browser_qa_cli_runs_every_check_on_one_app(
 
     for name in browser_qa.R5_CHECKS:
         monkeypatch.setattr(browser_qa.checks_r5, name, fake(name))
+
+    def deep_link(page: object, base: str, run: object) -> None:  # R7-B01
+        run.checks += 1  # type: ignore[attr-defined]
+        calls.append(("deep_link_card",))
+
+    monkeypatch.setattr(browser_qa.checks_r7, "deep_link_card", deep_link)
     base = "http://localhost:8090"
     run = browser_qa.Run()
     browser_qa.check_all(FakePage(), base, run, ROOT, ["a"], (1440,), False, True)
@@ -275,10 +281,11 @@ def test_browser_qa_cli_runs_every_check_on_one_app(
         ("click_path", "/"),
         ("no_view_as", "/"),
         ("load_error_retry", "/"),
+        ("deep_link_card",),
     ]
     # Every named browser check of the R2-R5 matrices runs in this one call.
     named = set(run.named)
-    for release in ("R2", "R3", "R4", "R5"):
+    for release in ("R2", "R3", "R4", "R5", "R7"):
         matrix = (ROOT / "tests" / "matrix" / f"{release}.yaml").read_text(encoding="utf-8")
         for line in matrix.splitlines():
             if line.strip().startswith("command: browser "):

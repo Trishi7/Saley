@@ -72,7 +72,8 @@ the line `Current release: <id>` in docs/STATUS.md.
 ## 3 · Test matrices (tests/matrix/<release>.yaml)
 
 Schema per row: `id`, `feature`, `layer`, `what`, `tool`, `command`, `pass`.
-Layers: `unit` (unit + integration), `sheet`, `api`, `browser`, `bot`, `guardrails`.
+Layers: `unit` (unit + integration), `sheet`, `api`, `browser`, `bot`, `guardrails`; from R7 also
+the docs/17 §9 layers `sql`, `integration`, `live`, `answers`, and `gate` for a gate-step row.
 Tools (saley.qa.matrix):
 
 | Tool | Command | Passes when |

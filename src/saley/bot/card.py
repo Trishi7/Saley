@@ -146,7 +146,12 @@ def _names(session: Session, ids: list[str], fallback: str | None = None) -> str
 
 
 def approver_names(session: Session, settings: Settings) -> str:
-    return _names(session, settings.approver_ids)
+    """The approvers who are writers (D257): the people who may approve from Discord."""
+    writers = session.execute(
+        text("select discord_id from users where short = any(:w) and discord_id is not null"),
+        {"w": settings.writer_shorts},
+    ).scalars()
+    return _names(session, [i for i in writers if i in settings.approver_ids])
 
 
 def instructor_names(session: Session, settings: Settings) -> str:

@@ -1140,7 +1140,9 @@ def test_gateway_replies_in_the_same_channel_without_mentions(monkeypatch, bot_e
         )
 
     monkeypatch.setattr(
-        gateway.SaleyBot, "_reply_text", staticmethod(lambda asked: f"a:{asked.text}")
+        gateway.SaleyBot,
+        "_reply_text",
+        staticmethod(lambda asked, channel_id=None: f"a:{asked.text}"),
     )
     asked = message(f"<@{BOT}> which P1 have no email")
     asyncio.run(bot.on_message(asked))

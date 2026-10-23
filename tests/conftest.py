@@ -37,6 +37,12 @@ RO_ROLE_MISSING = (
 )
 
 DATA_TABLES = (
+    "answer_intent",
+    "discord_event_link",
+    "chat_fact",
+    "chat_summary",
+    "chat_message",
+    "bot_interaction",
     "bot_exchange",
     "bot_post",
     "weekly_pack",
@@ -839,13 +845,16 @@ def team(synced: Session, set_env: Callable[..., None]) -> Iterator[Session]:
         DISCORD_USER_MAP=";".join(f"{short}:{i}" for short, i in TEAM_IDS.items()),
         DISCORD_APPROVER_IDS=approvers,
         DISCORD_INSTRUCT_IDS=",".join(TEAM_IDS.values()),
+        # The R4 tests use three approvers; D257 (R7) narrows Discord writes to DISCORD_WRITE_IDS
+        # (default sid,vaishnavi), tested in tests/test_bot_press.py.
+        DISCORD_WRITE_IDS="kushal,sid,vaishnavi",
         SALEY_ENV="dev",
         TEST_MODE="true",
     )
     identity.sync_user_map(synced, get_settings())
     yield synced
     synced.rollback()
-    synced.execute(text("update users set discord_id = null"))
+    synced.execute(text("update users set discord_id = null, discord_writer = false"))
     synced.commit()
 
 
@@ -876,3 +885,77 @@ def make_card(
     ).scalar_one()
     db.commit()
     return int(card_id)
+
+
+# ------------------------------------------------------------------ R7 cards
+
+
+@pytest.fixture
+def writers(db: Session) -> Iterator[Session]:
+    """D257: sid and vaishnavi may write from Discord (users.discord_writer); reset after."""
+    db.execute(text("update users set discord_writer = short in ('sid', 'vaishnavi')"))
+    db.commit()
+    yield db
+    db.rollback()
+    db.execute(text("update users set discord_writer = false"))
+    db.commit()
+
+
+def put_card(
+    db: Session,
+    card_id: str,
+    acts: dict[str, Any],
+    keys: list[str] | None = None,
+    *,
+    card_type: str = "M10",
+    state: str = "sent",
+    extra: dict[str, Any] | None = None,
+) -> int:
+    """One card row as cards_plan writes it (payload with keys and acts). Returns its id."""
+    payload = {"keys": keys or [], "acts": acts, "message": {"content": "x"}, **(extra or {})}
+    row = db.execute(
+        text(
+            "insert into bot_post (kind, shape, channel, mentions, body, rank, due_at, state, "
+            "card_type, priority, card_id, payload, rendered_hash) values "
+            "('card', 'card', 'sales', '{}', '', 0, now(), :st, :t, 0, :c, cast(:p as jsonb), 'h') "
+            "returning id"
+        ),
+        {"st": state, "t": card_type, "c": card_id, "p": json.dumps(payload)},
+    ).scalar_one()
+    db.commit()
+    return int(row)
+
+
+def press(db: Session, card_id: str, user: str, action: str, **values: Any) -> dict[str, Any]:
+    """Call saley_card_press as the bot does, and commit."""
+    return sql_call(
+        db,
+        "select saley_card_press(:c, :u, :a, cast(:p as jsonb), 'discord')",
+        c=card_id,
+        u=user,
+        a=action,
+        p=json.dumps({"undo_minutes": 5, "cooldown": 0, **values}),
+    )
+
+
+@pytest.fixture
+def crew(synced: Session, set_env: Callable[..., None]) -> Iterator[Session]:
+    """R7: the four people mapped to fake Discord ids, the default writers (sid, vaishnavi, D257),
+    a sent-to-Discord-ready test setup (TEST_MODE, dev)."""
+    from saley.bot import identity
+
+    set_env(
+        DISCORD_USER_MAP=";".join(f"{short}:{i}" for short, i in TEAM_IDS.items()),
+        DISCORD_APPROVER_IDS=",".join(TEAM_IDS[s] for s in ("kushal", "sid", "vaishnavi")),
+        DISCORD_INSTRUCT_IDS=",".join(TEAM_IDS.values()),
+        DISCORD_BOT_TOKEN="tkn",
+        DISCORD_TEST_CHANNEL_ID="100000000000000001",
+        DISCORD_SALES_CHANNEL_ID="200000000000000002",
+        SALEY_ENV="dev",
+        TEST_MODE="true",
+    )
+    identity.sync_user_map(synced, get_settings())
+    yield synced
+    synced.rollback()
+    synced.execute(text("update users set discord_id = null, discord_writer = false"))
+    synced.commit()

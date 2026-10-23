@@ -164,6 +164,17 @@ class NotesState(Out):
     last_ok: datetime | None
 
 
+class DiscordRow(Out):
+    label: str
+    value: str
+
+
+class DiscordBlock(Out):
+    """Sources & health · Discord (R7, docs/17 §10), from v_bot_health."""
+
+    rows: list[DiscordRow]
+
+
 class HealthOut(Meta):
     writes: WritesState
     mail: MailState
@@ -181,6 +192,7 @@ class HealthOut(Meta):
     apollo: ApolloBlock
     sheet_mode: str
     tabs: list[TabStatus]
+    discord: DiscordBlock
 
 
 # ------------------------------------------------------------------ search

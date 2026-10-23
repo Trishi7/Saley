@@ -597,6 +597,7 @@ export const W = {
   missingCols: "Missing columns: {h}",
   newCols: "New columns: {h}",
   connTitle: "Connections",
+  discordTitle: "Discord",
   connWrites: "Sheet writes: on",
   searchStatus: "{e}. Searches today: {n} of {c}.",
   searchUntil: "Search is off until {t}.",

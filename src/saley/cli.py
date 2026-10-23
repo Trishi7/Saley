@@ -24,7 +24,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
-from saley import cli_server
+from saley import cli_bot, cli_server
 from saley.core.logging import configure_logging, get_logger
 from saley.core.settings import MissingSettings, get_core_settings, get_settings
 
@@ -72,6 +72,7 @@ notes_app = typer.Typer(
 )
 app.add_typer(notes_app, name="notes")
 cli_server.register(app)  # R6: db-roles, last-run (deploy.sh, smoke.py)
+cli_bot.register(app)  # R7: chat forget, bot status
 log = get_logger("saley.cli")
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -162,13 +163,16 @@ def web() -> None:
     )
 
 
-@app.command()
+@cli_bot.bot_app.callback()
 def bot(
+    ctx: typer.Context,
     no_gateway: Annotated[
         bool, typer.Option("--no-gateway", help="CI only: no Discord connection (D247).")
     ] = False,
 ) -> None:
-    """Run the Discord bot (test channel, ping only in R1)."""
+    """Run the Discord bot (no subcommand); `saley bot status` prints its numbers."""
+    if ctx.invoked_subcommand is not None:
+        return
     from saley.bot.gateway import run, run_offline
 
     if no_gateway:
@@ -662,27 +666,44 @@ def discord_read(
 @discord_app.command("roundtrip")
 def discord_roundtrip(
     test: Annotated[bool, typer.Option("--test", help="Required: use the TEST channel.")] = False,
-    case: Annotated[str, typer.Option("--case", help="pack, answer or ping.")] = "pack",
+    case: Annotated[
+        str, typer.Option("--case", help="pack, answer, ping, a card (m1..m15, a1, a2) or all.")
+    ] = "pack",
 ) -> None:
-    """R4-P03, R4-Q02: post one shape to the TEST channel, read it back, delete it."""
+    """R4-P03, R4-Q02, R7-L01: post one shape to the TEST channel, read it back, delete it.
+
+    A card case also edits the card within 5 s and reads the edit back. `all` runs every card.
+    """
     import httpx
     from sqlalchemy.exc import SQLAlchemyError
 
     from saley.bot.cli_discord import DiscordRefused
-    from saley.bot.roundtrip import run
+    from saley.bot.roundtrip import CARD_CASES, CASES, case_pause_seconds, run
     from saley.core.egress import EgressBlocked
 
     if not test:
         _fail("Refused: add --test. Only the TEST channel is allowed.")
-    try:
-        result = run(case)
-    except (httpx.HTTPError, SQLAlchemyError) as exc:
-        _fail(f"roundtrip {case} failed: {exc.__class__.__name__}")
-    except (DiscordRefused, MissingSettings, EgressBlocked) as exc:
-        _fail(f"Refused: {exc}")
-    back, gone = ("yes" if flag else "NO" for flag in (result.matched, result.deleted))
-    typer.echo(f"roundtrip {result.case}: {result.message_id} read back {back}, deleted {gone}")
-    if not result.ok:
+    if case not in CASES:
+        _fail(f"Refused: --case must be one of: {', '.join(CASES)}")
+    failed = 0
+    for one in list(CARD_CASES) if case == "all" else [case]:
+        try:
+            result = run(one)
+        except (httpx.HTTPError, SQLAlchemyError) as exc:
+            _fail(f"roundtrip {one} failed: {exc.__class__.__name__}")
+        except (DiscordRefused, MissingSettings, EgressBlocked) as exc:
+            _fail(f"Refused: {exc}")
+        flags = (result.matched, result.deleted, result.edited)
+        back, gone, edit = ("yes" if flag else "NO" for flag in flags)
+        status = "ok" if result.ok else "FAIL"
+        typer.echo(
+            f"roundtrip {result.case}: {status} · {result.message_id} read back {back}, "
+            f"edited {edit}, deleted {gone}"
+        )
+        failed += not result.ok
+        if case == "all":
+            time.sleep(case_pause_seconds())
+    if failed:
         raise typer.Exit(code=1)
 
 

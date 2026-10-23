@@ -71,6 +71,7 @@ Writer = Callable[[str, dict[str, Any]], Any]
 # people and tasks have one type for each question, so one list never hides another.
 SEEN_WHO, SEEN_WORKING, SEEN_P1 = "answer_who", "answer_working", "answer_p1"
 SEEN_MEETING, SEEN_TASK, SEEN_STORY = "answer_due_meeting", "answer_due_task", "story"
+SEEN_CHAT = "answer_chat"  # R7 (D262): chat lines of the channel, seen per person
 
 _WHO = re.compile(
     r"who (?:at|in|from) (?P<company>.{1,80}?) (?:works?|is working|are working) on "
@@ -81,6 +82,17 @@ _NEWS = re.compile(r"(?:what(?: is|'s) the )?news since (?P<day>.{1,30})", re.IG
 _WORKING = re.compile(r"what(?: is|'s) (?P<person>.{1,80}?) working on", re.IGNORECASE)
 _P1 = re.compile(r"which p1s? (?:have|has) no e-?mail(?: address)?", re.IGNORECASE)
 _DUE = re.compile(r"what(?: is|'s) due this week", re.IGNORECASE)
+# R7 (D262): "what did we say about the NDA", "what did Vaishnavi say about ARTPARK".
+_CHAT = re.compile(
+    r"what (?:did|has) (?:we|the team|(?P<who>[A-Za-z][A-Za-z .'-]{0,40}?)) "
+    r"(?:say|said|write|wrote|tell us) about (?P<topic>.{1,80})",
+    re.IGNORECASE,
+)
+# Personal data never goes to a channel (docs/09 §8): a chat line may hold what a person typed.
+_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+_PHONE = re.compile(r"(?<!\w)\+?\d[\d ()-]{7,}\d(?!\w)")
+CHAT_DAYS = 90  # the window of the chat lookup: CHAT_RETENTION_DAYS keeps no older line
+THREAD_HEAD_LINES = 3  # docs/09 §8: a long answer keeps 3 lines in the channel
 _MORE = re.compile(r"more", re.IGNORECASE)
 _DAY_MONTH = re.compile(r"(\d{1,2})(?:st|nd|rd|th)? ([a-z]{3,9})(?: (\d{4}))?")
 _MONTH_DAY = re.compile(r"([a-z]{3,9}) (\d{1,2})(?:st|nd|rd|th)?(?: (\d{4}))?")
@@ -218,6 +230,10 @@ def parse(raw: str, today: date) -> Parsed | None:
         return Parsed("p1")
     if _DUE.fullmatch(question):
         return Parsed("due")
+    if m := _CHAT.fullmatch(question):
+        return Parsed(
+            "chat", (("topic", chat_topic(m["topic"])), ("who", (m["who"] or "").strip()))
+        )
     return None
 
 
@@ -542,12 +558,72 @@ def fetch_due(conn: Connection, parsed: Parsed, now: datetime, user: str) -> Fet
     )
 
 
+_ARTICLE = re.compile(r"^(?:the|a|an|our)\s+", re.IGNORECASE)
+
+
+def chat_topic(raw: str) -> str:
+    """ "the NDA" finds "NDA draft is with legal": a leading article is not part of the topic."""
+    return _ARTICLE.sub("", raw.strip()) or raw.strip()
+
+
+def private(text: str) -> str:
+    """Emails and phone numbers out of a channel answer (docs/09 §8)."""
+    return _PHONE.sub(bw.HIDDEN, _EMAIL.sub(bw.HIDDEN, text))
+
+
+def _chat_item(row: Any) -> Item:
+    who = _clean((row.name or row.author_short or "").split(" ")[0] or "?", NAME_MAX)
+    at = row.at.astimezone(clock.tz())
+    day, hhmm = f"{at:%a}", clock.hhmm(at)
+    said = private(_clean(row.text, DETAIL_MAX))
+    line = bw.LINE_CHAT.format(text=said)
+    cite = bw.CITE_CHAT.format(who=who, day=day, time=hhmm)
+    return Item(SEEN_CHAT, row.message_id, f"{line} {cite}", _facts(said, who, day, hhmm, row.text))
+
+
+def fetch_chat(conn: Connection, parsed: Parsed, now: datetime, user: str) -> Fetched:
+    """Chat lines of this channel (all chat channels on the dashboard), last 90 days."""
+    args = dict(parsed.args)
+    since = now - timedelta(days=CHAT_DAYS)
+    lookup = Lookup(
+        SEEN_CHAT,
+        "m.message_id",
+        "m.message_id, m.text, m.at, m.author_short, u.name",
+        "from chat_message m left join users u on u.short = m.author_short "
+        "where m.at >= :since and m.text ilike :topic escape '\\' "
+        "and (cast(:ch as bigint) is null or m.channel_id = cast(:ch as bigint)) "
+        "and (:who = '' or lower(u.name) like :wholike escape '\\' "
+        "or m.author_short = lower(:who))",
+        "m.at desc, m.message_id desc",
+        _chat_item,
+    )
+    params = {
+        "since": since,
+        "topic": _like(args["topic"]),
+        "ch": int(args["channel"]) if args.get("channel", "").isdigit() else None,
+        "who": args.get("who", ""),
+        "wholike": _like(args.get("who", "").casefold()),
+    }
+    return _fetched(conn, user, (lookup,), params, since, now)
+
+
+def split_for_thread(text: str, limit: int) -> tuple[str, str | None]:
+    """docs/09 §8: over `limit` lines, 3 stay in the channel and the rest go to a thread."""
+    lines = text.splitlines()
+    if len(lines) <= limit:
+        return text, None
+    return "\n".join([*lines[:THREAD_HEAD_LINES], bw.REST_IN_THREAD]), "\n".join(
+        lines[THREAD_HEAD_LINES:]
+    )
+
+
 FETCHERS: dict[str, Callable[[Connection, Parsed, datetime, str], Fetched]] = {
     "who": fetch_who,
     "working": fetch_working,
     "p1": fetch_p1,
     "news": fetch_news,
     "due": fetch_due,
+    "chat": fetch_chat,
 }
 
 
@@ -711,11 +787,19 @@ def respond(
     raw: str,
     surface: str,
     now: datetime | None = None,
+    intent: Parsed | None = None,
+    channel: int | None = None,
 ) -> Answer:
-    """Answer one question from `user`. `surface` is `discord` or `dashboard`."""
+    """Answer one question from `user`. `surface` is `discord` or `dashboard`.
+
+    R7: `intent` is the worker's intent step, already mapped to the grammar (bot/intent.py);
+    when it is None (no key, a timeout, an unknown kind) the fixed grammar parses the question.
+    `channel` limits the chat lookup to the channel of the question."""
     moment = (now or clock.now_ist()).astimezone(clock.tz())
     turn = _Turn(write, user, surface, _tidy(raw))
-    parsed = parse(turn.question, moment.date())
+    parsed = intent or parse(turn.question, moment.date())
+    if parsed is not None and parsed.intent == "chat":
+        parsed = Parsed("chat", (*parsed.args, ("channel", str(channel or ""))))
     if parsed is None:
         return _reply_only(turn, "unknown", _unknown())
     is_more = parsed.intent == "more"
@@ -733,8 +817,22 @@ def _unknown() -> str:
     return f"{bw.UNKNOWN_HAVE} {bw.UNKNOWN_NEXT.format(person=bw.UNKNOWN_PERSON)}"
 
 
-def discord_reply(session: Session, author_id: int, raw: str, settings: Settings) -> str:
-    """The reply for one Discord question. An unknown author gets one line and no data (D135)."""
+IntentOf = Callable[[str, str], Parsed | None]
+
+
+def discord_reply(
+    session: Session,
+    author_id: int,
+    raw: str,
+    settings: Settings,
+    *,
+    channel: int | None = None,
+    intent_of: IntentOf | None = None,
+) -> str:
+    """The reply for one Discord question. An unknown author gets one line and no data (D135).
+
+    `intent_of(short, question)` is the R7 intent step (the worker, LLM_SMALL, at most
+    BOT_INTENT_TIMEOUT_S); None or no answer means the grammar decides."""
     who = identity.identify(session, author_id, settings)
     line = identity.reply_for(who)
     if line is not None or who.short is None:
@@ -745,8 +843,17 @@ def discord_reply(session: Session, author_id: int, raw: str, settings: Settings
     def write(sql: str, params: dict[str, Any]) -> Any:
         return session.execute(text(sql), params).scalar_one()
 
+    intent = intent_of(who.short, raw) if intent_of else None
     try:
-        answer = respond(session.connection(), write, user=who.short, raw=raw, surface="discord")
+        answer = respond(
+            session.connection(),
+            write,
+            user=who.short,
+            raw=raw,
+            surface="discord",
+            intent=intent,
+            channel=channel,
+        )
     except Exception:
         session.rollback()  # the log and the seen marks are one unit
         raise

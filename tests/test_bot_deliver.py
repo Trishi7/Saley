@@ -314,4 +314,8 @@ def test_health_line_twice_queues_one(
 
 
 def test_brief_module_uses_conflict_safe_insert() -> None:
-    assert "on conflict do nothing" in __import__("inspect").getsource(brief.queue_briefs)
+    # R7: the brief is an M1 card; the conflict-safe insert is the shared card insert.
+    from saley.bot import queue
+
+    assert "queue.insert_card" in __import__("inspect").getsource(brief.queue_briefs)
+    assert "on conflict do nothing" in queue.card_sql

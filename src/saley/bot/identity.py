@@ -4,6 +4,10 @@ Why: only people in the team may get data. `DISCORD_USER_MAP` fills `users.disco
 the bot starts. The allowlists are the ids already in DISCORD_APPROVER_IDS and
 DISCORD_INSTRUCT_IDS (D16, D135); this module only reads them. An author with no `users` row
 gets one polite line and no data. Discord ids are never logged.
+
+D257 (R7): only the writers (DISCORD_WRITE_IDS, short names) may change the sheet from Discord.
+So an approver must also be a writer to approve, and the start-up sync sets
+`users.discord_writer`, which `saley_card_press` checks in SQL (the check that counts).
 """
 
 from __future__ import annotations
@@ -25,7 +29,8 @@ log = get_logger("saley.bot.identity")
 class Identity:
     short: str | None
     can_instruct: bool
-    can_approve: bool
+    can_approve: bool  # D257: on DISCORD_APPROVER_IDS and a writer
+    can_write: bool = False
 
 
 def _is_user(session: Session, short: str) -> bool:
@@ -56,6 +61,14 @@ def sync_user_map(session: Session, settings: Settings) -> int:
         if result.rowcount == 0 and not _is_user(session, short):
             log.warning("discord_user_unknown", person=short)
         changed += result.rowcount
+    # D257: the SQL check of saley_card_press reads this flag.
+    session.execute(
+        text(
+            "update users set discord_writer = (short = any(:w)) "
+            "where discord_writer is distinct from (short = any(:w))"
+        ),
+        {"w": settings.writer_shorts},
+    )
     session.commit()
     return changed
 
@@ -68,7 +81,10 @@ def identify(session: Session, author_id: int, settings: Settings) -> Identity:
     ).scalar()
     if short is None:
         return Identity(None, False, False)
-    return Identity(short, ident in settings.instruct_ids, ident in settings.approver_ids)
+    writer = short in settings.writer_shorts
+    return Identity(
+        short, ident in settings.instruct_ids, writer and ident in settings.approver_ids, writer
+    )
 
 
 def reply_for(identity: Identity) -> str | None:

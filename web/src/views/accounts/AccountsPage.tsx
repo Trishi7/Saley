@@ -15,6 +15,7 @@ import { ViewPage } from "@/components/saley/ViewPage";
 import { useApi } from "@/hooks/use-api";
 import { useKeptPage, useOffset } from "@/hooks/use-kept";
 import { useRoute } from "@/hooks/use-route";
+import { openId } from "@/lib/card-focus";
 import { go } from "@/lib/route";
 import { fmt, W } from "@/words";
 import { accountFilters, accountsPath, DEFAULT_FILTER } from "./account-rules";
@@ -24,7 +25,8 @@ import type { AccountsData } from "./types";
 
 export function AccountsPage({ view }: { view: ViewDef }) {
   const toast = useToast();
-  const filter = useRoute().params.filter || DEFAULT_FILTER;
+  const params = useRoute().params;
+  const filter = params.filter || DEFAULT_FILTER;
   const [q, setQ] = useState("");
   const [offset, setOffset] = useOffset(`${filter}|${q}`);
   const { data, error, loading, reload } = useApi<AccountsData>(accountsPath(filter, q, offset));
@@ -37,6 +39,14 @@ export function AccountsPage({ view }: { view: ViewDef }) {
   // company -> person hand-off); during the hand-off the company drawer leaves focus alone.
   const [opener, setOpener] = useState<HTMLElement | null>(null);
   const [handOff, setHandOff] = useState(false);
+  // D261: `#accounts?open=77` (a Discord card's link) opens that company's drawer; the drawer
+  // shows the name once its data is there.
+  const linked = openId(params.open);
+  const [opened, setOpened] = useState<number | null>(null);
+  if (linked !== null && linked !== opened) {
+    setOpened(linked); // React: state that follows the route is set during render, once
+    setCompany({ id: linked, name: "" });
+  }
   const pick = (next: string) => go("accounts", next === DEFAULT_FILTER ? undefined : { filter: next });
   const onSaved = useCallback(
     (saved: SavedEmail) => {

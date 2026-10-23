@@ -53,6 +53,7 @@ from saley.core import egress
 from saley.core.db import ro_engine
 from saley.core.logging import get_logger
 from saley.core.settings import Settings, get_settings, is_missing
+from saley.web import deeplink
 from saley.web import words as w
 from saley.web.guards import _cross_site
 
@@ -61,6 +62,8 @@ log = get_logger("saley.web.auth")
 SESSION_COOKIE = "saley_session"
 OAUTH_COOKIE = "saley_oauth"
 OAUTH_COOKIE_SECONDS = 600
+# D261: a deep link's path rides through the Google round trip in this cookie (path /auth).
+NEXT_COOKIE = "saley_next"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 - a URL, not a secret
 ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
@@ -357,15 +360,18 @@ def refuse_cross_site(request: Request) -> None:
         raise HTTPException(status_code=403, detail=w.ERR_CROSS_SITE)
 
 
-def finish(request: Request, short: str, provider_name: str) -> Response:
-    """Start the session and send the browser to the dashboard."""
+def finish(
+    request: Request, short: str, provider_name: str, next_path: str | None = None
+) -> Response:
+    """Start the session and send the browser to the dashboard, or to a same-site deep link
+    (D261: `safe_next` takes only that form, never another site)."""
     settings = get_settings()
     token = start_session(short, provider_name, settings.session_hours)
     if token is None:
         # On the list, but no team row (v_team): not an allowlist problem (T10 review).
         log.warning("signin_failed", reason="no_such_user", kind="other")
         return message_page(w.SIGNIN_NO_USER, 403)
-    response = RedirectResponse("/", status_code=303)
+    response = RedirectResponse(deeplink.safe_next(next_path) or "/", status_code=303)
     set_session_cookie(response, request, token, settings.session_hours)
     log.info("signed_in", short=short, provider=provider_name)
     return response
@@ -484,29 +490,39 @@ def _not_set_up() -> HTMLResponse:
     return message_page(w.SIGNIN_NOT_SET, 503)
 
 
+NextParam = Annotated[str | None, Query(alias="next", max_length=200)]
+
+
 @router.get("/signin", include_in_schema=False)
-def signin(request: Request) -> Response:
+def signin(request: Request, next_path: NextParam = None) -> Response:
     settings = get_settings()
     if provider(settings) == "mock" and not mock_allowed(request, settings):
         raise HTTPException(status_code=404, detail="Not Found")
+    keep = deeplink.safe_next(next_path)  # a foreign `next` is dropped, never followed
     if session_user(request) is not None:
-        return RedirectResponse("/", status_code=303)
+        return RedirectResponse(keep or "/", status_code=303)
     if provider(settings) == "google":
         if not google_configured(settings):
             return _not_set_up()
-        button = f'<a class="btn" href="/auth/google">{html.escape(w.SIGNIN_GOOGLE)}</a>'
+        href = "/auth/google" + (f"?{urlencode({'next': keep})}" if keep else "")
+        button = f'<a class="btn" href="{html.escape(href)}">{html.escape(w.SIGNIN_GOOGLE)}</a>'
         return page(w.SIGNIN_TITLE, button)
     label = html.escape(w.SIGNIN_MOCK.replace("{who}", settings.dev_user_short))
+    hidden = f'<input type="hidden" name="next" value="{html.escape(keep)}">' if keep else ""
     form = (
-        '<form method="post" action="/auth/mock">'
+        f'<form method="post" action="/auth/mock">{hidden}'
         f'<button class="btn" type="submit">{label}</button></form>'
     )
     return page(w.SIGNIN_TITLE, form)
 
 
-def _form_email(raw: bytes) -> str:
+def _form_value(raw: bytes, name: str) -> str:
     values = parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True)
-    return values.get("email", [""])[0]
+    return values.get(name, [""])[0]
+
+
+def _form_email(raw: bytes) -> str:
+    return _form_value(raw, "email")
 
 
 def _mock_short(settings: Settings, email: str) -> str | None:
@@ -528,11 +544,11 @@ async def auth_mock(request: Request, _limit: Limited) -> Response:
     short = _mock_short(settings, _form_email(raw))
     if short is None:
         return refused("not_on_allowlist")
-    return await run_in_threadpool(finish, request, short, "mock")
+    return await run_in_threadpool(finish, request, short, "mock", _form_value(raw, "next"))
 
 
 @router.get("/auth/google", include_in_schema=False)
-def auth_google(request: Request, _limit: Limited) -> Response:
+def auth_google(request: Request, _limit: Limited, next_path: NextParam = None) -> Response:
     settings = _provider_or_404(request, "google")
     if not google_configured(settings):
         return _not_set_up()
@@ -567,6 +583,16 @@ def auth_google(request: Request, _limit: Limited) -> Response:
         samesite="lax",
         secure=_secure(request),
     )
+    if keep := deeplink.safe_next(next_path):
+        response.set_cookie(
+            NEXT_COOKIE,
+            keep,
+            max_age=OAUTH_COOKIE_SECONDS,
+            path="/auth",
+            httponly=True,
+            samesite="lax",
+            secure=_secure(request),
+        )
     return response
 
 
@@ -681,8 +707,9 @@ def auth_callback(
         response = refused("not_on_allowlist")
         clear_cookie(response, request, OAUTH_COOKIE, "/auth")
         return response
-    response = finish(request, short, "google")
+    response = finish(request, short, "google", request.cookies.get(NEXT_COOKIE))
     clear_cookie(response, request, OAUTH_COOKIE, "/auth")
+    clear_cookie(response, request, NEXT_COOKIE, "/auth")
     return response
 
 

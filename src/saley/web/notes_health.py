@@ -60,3 +60,46 @@ def notes_state(conn: Connection) -> dict[str, Any]:
     else:
         message = w.NOTES_FAILING
     return {"state": state, "message": message, "last_ok": row["last_ok_at"]}
+
+
+# ------------------------------------------------------------------ the Discord block (R7)
+
+DISCORD_SQL = (
+    "select sent_today, held, failed_today, presses_ok, presses_already, presses_refused, "
+    "press_p50_ms, last_sent, last_sync, chat_lines, last_summary from v_bot_health"
+)
+
+
+def discord_numbers(conn: Connection) -> dict[str, Any]:
+    """The row of v_bot_health (docs/17 §10): cards, presses, card sync, chat memory."""
+    return dict(conn.execute(text(DISCORD_SQL)).mappings().one())
+
+
+def _ms(value: float | None) -> str:
+    return w.fill(w.DISCORD_MS, n=round(value)) if value is not None else "—"
+
+
+def discord_state(conn: Connection) -> dict[str, Any]:
+    """Sources & health · Discord, and `saley bot status`: the same lines from one view."""
+    n = discord_numbers(conn)
+    rows = [
+        (w.DISCORD_SENT, str(n["sent_today"])),
+        (w.DISCORD_HELD, str(n["held"])),
+        (w.DISCORD_FAILED, str(n["failed_today"])),
+        (
+            w.DISCORD_PRESSES,
+            w.fill(
+                w.DISCORD_PRESSES_VALUE,
+                ok=n["presses_ok"],
+                already=n["presses_already"],
+                refused=n["presses_refused"],
+            ),
+        ),
+        (w.DISCORD_P50, _ms(n["press_p50_ms"])),
+        (w.DISCORD_LAST_SENT, hhmm(n["last_sent"])),
+        (w.DISCORD_LAST_SYNC, hhmm(n["last_sync"])),
+        (w.DISCORD_CHAT, str(n["chat_lines"])),
+        (w.DISCORD_SUMMARY, hhmm(n["last_summary"])),
+        (w.DISCORD_DMS, w.DISCORD_ON if get_settings().dm_enabled else w.DISCORD_OFF),
+    ]
+    return {"rows": [{"label": label, "value": value} for label, value in rows]}

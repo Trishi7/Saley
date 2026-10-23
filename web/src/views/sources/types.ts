@@ -26,6 +26,7 @@ export type HealthData = {
   writes: { enabled: boolean; message: string | null; open: number; failed: number };
   mail: { message: string };
   notes: { message: string };
+  discord: { rows: { label: string; value: string }[] };
   jobs: Job[];
   parity: { metric: string; sheet_value: number | null; view_value: number | null; ok: boolean; note: string | null }[];
   quality: { problem: string; n: number }[];

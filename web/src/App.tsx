@@ -12,6 +12,7 @@ import { resolveView, VIEWS, type ViewDef } from "@/components/saley/views";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { isAdmin, MeProvider, useMe } from "@/hooks/use-me";
 import { useRoute } from "@/hooks/use-route";
+import { focusCard } from "@/lib/card-focus";
 import { W } from "@/words";
 
 type PageProps = { view: ViewDef };
@@ -55,6 +56,9 @@ function CurrentView() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [view.id]);
+  // D261: a link from a Discord card outlines the item it was about.
+  const { card, open } = route.params;
+  useEffect(() => focusCard(card, open), [view.id, card, open]);
   return (
     <Shell view={view.id} q={route.params.q ?? ""}>
       {error !== null && <ErrorLine what={W.whatMe} error={error} onRetry={reload} />}

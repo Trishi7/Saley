@@ -14,6 +14,12 @@ Rules, per person ("people" of a post = the people it @mentions, plus the recipi
 - Weekend (Sat, Sun IST): silent, except meeting briefs and reconnect pings (D10).
 - A DM is dropped while DM_ENABLED=false or when the person is not in DM_USERS (D128).
 - A post older than MAX_AGE_DAYS is dropped: a ping that old would only confuse.
+- D260: when cards compete for one person, the card type decides: M5 meeting brief, M8
+  commitment, M7 reconnect, M2 needs a look, M3 suggestions, M11 new company, M4 events. A post
+  with no card type (the R4 shapes) keeps the old order after them: meeting, reconnect, rank.
+- The daily brief (M1) and the weekly pack (M12) never count against the cap or the gap.
+- When the cap holds posts back, the plan says how many per person (`held`), so the last card
+  of the day can say "I am holding N more for Monday." (or "for tomorrow").
 Answers to questions never pass through here, so they are never capped.
 """
 
@@ -23,10 +29,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 
+from saley.bot import words as bw
 from saley.core import clock
 from saley.core.settings import MINUTES_PER_DAY, Settings
 
 MAX_AGE_DAYS = 3
+PRIORITY = {"M5": 1, "M8": 2, "M7": 3, "M2": 4, "M3": 5, "M11": 6, "M4": 7}  # D260
+OTHER_CARD = 8  # any other card type: after the D260 list, before the R4 shapes
+UNCAPPED = frozenset({"M1", "M12"})  # docs/09 §4
 WEEKEND_FROM = 5  # datetime.weekday(): Saturday
 SEARCH_DAYS = 10  # enough to cross a weekend and an empty window
 
@@ -44,6 +54,7 @@ class Post:
     is_reconnect: bool = False
     not_before: datetime | None = None
     max_age: timedelta | None = None  # shorter than MAX_AGE_DAYS for a fast-stale post
+    card_type: str | None = None  # R7 cards: the D260 order and the M1/M12 cap exemption
 
     def later(self, when: datetime) -> Post:
         return replace(self, not_before=when)
@@ -54,6 +65,8 @@ class Plan:
     ready: tuple[int, ...] = ()
     deferred: Mapping[int, datetime] = field(default_factory=dict)
     dropped: Mapping[int, str] = field(default_factory=dict)  # id -> why
+    # person -> (posts the cap moved, the day they go out): "I am holding N more for Monday."
+    held: Mapping[str, tuple[int, datetime]] = field(default_factory=dict)
 
 
 def _midnight(day: datetime) -> datetime:
@@ -92,8 +105,15 @@ def next_slot(
     return when
 
 
-def _order(post: Post) -> tuple[int, int, int, datetime, int]:
-    return (-int(post.is_meeting), -int(post.is_reconnect), -post.rank, post.due_at, post.id)
+def _order(post: Post) -> tuple[int, int, int, int, datetime, int]:
+    card = PRIORITY.get(post.card_type or "", OTHER_CARD) if post.card_type else OTHER_CARD + 1
+    return (card, -int(post.is_meeting), -int(post.is_reconnect), -post.rank, post.due_at, post.id)
+
+
+def held_line(count: int, until: datetime, now: datetime) -> str:
+    """docs/09 §4: the line the last card of the day ends with."""
+    template = bw.HELD_TOMORROW if (until.date() - now.date()).days <= 1 else bw.HELD_MONDAY
+    return template.format(n=count)
 
 
 def _drop_reason(post: Post, now: datetime, settings: Settings) -> str | None:
@@ -128,6 +148,7 @@ def plan(
     ready: list[int] = []
     deferred: dict[int, datetime] = {}
     dropped: dict[int, str] = {}
+    held: dict[str, tuple[int, datetime]] = {}
     for post in sorted(posts, key=_order):
         if post.due_at > now or (post.not_before and post.not_before > now):
             continue
@@ -139,10 +160,17 @@ def plan(
         if slot > now:
             deferred[post.id] = slot
             continue
+        if post.card_type in UNCAPPED:  # docs/09 §4: no cap, no gap, counts for nobody
+            ready.append(post.id)
+            continue
         counts = [sum(t.date() == now.date() for t in sends.get(p, ())) for p in post.people]
         if any(n >= cap for n in counts):  # D132: the rest goes to the next day, ranked
             tomorrow = _midnight(now) + timedelta(days=1)
             deferred[post.id] = next_slot(tomorrow, post.people, hours, weekend_ok=exempt)
+            for person, n in zip(post.people, counts, strict=True):
+                if n >= cap:
+                    before = held.get(person, (0, deferred[post.id]))
+                    held[person] = (before[0] + 1, min(before[1], deferred[post.id]))
             continue
         if not post.is_meeting:
             lasts = [max(sends[p]) for p in post.people if sends.get(p)]
@@ -153,4 +181,4 @@ def plan(
         ready.append(post.id)
         for person in post.people:
             sends.setdefault(person, []).append(now)
-    return Plan(tuple(ready), deferred, dropped)
+    return Plan(tuple(ready), deferred, dropped, held)

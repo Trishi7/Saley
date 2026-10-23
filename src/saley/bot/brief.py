@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from saley.bot import cards, queue
 from saley.bot import words as bw
 from saley.bot.caps import WEEKEND_FROM
 from saley.core import clock
@@ -114,15 +115,22 @@ def first_name(session: Session, user_id: int, short: str) -> str:
     return words[0] if words else short.capitalize()
 
 
-def build_brief(session: Session, user_id: int, short: str, role: str, now: datetime) -> str | None:
-    """The brief text for one person, or None when there is nothing to say."""
+def brief_parts(
+    session: Session, user_id: int, short: str, role: str, now: datetime
+) -> tuple[list[str], int]:
+    """The brief lines (approvals, the next meeting, a reminder) and the count of the rest."""
     approvals = _approvals(session, role)
     meetings = _meetings(session, short, now)
     reminders = _reminders(session, user_id, now)
     lines = [*([approvals] if approvals else []), *meetings[:1], *reminders[:1]]
+    return lines, max(len(meetings) - 1, 0) + max(len(reminders) - 1, 0)
+
+
+def build_brief(session: Session, user_id: int, short: str, role: str, now: datetime) -> str | None:
+    """The brief text for one person, or None when there is nothing to say."""
+    lines, rest = brief_parts(session, user_id, short, role, now)
     if not lines:
         return None
-    rest = max(len(meetings) - 1, 0) + max(len(reminders) - 1, 0)
     name = first_name(session, user_id, short)
     shown = min(len(lines), MAX_LINES)
     head = w.fill_count(bw.BRIEF_HEAD_ONE, bw.BRIEF_HEAD, shown, name=name)
@@ -158,15 +166,24 @@ def queue_briefs(session: Session) -> BriefStats:
         body = None if done else build_brief(session, user.id, short, user.role, now)
         if body is None:
             continue
-        inserted = session.execute(
-            text(
-                "insert into bot_post (kind, shape, channel, for_user, mentions, body, rank, "
-                "due_at, state, item_type, item_id, is_meeting, is_reconnect) values "
-                "(:k, :k, 'dm', :u, '{}', :b, :r, :t, 'queued', :k, :d, false, false) "
-                "on conflict do nothing"
-            ),
-            {"k": SHAPE, "u": user.id, "b": body, "r": BRIEF_RANK, "t": now, "d": day_key},
-        )
+        lines, rest = brief_parts(session, user.id, short, user.role, now)
+        data = {
+            "name": first_name(session, user.id, short),
+            "day": clock.day_label(now),
+            "lines": lines,
+            "more": rest,
+        }
+        payload = cards.render("M1", data, f"m1-{short}-{day_key}")
         # uq_bot_post_once (0021) turns a second insert of the day into a no-op, even in a race.
-        stats.queued += 1 if inserted.rowcount else 0
+        inserted = queue.insert_card(
+            session,
+            payload,
+            due_at=now,
+            channel="dm",
+            for_user=user.id,
+            item=(SHAPE, day_key),
+            shape=SHAPE,
+            body=body,
+        )
+        stats.queued += 1 if inserted else 0
     return stats

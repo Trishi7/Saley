@@ -13,6 +13,7 @@ import { sumKnown } from "@/lib/team-rules";
 import { fmt, W } from "@/words";
 import {
   Connections,
+  DiscordTable,
   EgressTable,
   JobsTable,
   ParityTable,
@@ -68,6 +69,7 @@ export function SourcesPage({ view }: { view: ViewDef }) {
             <QualityTable data={data} />
             <Connections data={data} />
           </div>
+          <DiscordTable rows={data.discord.rows} />
           <p className="text-muted-foreground nums text-xs">
             {fmt(W.lastComputed, { t: data.last_computed_label })}
           </p>

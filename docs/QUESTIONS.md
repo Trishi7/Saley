@@ -2,6 +2,37 @@
 
 (newest first)
 
+## Q-R7-2 · 2026-10-23 · R7 gate · The compose rows need the R7 tree on GitHub (open)
+- What happened: the R7 gate runs the R1.1–R7 matrices. The ten R6 compose rows that the gate reads from CI (R6-C02, C05, C06, C07, D03, D04, B02, G02, G03, M01; tool `ci`) are read from the GitHub Actions compose run of HEAD (D241), and the gate refuses that result while the tree differs from HEAD outside docs/ ("commit and push first"). R7 changes code and `docker-compose.yml` (the bot service blanks ANTHROPIC_API_KEY and more, docs/17 §3).
+- needed from you: commit and push the R7 tree (the "safe to commit" note is in the R7 summary). The compose workflow runs on the push (about 30 minutes).
+- then (Claude Code, or you): `uv run python scripts/verify.py --release R7 --ci` to read the compose run, then the finalize: `uv run python scripts/verify.py --release R7 --finalize`. That writes `docs/test-reports/R7-final.md` on GATE: PASS; then the R7 ping.
+- took meanwhile: gate steps 1–9 PASS on the laptop and 267 of 280 matrix rows pass, every R7 row among them (17 live card round trips, the deep link in the browser); the other three rows are read at the finalize (step 11). Report `docs/test-reports/R7-2026-10-23.md`. Nothing else waits.
+
+## Q-R7-1 · 2026-10-23 · R7 · Defaults taken while building the bot v2 (open: confirm or change)
+One line each: what needed a decision, the default Claude Code built. Nothing waits on these.
+- Writers in SQL (D257): `users.discord_writer`, set by the bot at start from `DISCORD_WRITE_IDS` (as it sets `discord_id`). `saley_card_press` refuses a write press when the flag is false.
+- Presses that need no writer: Seen it, Not useful, Skip on M3, More, Dismiss, Ask Sid/Vaishnavi, and Answer on M14 by the person who was asked. Every other press needs a writer.
+- M6 time: Meeting Date has no time. The card is due the day after the meeting at 00:00 + `AFTER_MEETING_HOURS`; the caps move it into the person's hours.
+- M6 "next step" and its date become a commitment of the presser (source `discord`). The Next Step column is not writable (CLAUDE.md column locks); Meeting Status goes to the sheet through `saley_act`.
+- M5 note, M4 register interest, M11 take it and M14 answer are `fact` rows (signed in `bot_interaction`), not sheet writes. Undo covers sheet writes and dismisses only.
+- M7 "Move a week" and M9 "Snooze a day" queue a copy of the card due 7 days or 1 day later. No sheet write.
+- M8 "Move date" changes `commitment.due` of an open commitment of the presser (owner rule D155).
+- M3 "Skip" closes the card for everybody (no write); "Do it" (one person, or a select menu) resolves that proposal. M10 is the one-press form for one proposal.
+- M8 vs M9: a reminder with a commitment is M8; a reminder without one is M9.
+- Answers: the worker runs the intent step; the bot polls the `answer_intent` row (every 250 ms, at most `BOT_INTENT_TIMEOUT_S`) instead of a second NOTIFY channel. With no LLM key the worker answers "none" at once, so the grammar answers without a wait.
+- Personal data in an answer: the answer engine masks phone numbers and email addresses in chat lines with "(not shown in the channel)" (`answer.private`; a message is not an interaction, so it cannot be ephemeral). The sheet lookups never show a phone or an email.
+- Answers: the intent step's words must appear in the question (the worker drops any other word), so the LLM cannot add a company, a person or a day. A refusal, the unknown line and a failure are A2 lines (no closing line, no buttons); an answer from rows is A1 (closing line, More and Dismiss).
+- Matrix: the seeded `tests/matrix/R7.yaml` uses the docs/17 §9 layers (sql, integration, live, answers, gate). The loader now accepts them (docs/16 §3). Row R7-I02 had an unquoted ": " (not valid YAML); its text is now in quotes, unchanged.
+- M2 "needs a look": docs/09 says "linked signal >= 7", but importance runs 1 to 5. The card uses the Today rule (linked, rated 4 or 5) or a P1 person, so one card follows one dashboard notification (D259).
+- M3 "Do it": the Suggestions page has no Do it for a person, so `saley_proposal_resolve` does not fit. M3 lists the top warm suggestions; Do it makes a commitment of the presser ("Add … to pipeline", due in 2 days, door `commit`); Skip marks the shown people seen (as the page does). Proposals (the only two types, meeting and LinkedIn) are M10 cards, one each.
+- A press on a card with a list (M2, M3, M4) closes the card for everybody; the open items come again on the next card.
+- M5 risk and questions: the risk is one rule from the row (no email, no package, no deal size); questions show only when a row holds them (none today), never written by the LLM.
+- M11 "new this week": the first stage_log row of the account's people is in this week (the account table has no created time).
+- Bot edges (graphify rule "core, intel.guard and the SQL doors only"): the edge to `sales` is gone (`norm_name` moved to `core.text`); R7-G01 checks no edge to `sales`, `news`, `anthropic`, `core.llm` or `worker`, and that the running bot loads none of them. Two R4 edges stay: `web.words` (the `fill` helpers of the brief and the health text) and `intel.pack` (the R4 pack round trip, a CLI case, not the bot process). Default: keep both; moving the helpers to `core` is a later clean-up.
+- The bot compose service now also blanks ANTHROPIC_API_KEY, DATABASE_URL_RO and TEST_DATABASE_URL (it kept them from the env file before).
+- The seed folder `saley-r7-seed/` (the unpacked zip) is now in `.scratch/saley-r7-seed/`. Its files were copied to `docs/`, `docs/plans/`, `docs/tools/` and `tests/matrix/` (the same bytes; R7.yaml then got its rows), and `env.r7.additions` was merged into `.env.example` and deleted. The folder made gate step 1 (`tidy.py --check`) fail. A move, not a delete; to undo: `mv .scratch/saley-r7-seed .`.
+- graphify: the code graph only (`graphify update .`, AST, no LLM). A semantic pass over docs/ would need many subagents, which D142 does not allow.
+
 ## Q-R6-5 · 2026-10-22 · R6 gate · caddy: "Address already in use" (resolved)
 - **Answer (Trishi, 22 Oct, chat):** postgres took 172.30.0.2, the first dynamic address, because caddy starts last. Fix: dynamic addresses from 172.30.0.128/25, caddy keeps 172.30.0.2, FORWARDED_ALLOW_IPS to match, and a matrix row "caddy gets its fixed address with every service order". **Resolved.**
 - Done: saley_net is an external network made by deploy.sh and install.sh, so the range is set at creation (`--ip-range 172.30.0.128/25`), not in compose `ipam`; a deploy stops when an existing saley_net has other settings (runbook section 8, step 3). caddy stays 172.30.0.2, so FORWARDED_ALLOW_IPS (172.30.0.2) already matches. Rows: R6-C07 (CI: the addresses after the first deploy, after caddy starts first, and after all containers are recreated) and R6-C08 (pytest: caddy's address is in the subnet and outside the automatic range; the web trusts that address only).

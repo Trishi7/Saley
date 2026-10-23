@@ -56,6 +56,8 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(Text, unique=True)
     role: Mapped[str] = mapped_column(Text, server_default="viewer")
     discord_id: Mapped[str | None] = mapped_column(Text)
+    # D257 (0027): set by the bot at start from DISCORD_WRITE_IDS; saley_card_press checks it.
+    discord_writer: Mapped[bool] = mapped_column(Boolean, server_default="false")
     created_at: Mapped[datetime] = _now()
 
 
@@ -1023,8 +1025,10 @@ class BotPost(Base):
         CheckConstraint("channel in ('test','sales','dm')", name="ck_bot_post_channel"),
         CheckConstraint("channel <> 'dm' or for_user is not null", name="ck_bot_post_dm_user"),
         CheckConstraint(
-            "state in ('queued','ready','sent','deferred','dropped')", name="ck_bot_post_state"
+            "state in ('queued','ready','sent','deferred','dropped','gone')",
+            name="ck_bot_post_state",
         ),
+        UniqueConstraint("card_id", name="uq_bot_post_card"),  # 0027, D259
         Index("ix_bot_post_state_due", "state", "due_at"),
         Index("ix_bot_post_user_sent", "for_user", "sent_at"),
         Index(
@@ -1056,6 +1060,112 @@ class BotPost(Base):
     is_meeting: Mapped[bool | None] = mapped_column(Boolean, server_default="false")
     is_reconnect: Mapped[bool | None] = mapped_column(Boolean, server_default="false")
     created_at: Mapped[datetime] = _now()
+    # R7 cards (0027): the worker renders `payload` (Discord body, `keys`, `acts`); the bot sends.
+    card_type: Mapped[str | None] = mapped_column(Text)
+    priority: Mapped[int | None] = mapped_column(Integer)
+    held_reason: Mapped[str | None] = mapped_column(Text)
+    discord_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    discord_channel_id: Mapped[int | None] = mapped_column(BigInteger)
+    thread_id: Mapped[int | None] = mapped_column(BigInteger)
+    card_id: Mapped[str | None] = mapped_column(Text)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    rendered_hash: Mapped[str | None] = mapped_column(Text)
+    pinned: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    edited_at: Mapped[datetime | None] = mapped_column(TZ)
+    done_by: Mapped[str | None] = mapped_column(Text)
+    done_at: Mapped[datetime | None] = mapped_column(TZ)
+    done_surface: Mapped[str | None] = mapped_column(Text)
+    done_write_id: Mapped[int | None] = mapped_column(BigInteger)
+    undo_until: Mapped[datetime | None] = mapped_column(TZ)
+
+
+class BotInteraction(Base):
+    """Every press, modal and select on a card, written by `saley_card_press` (0027)."""
+
+    __tablename__ = "bot_interaction"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    card_id: Mapped[str] = mapped_column(Text)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(Text)
+    surface: Mapped[str] = mapped_column(Text)
+    result: Mapped[str] = mapped_column(Text)
+    code: Mapped[str | None] = mapped_column(Text)
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    at: Mapped[datetime] = _now()
+
+
+class ChatMessage(Base):
+    """One message of a bot channel, text only (D262, 0028). Kept CHAT_RETENTION_DAYS."""
+
+    __tablename__ = "chat_message"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    channel_id: Mapped[int] = mapped_column(BigInteger)
+    message_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    thread_id: Mapped[int | None] = mapped_column(BigInteger)
+    author_short: Mapped[str | None] = mapped_column(Text)
+    author_discord_id: Mapped[int | None] = mapped_column(BigInteger)
+    text: Mapped[str] = mapped_column(Text)
+    reply_to: Mapped[int | None] = mapped_column(BigInteger)
+    at: Mapped[datetime] = mapped_column(TZ)
+
+
+class ChatSummary(Base):
+    """The nightly summary of one channel and day (D262, 0028)."""
+
+    __tablename__ = "chat_summary"
+
+    channel_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    summary: Mapped[str] = mapped_column(Text)
+    facts: Mapped[int] = mapped_column(Integer, server_default="0")
+    model: Mapped[str | None] = mapped_column(Text)
+    at: Mapped[datetime] = _now()
+
+
+class ChatFact(Base):
+    """Who said what about which company, from the nightly summary (D262, 0028)."""
+
+    __tablename__ = "chat_fact"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    channel_id: Mapped[int] = mapped_column(BigInteger)
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_message.message_id", ondelete="CASCADE")
+    )
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("account.id", ondelete="SET NULL"))
+    contact_id: Mapped[int | None] = mapped_column(ForeignKey("contact.id", ondelete="SET NULL"))
+    text: Mapped[str] = mapped_column(Text)
+    author_short: Mapped[str | None] = mapped_column(Text)
+    at: Mapped[datetime] = mapped_column(TZ)
+
+
+class DiscordEventLink(Base):
+    """An event and the Discord scheduled event made for it (0028)."""
+
+    __tablename__ = "discord_event_link"
+
+    event_id: Mapped[int] = mapped_column(
+        ForeignKey("event.id", ondelete="CASCADE"), primary_key=True
+    )
+    discord_event_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    at: Mapped[datetime] = _now()
+
+
+class AnswerIntent(Base):
+    """A question waiting for the worker's intent step (LLM_SMALL; the bot has no key, 0028)."""
+
+    __tablename__ = "answer_intent"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_short: Mapped[str] = mapped_column(Text)
+    question: Mapped[str] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(Text, server_default="waiting")
+    intent: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _now()
+    done_at: Mapped[datetime | None] = mapped_column(TZ)
 
 
 class BotExchange(Base):

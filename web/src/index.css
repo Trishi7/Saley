@@ -281,3 +281,10 @@
     }
   }
 }
+
+/* D261: the item a Discord card linked to is outlined for 3 s (src/lib/card-focus.ts). */
+[data-card-focus] {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+}

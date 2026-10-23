@@ -33,9 +33,10 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from saley.bot import cards, queue
 from saley.core.clock import day_label, now_ist, tz, week_start
 from saley.core.logging import get_logger
-from saley.core.models import BotPost, WeeklyPack
+from saley.core.models import WeeklyPack
 from saley.core.settings import get_settings
 from saley.intel import metrics
 from saley.intel import tasks as rules
@@ -47,6 +48,7 @@ log = get_logger("saley.intel.pack")
 PACK_WEEKDAY = "mon"  # D134
 PACK_HOUR = 14  # 14:00 IST (D7, D21, D134)
 LATE_CAP = 5  # D130: the blocker note has at most 5 lines
+BLOCKER_CARD_CAP = 25  # D260: the M13 card shows 5, its thread the rest
 TASKS_PER_PERSON = 10
 SUMMARY_MAX_LINES = 11  # docs/09: 12 lines in all, the link is the twelfth
 SYNC_MAX_AGE_MINUTES = 120  # same limit as metrics_snapshot (SNAPSHOT_MAX_AGE)
@@ -146,7 +148,7 @@ def _scorecard(session: Session, last_day: date) -> list[dict[str, Any]]:
     return metrics.merge_last_week([{**r, "reply_note": w.REPLY_NOTE} for r in live], snapshots)
 
 
-def _late_items(session: Session) -> tuple[int, list[dict[str, Any]]]:
+def _late_items(session: Session, cap: int = LATE_CAP) -> tuple[int, list[dict[str, Any]]]:
     total = session.execute(
         text("select count(*) from v_deliverable_late where cardinality(blocks_goals) > 0")
     ).scalar_one()
@@ -156,7 +158,7 @@ def _late_items(session: Session) -> tuple[int, list[dict[str, Any]]]:
             "where cardinality(blocks_goals) > 0 "
             "order by late_by_days desc, item, id limit :n"
         ),
-        {"n": LATE_CAP},
+        {"n": cap},
     ).mappings()
     items = [
         {
@@ -273,26 +275,78 @@ def blocker_text(late: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _queue(
-    session: Session, pack_id: int, shape: str, body: str, due_at: datetime, channel: str
-) -> None:
-    """One queued row. No mentions and no `for_user`: the post counts for nobody (D132)."""
-    session.execute(
-        insert(BotPost).values(
-            kind=shape,
-            shape=shape,
-            channel=channel,
-            for_user=None,
-            mentions=[],
-            body=body,
-            rank=0,
-            due_at=due_at,
-            state="queued",
-            item_type="weekly_pack",
-            item_id=pack_id,
-            is_meeting=False,
-            is_reconnect=False,
+def _rag(value: Any, last: Any) -> str | None:
+    """Green up, amber same, red down (D260 pack scoreboard). Unknown: no colour."""
+    if not isinstance(value, int | float) or not isinstance(last, int | float):
+        return None
+    return "green" if value > last else "amber" if value == last else "red"
+
+
+def pack_card(body: dict[str, Any], week: date, card_id: str) -> dict[str, Any]:
+    """M12 (docs/09): the scoreboard, the top 3 next steps, Components v2, pinned."""
+    iso = week.isocalendar()
+    top = [
+        f"{t['person'].capitalize()}: {t['items'][0]['title']}" for t in body["tasks"] if t["items"]
+    ]
+    data = {
+        "day": f"{week.day} {week:%b}",
+        "week": f"{iso.year}-W{iso.week:02d}",
+        "lines": [
+            {
+                "rag": _rag(n["value"], n["last_week"]),
+                "label": n["label"],
+                "value": _show(n["value"]),
+                "last": n["last_week"],
+            }
+            for n in body["team"]
+        ],
+        "funnel": None,
+        "top": top[:3],
+        "idea": None,
+    }
+    return cards.render("M12", data, card_id)
+
+
+def blocker_card(session: Session, card_id: str) -> tuple[dict[str, Any], list[int]]:
+    """M13: late items that block goals (5 in the card, the rest in the thread) and the ids of
+    the owners to mention once each."""
+    _, late = _late_items(session, BLOCKER_CARD_CAP)
+    owners = {(r["owner"] or "").strip().casefold() for r in late} - {""}
+    ids = [
+        int(i)
+        for (i,) in session.execute(
+            text("select id from users where lower(short) = any(:o) or lower(name) = any(:o)"),
+            {"o": list(owners)},
         )
+    ]
+    items = [
+        {"owner": r["owner"] or w.PACK_NO_OWNER, "item": r["item"], "goal": ", ".join(r["blocks"])}
+        for r in late
+    ]
+    return cards.render("M13", {"items": items}, card_id), ids
+
+
+def _queue(
+    session: Session,
+    pack_id: int,
+    shape: str,
+    body: str,
+    due_at: datetime,
+    channel: str,
+    payload: dict[str, Any],
+    mentions: list[int] | None = None,
+) -> None:
+    """One queued row. M12 mentions nobody, so it counts for nobody (D132); M13 mentions each
+    owner once (docs/09 M13)."""
+    queue.insert_card(
+        session,
+        payload,
+        due_at=due_at,
+        channel=channel,
+        mentions=mentions or [],
+        item=("weekly_pack", pack_id),
+        shape=shape,
+        body=body,
     )
 
 
@@ -333,11 +387,23 @@ def build_weekly_pack(session: Session, now: datetime | None = None) -> PackStat
         return PackStats(False, week)
     channel = "test" if settings.test_mode else "sales"
     post_at = max(due, moment)  # a late build posts now, not at a time already gone
-    _queue(session, pack_id, "pack_summary", summary_text(body, week), post_at, channel)
+    week_key = f"{week:%Y%m%d}"
+    summary = pack_card(body, week, f"m12-{week_key}")
+    _queue(session, pack_id, "pack_summary", summary_text(body, week), post_at, channel, summary)
     queued = 1
     if body["late"]:
         later = post_at + timedelta(minutes=settings.blocker_note_delay_minutes)
-        _queue(session, pack_id, "blocker_note", blocker_text(body["late"]), later, channel)
+        note, owners = blocker_card(session, f"m13-{week_key}")
+        _queue(
+            session,
+            pack_id,
+            "blocker_note",
+            blocker_text(body["late"]),
+            later,
+            channel,
+            note,
+            owners,
+        )
         queued += 1
     no_baseline = all(n["last_week"] is None for n in body["team"])
     log.info("weekly_pack_built", week=str(week), posts=queued, late=body["late_total"])
